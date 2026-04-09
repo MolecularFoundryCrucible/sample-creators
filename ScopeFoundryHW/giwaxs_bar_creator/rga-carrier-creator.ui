@@ -348,88 +348,82 @@
        <item row="0" column="3"><widget class="QLineEdit" name="lineEdit_tf_A2"/></item>
        <item row="0" column="4"><widget class="QLabel"><property name="text"><string>A3:</string></property></widget></item>
        <item row="0" column="5"><widget class="QLineEdit" name="lineEdit_tf_A3"/></item>
-
-       <item row="1" column="0"><widget class="QLabel"><property name="text"><string>A4:</string></property></widget></item>
-       <item row="1" column="1"><widget class="QLineEdit" name="lineEdit_tf_A4"/></item>
-       <item row="1" column="2"><widget class="QLabel"><property name="text"><string>A5:</string></property></widget></item>
-       <item row="1" column="3"><widget class="QLineEdit" name="lineEdit_tf_A5"/></item>
-       <item row="1" column="4"><widget class="QLabel"><property name="text"><string>A6:</string></property></widget></item>
-       <item row="1" column="5"><widget class="QLineEdit" name="lineEdit_tf_A6"/></item>
+       <item row="0" column="6"><widget class="QLabel"><property name="text"><string>A4:</string></property></widget></item>
+       <item row="0" column="7"><widget class="QLineEdit" name="lineEdit_tf_A4"/></item>
+       <item row="0" column="8"><widget class="QLabel"><property name="text"><string>A5:</string></property></widget></item>
+       <item row="0" column="9"><widget class="QLineEdit" name="lineEdit_tf_A5"/></item>
+       <item row="0" column="10"><widget class="QLabel"><property name="text"><string>A6:</string></property></widget></item>
+       <item row="0" column="11"><widget class="QLineEdit" name="lineEdit_tf_A6"/></item>
 
        <!-- Row B -->
-       <item row="2" column="0"><widget class="QLabel"><property name="text"><string>B1:</string></property></widget></item>
-       <item row="2" column="1"><widget class="QLineEdit" name="lineEdit_tf_B1"/></item>
-       <item row="2" column="2"><widget class="QLabel"><property name="text"><string>B2:</string></property></widget></item>
-       <item row="2" column="3"><widget class="QLineEdit" name="lineEdit_tf_B2"/></item>
-       <item row="2" column="4"><widget class="QLabel"><property name="text"><string>B3:</string></property></widget></item>
-       <item row="2" column="5"><widget class="QLineEdit" name="lineEdit_tf_B3"/></item>
-
-       <item row="3" column="0"><widget class="QLabel"><property name="text"><string>B4:</string></property></widget></item>
-       <item row="3" column="1"><widget class="QLineEdit" name="lineEdit_tf_B4"/></item>
-       <item row="3" column="2"><widget class="QLabel"><property name="text"><string>B5:</string></property></widget></item>
-       <item row="3" column="3"><widget class="QLineEdit" name="lineEdit_tf_B5"/></item>
-       <item row="3" column="4"><widget class="QLabel"><property name="text"><string>B6:</string></property></widget></item>
-       <item row="3" column="5"><widget class="QLineEdit" name="lineEdit_tf_B6"/></item>
+       <item row="1" column="0"><widget class="QLabel"><property name="text"><string>B1:</string></property></widget></item>
+       <item row="1" column="1"><widget class="QLineEdit" name="lineEdit_tf_B1"/></item>
+       <item row="1" column="2"><widget class="QLabel"><property name="text"><string>B2:</string></property></widget></item>
+       <item row="1" column="3"><widget class="QLineEdit" name="lineEdit_tf_B2"/></item>
+       <item row="1" column="4"><widget class="QLabel"><property name="text"><string>B3:</string></property></widget></item>
+       <item row="1" column="5"><widget class="QLineEdit" name="lineEdit_tf_B3"/></item>
+       <item row="1" column="6"><widget class="QLabel"><property name="text"><string>B4:</string></property></widget></item>
+       <item row="1" column="7"><widget class="QLineEdit" name="lineEdit_tf_B4"/></item>
+       <item row="1" column="8"><widget class="QLabel"><property name="text"><string>B5:</string></property></widget></item>
+       <item row="1" column="9"><widget class="QLineEdit" name="lineEdit_tf_B5"/></item>
+       <item row="1" column="10"><widget class="QLabel"><property name="text"><string>B6:</string></property></widget></item>
+       <item row="1" column="11"><widget class="QLineEdit" name="lineEdit_tf_B6"/></item>
 
        <!-- Row C -->
-       <item row="4" column="0"><widget class="QLabel"><property name="text"><string>C1:</string></property></widget></item>
-       <item row="4" column="1"><widget class="QLineEdit" name="lineEdit_tf_C1"/></item>
-       <item row="4" column="2"><widget class="QLabel"><property name="text"><string>C2:</string></property></widget></item>
-       <item row="4" column="3"><widget class="QLineEdit" name="lineEdit_tf_C2"/></item>
-       <item row="4" column="4"><widget class="QLabel"><property name="text"><string>C3:</string></property></widget></item>
-       <item row="4" column="5"><widget class="QLineEdit" name="lineEdit_tf_C3"/></item>
-
-       <item row="5" column="0"><widget class="QLabel"><property name="text"><string>C4:</string></property></widget></item>
-       <item row="5" column="1"><widget class="QLineEdit" name="lineEdit_tf_C4"/></item>
-       <item row="5" column="2"><widget class="QLabel"><property name="text"><string>C5:</string></property></widget></item>
-       <item row="5" column="3"><widget class="QLineEdit" name="lineEdit_tf_C5"/></item>
-       <item row="5" column="4"><widget class="QLabel"><property name="text"><string>C6:</string></property></widget></item>
-       <item row="5" column="5"><widget class="QLineEdit" name="lineEdit_tf_C6"/></item>
+       <item row="2" column="0"><widget class="QLabel"><property name="text"><string>C1:</string></property></widget></item>
+       <item row="2" column="1"><widget class="QLineEdit" name="lineEdit_tf_C1"/></item>
+       <item row="2" column="2"><widget class="QLabel"><property name="text"><string>C2:</string></property></widget></item>
+       <item row="2" column="3"><widget class="QLineEdit" name="lineEdit_tf_C2"/></item>
+       <item row="2" column="4"><widget class="QLabel"><property name="text"><string>C3:</string></property></widget></item>
+       <item row="2" column="5"><widget class="QLineEdit" name="lineEdit_tf_C3"/></item>
+       <item row="2" column="6"><widget class="QLabel"><property name="text"><string>C4:</string></property></widget></item>
+       <item row="2" column="7"><widget class="QLineEdit" name="lineEdit_tf_C4"/></item>
+       <item row="2" column="8"><widget class="QLabel"><property name="text"><string>C5:</string></property></widget></item>
+       <item row="2" column="9"><widget class="QLineEdit" name="lineEdit_tf_C5"/></item>
+       <item row="2" column="10"><widget class="QLabel"><property name="text"><string>C6:</string></property></widget></item>
+       <item row="2" column="11"><widget class="QLineEdit" name="lineEdit_tf_C6"/></item>
 
        <!-- Row D -->
-       <item row="6" column="0"><widget class="QLabel"><property name="text"><string>D1:</string></property></widget></item>
-       <item row="6" column="1"><widget class="QLineEdit" name="lineEdit_tf_D1"/></item>
-       <item row="6" column="2"><widget class="QLabel"><property name="text"><string>D2:</string></property></widget></item>
-       <item row="6" column="3"><widget class="QLineEdit" name="lineEdit_tf_D2"/></item>
-       <item row="6" column="4"><widget class="QLabel"><property name="text"><string>D3:</string></property></widget></item>
-       <item row="6" column="5"><widget class="QLineEdit" name="lineEdit_tf_D3"/></item>
-
-       <item row="7" column="0"><widget class="QLabel"><property name="text"><string>D4:</string></property></widget></item>
-       <item row="7" column="1"><widget class="QLineEdit" name="lineEdit_tf_D4"/></item>
-       <item row="7" column="2"><widget class="QLabel"><property name="text"><string>D5:</string></property></widget></item>
-       <item row="7" column="3"><widget class="QLineEdit" name="lineEdit_tf_D5"/></item>
-       <item row="7" column="4"><widget class="QLabel"><property name="text"><string>D6:</string></property></widget></item>
-       <item row="7" column="5"><widget class="QLineEdit" name="lineEdit_tf_D6"/></item>
+       <item row="3" column="0"><widget class="QLabel"><property name="text"><string>D1:</string></property></widget></item>
+       <item row="3" column="1"><widget class="QLineEdit" name="lineEdit_tf_D1"/></item>
+       <item row="3" column="2"><widget class="QLabel"><property name="text"><string>D2:</string></property></widget></item>
+       <item row="3" column="3"><widget class="QLineEdit" name="lineEdit_tf_D2"/></item>
+       <item row="3" column="4"><widget class="QLabel"><property name="text"><string>D3:</string></property></widget></item>
+       <item row="3" column="5"><widget class="QLineEdit" name="lineEdit_tf_D3"/></item>
+       <item row="3" column="6"><widget class="QLabel"><property name="text"><string>D4:</string></property></widget></item>
+       <item row="3" column="7"><widget class="QLineEdit" name="lineEdit_tf_D4"/></item>
+       <item row="3" column="8"><widget class="QLabel"><property name="text"><string>D5:</string></property></widget></item>
+       <item row="3" column="9"><widget class="QLineEdit" name="lineEdit_tf_D5"/></item>
+       <item row="3" column="10"><widget class="QLabel"><property name="text"><string>D6:</string></property></widget></item>
+       <item row="3" column="11"><widget class="QLineEdit" name="lineEdit_tf_D6"/></item>
 
        <!-- Row E -->
-       <item row="8" column="0"><widget class="QLabel"><property name="text"><string>E1:</string></property></widget></item>
-       <item row="8" column="1"><widget class="QLineEdit" name="lineEdit_tf_E1"/></item>
-       <item row="8" column="2"><widget class="QLabel"><property name="text"><string>E2:</string></property></widget></item>
-       <item row="8" column="3"><widget class="QLineEdit" name="lineEdit_tf_E2"/></item>
-       <item row="8" column="4"><widget class="QLabel"><property name="text"><string>E3:</string></property></widget></item>
-       <item row="8" column="5"><widget class="QLineEdit" name="lineEdit_tf_E3"/></item>
-
-       <item row="9" column="0"><widget class="QLabel"><property name="text"><string>E4:</string></property></widget></item>
-       <item row="9" column="1"><widget class="QLineEdit" name="lineEdit_tf_E4"/></item>
-       <item row="9" column="2"><widget class="QLabel"><property name="text"><string>E5:</string></property></widget></item>
-       <item row="9" column="3"><widget class="QLineEdit" name="lineEdit_tf_E5"/></item>
-       <item row="9" column="4"><widget class="QLabel"><property name="text"><string>E6:</string></property></widget></item>
-       <item row="9" column="5"><widget class="QLineEdit" name="lineEdit_tf_E6"/></item>
+       <item row="4" column="0"><widget class="QLabel"><property name="text"><string>E1:</string></property></widget></item>
+       <item row="4" column="1"><widget class="QLineEdit" name="lineEdit_tf_E1"/></item>
+       <item row="4" column="2"><widget class="QLabel"><property name="text"><string>E2:</string></property></widget></item>
+       <item row="4" column="3"><widget class="QLineEdit" name="lineEdit_tf_E2"/></item>
+       <item row="4" column="4"><widget class="QLabel"><property name="text"><string>E3:</string></property></widget></item>
+       <item row="4" column="5"><widget class="QLineEdit" name="lineEdit_tf_E3"/></item>
+       <item row="4" column="6"><widget class="QLabel"><property name="text"><string>E4:</string></property></widget></item>
+       <item row="4" column="7"><widget class="QLineEdit" name="lineEdit_tf_E4"/></item>
+       <item row="4" column="8"><widget class="QLabel"><property name="text"><string>E5:</string></property></widget></item>
+       <item row="4" column="9"><widget class="QLineEdit" name="lineEdit_tf_E5"/></item>
+       <item row="4" column="10"><widget class="QLabel"><property name="text"><string>E6:</string></property></widget></item>
+       <item row="4" column="11"><widget class="QLineEdit" name="lineEdit_tf_E6"/></item>
 
        <!-- Row F -->
-       <item row="10" column="0"><widget class="QLabel"><property name="text"><string>F1:</string></property></widget></item>
-       <item row="10" column="1"><widget class="QLineEdit" name="lineEdit_tf_F1"/></item>
-       <item row="10" column="2"><widget class="QLabel"><property name="text"><string>F2:</string></property></widget></item>
-       <item row="10" column="3"><widget class="QLineEdit" name="lineEdit_tf_F2"/></item>
-       <item row="10" column="4"><widget class="QLabel"><property name="text"><string>F3:</string></property></widget></item>
-       <item row="10" column="5"><widget class="QLineEdit" name="lineEdit_tf_F3"/></item>
-
-       <item row="11" column="0"><widget class="QLabel"><property name="text"><string>F4:</string></property></widget></item>
-       <item row="11" column="1"><widget class="QLineEdit" name="lineEdit_tf_F4"/></item>
-       <item row="11" column="2"><widget class="QLabel"><property name="text"><string>F5:</string></property></widget></item>
-       <item row="11" column="3"><widget class="QLineEdit" name="lineEdit_tf_F5"/></item>
-       <item row="11" column="4"><widget class="QLabel"><property name="text"><string>F6:</string></property></widget></item>
-       <item row="11" column="5"><widget class="QLineEdit" name="lineEdit_tf_F6"/></item>
+       <item row="5" column="0"><widget class="QLabel"><property name="text"><string>F1:</string></property></widget></item>
+       <item row="5" column="1"><widget class="QLineEdit" name="lineEdit_tf_F1"/></item>
+       <item row="5" column="2"><widget class="QLabel"><property name="text"><string>F2:</string></property></widget></item>
+       <item row="5" column="3"><widget class="QLineEdit" name="lineEdit_tf_F2"/></item>
+       <item row="5" column="4"><widget class="QLabel"><property name="text"><string>F3:</string></property></widget></item>
+       <item row="5" column="5"><widget class="QLineEdit" name="lineEdit_tf_F3"/></item>
+       <item row="5" column="6"><widget class="QLabel"><property name="text"><string>F4:</string></property></widget></item>
+       <item row="5" column="7"><widget class="QLineEdit" name="lineEdit_tf_F4"/></item>
+       <item row="5" column="8"><widget class="QLabel"><property name="text"><string>F5:</string></property></widget></item>
+       <item row="5" column="9"><widget class="QLineEdit" name="lineEdit_tf_F5"/></item>
+       <item row="5" column="10"><widget class="QLabel"><property name="text"><string>F6:</string></property></widget></item>
+       <item row="5" column="11"><widget class="QLineEdit" name="lineEdit_tf_F6"/></item>
       </layout>
      </widget>
     </widget>
