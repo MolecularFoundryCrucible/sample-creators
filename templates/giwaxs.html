@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% block title %}GIWAXS Bar Creator{% endblock %}
+
+{% block content %}
+<h1>GIWAXS Bar Creator</h1>
+
+<div class="two-column">
+    <div class="left-panel">
+        <!-- User Login -->
+        <section class="section" id="section-login">
+            <h2>User Login</h2>
+            <div class="form-group">
+                <label>Email</label>
+                <div class="input-row">
+                    <input type="email" id="email" placeholder="user-email@lbl.gov">
+                    <button class="btn btn-primary" onclick="loginUser()">Login</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="username" readonly>
+            </div>
+            <div class="form-group">
+                <label>Project</label>
+                <select id="project" onchange="setProject()"></select>
+            </div>
+            <div class="form-group">
+                <label>Comments</label>
+                <input type="text" id="comments" placeholder="comments">
+            </div>
+            <button class="btn btn-secondary" onclick="logoutUser()">Logout</button>
+        </section>
+
+        <!-- Bar Registration -->
+        <section class="section" id="section-bar">
+            <h2>Bar Setup</h2>
+
+            <div class="workflow-tabs">
+                <button class="tab-btn active" onclick="showBarTab('new')">Create New Bar</button>
+                <button class="tab-btn" onclick="showBarTab('existing')">Find Existing Bar</button>
+            </div>
+
+            <div id="bar-tab-new" class="tab-content">
+                <p class="help-text">Step 1: Get the next available bar number, then register it in both databases.</p>
+                <div class="form-group">
+                    <label>Bar Name</label>
+                    <div class="input-row">
+                        <input type="text" id="bar_name" placeholder="GWBAR000001" readonly>
+                        <button class="btn btn-primary" onclick="getNextBarName()">Get Next Bar #</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>MF Bar UUID</label>
+                    <input type="text" id="bar_mf_uuid" readonly>
+                </div>
+                <div class="form-group">
+                    <label>ALS Bar UUID</label>
+                    <input type="text" id="bar_als_uuid" readonly>
+                </div>
+                <p class="help-text">Step 2: Register in Crucible first, then ALS.</p>
+                <div class="button-row">
+                    <button class="btn btn-primary" id="btn-reg-crucible" onclick="registerCrucible()">1. Add to Crucible</button>
+                    <button class="btn btn-primary" id="btn-reg-als" onclick="registerALS()">2. Add to ALS DB</button>
+                </div>
+            </div>
+
+            <div id="bar-tab-existing" class="tab-content hidden">
+                <p class="help-text">Search for an existing bar by name. The UUIDs will auto-populate.</p>
+                <div class="form-group">
+                    <label>Bar Name</label>
+                    <div class="input-row">
+                        <input type="text" id="bar_name_search" placeholder="e.g. GWBAR000123" onchange="lookupBar()">
+                        <button class="btn btn-primary" onclick="lookupBar()">Search</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>MF Bar UUID</label>
+                    <input type="text" id="bar_mf_uuid_search" readonly>
+                </div>
+                <div class="form-group">
+                    <label>ALS Bar UUID</label>
+                    <input type="text" id="bar_als_uuid_search" readonly>
+                </div>
+            </div>
+        </section>
+
+        <!-- Tray Scan + Sample Selection -->
+        <section class="section" id="section-tray">
+            <h2>Thin Film Selection</h2>
+            <div class="form-group">
+                <label>Tray UUID</label>
+                <input type="text" id="tray_uuid" placeholder="Scan or paste tray UUID and press Enter"
+                       onkeydown="if(event.key==='Enter') scanTray()">
+            </div>
+            <div class="form-group">
+                <label>Tray Name</label>
+                <span id="tray_name" class="info-text">No Tray Scanned</span>
+            </div>
+            <div class="form-group">
+                <label>Bar Position</label>
+                <select id="select_bar_pos">
+                    {% for i in range(1, 15) %}
+                    <option value="{{ i }}">{{ i }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Thin Film</label>
+                <select id="select_thinfilm"></select>
+            </div>
+            <div class="button-row">
+                <button class="btn" onclick="addOneToBar()">Add One</button>
+                <button class="btn" onclick="addAllToBar()">Add All</button>
+            </div>
+        </section>
+    </div>
+
+    <div class="right-panel">
+        <!-- Bar Parameters -->
+        <section class="section" id="section-params">
+            <h2>Bar Parameters</h2>
+            <div class="params-row">
+                <div class="form-group">
+                    <label>Incidence Angles</label>
+                    <input type="text" id="incidence_angle" value="1.0" onchange="updateParams()">
+                </div>
+                <div class="form-group">
+                    <label>Wafer Width (mm)</label>
+                    <input type="number" id="wafer_width" value="15" step="0.1" onchange="recalcPositions(); updateParams()">
+                </div>
+                <div class="form-group">
+                    <label>Offset from Left (mm)</label>
+                    <input type="number" id="offset_mm" value="20" step="0.1" onchange="recalcPositions(); updateParams()">
+                </div>
+            </div>
+        </section>
+
+        <!-- Bar Layout Grid -->
+        <section class="section" id="section-layout">
+            <h2>Bar Layout</h2>
+            <table class="layout-table">
+                <thead>
+                    <tr>
+                        <th>Pos</th>
+                        <th>Thin Film</th>
+                        <th>mm</th>
+                    </tr>
+                </thead>
+                <tbody id="bar-layout-body">
+                    {% for i in range(1, 15) %}
+                    <tr>
+                        <td>{{ i }}</td>
+                        <td><input type="text" class="tf-input" id="pos_{{ i }}_tf" onchange="persistLayout()"></td>
+                        <td><span id="pos_{{ i }}_mm">0.0</span></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <div class="button-row" style="margin-top: 10px;">
+                <button class="btn btn-secondary" onclick="clearLayout()">Clear Layout</button>
+                <button class="btn btn-primary" onclick="previewAndUpload()">Preview & Upload</button>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/giwaxs.js') }}"></script>
+{% endblock %}

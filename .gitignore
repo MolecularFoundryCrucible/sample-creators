@@ -10,3 +10,8 @@ wheels/
 .venv
 data/
 log/
+=======
+*.pyc
+log/
+.env
+.DS_Store

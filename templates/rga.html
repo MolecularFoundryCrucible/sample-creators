@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+{% block title %}RGA Carrier Creator{% endblock %}
+
+{% block content %}
+<h1>RGA Carrier Creator</h1>
+
+<div class="two-column">
+    <div class="left-panel">
+        <!-- User Login -->
+        <section class="section" id="section-login">
+            <h2>User Login</h2>
+            <div class="form-group">
+                <label>Email</label>
+                <div class="input-row">
+                    <input type="email" id="email" placeholder="user-email@lbl.gov">
+                    <button class="btn btn-primary" onclick="loginUser()">Login</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="username" readonly>
+            </div>
+            <div class="form-group">
+                <label>Project</label>
+                <select id="project" onchange="setProject()"></select>
+            </div>
+            <div class="form-group">
+                <label>Comments</label>
+                <input type="text" id="comments" placeholder="comments">
+            </div>
+            <button class="btn btn-secondary" onclick="logoutUser()">Logout</button>
+        </section>
+
+        <!-- RGA Carrier Registration -->
+        <section class="section" id="section-rga">
+            <h2>Carrier Setup</h2>
+
+            <div class="workflow-tabs">
+                <button class="tab-btn active" onclick="showCarrierTab('new')">Create New Carrier</button>
+                <button class="tab-btn" onclick="showCarrierTab('existing')">Find Existing Carrier</button>
+            </div>
+
+            <div id="carrier-tab-new" class="tab-content">
+                <p class="help-text">Step 1: Get the next available carrier number, then register it in both databases.</p>
+                <div class="form-group">
+                    <label>RGA Name</label>
+                    <div class="input-row">
+                        <input type="text" id="rga_name" placeholder="RGA000001" readonly>
+                        <button class="btn btn-primary" onclick="getNextCarrierName()">Get Next RGA #</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>MF RGA UUID</label>
+                    <input type="text" id="rga_mf_uuid" readonly>
+                </div>
+                <div class="form-group">
+                    <label>ALS RGA UUID</label>
+                    <input type="text" id="rga_als_uuid" readonly>
+                </div>
+                <p class="help-text">Step 2: Register in Crucible first, then ALS.</p>
+                <div class="button-row">
+                    <button class="btn btn-primary" onclick="registerCrucible()">1. Add to Crucible</button>
+                    <button class="btn btn-primary" onclick="registerALS()">2. Add to ALS DB</button>
+                </div>
+            </div>
+
+            <div id="carrier-tab-existing" class="tab-content hidden">
+                <p class="help-text">Search for an existing carrier by name. The UUIDs will auto-populate.</p>
+                <div class="form-group">
+                    <label>RGA Name</label>
+                    <div class="input-row">
+                        <input type="text" id="rga_name_search" placeholder="e.g. RGA000045" onchange="lookupCarrier()">
+                        <button class="btn btn-primary" onclick="lookupCarrier()">Search</button>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>MF RGA UUID</label>
+                    <input type="text" id="rga_mf_uuid_search" readonly>
+                </div>
+                <div class="form-group">
+                    <label>ALS RGA UUID</label>
+                    <input type="text" id="rga_als_uuid_search" readonly>
+                </div>
+            </div>
+        </section>
+
+        <!-- Source Tray Scan -->
+        <section class="section" id="section-carrier">
+            <h2>Source Tray</h2>
+            <div class="form-group">
+                <label>Tray UUID</label>
+                <input type="text" id="carrier_uuid" placeholder="Scan or paste tray UUID and press Enter"
+                       onkeydown="if(event.key==='Enter') scanCarrier()">
+            </div>
+            <div class="form-group">
+                <label>Tray Name</label>
+                <span id="carrier_name" class="info-text">No Tray Scanned</span>
+            </div>
+        </section>
+
+        <!-- Sample Selection -->
+        <section class="section" id="section-select">
+            <h2>Add Samples to RGA Layout</h2>
+            <div class="form-group">
+                <label>RGA Position</label>
+                <select id="select_rga_pos">
+                    {% for pos in rga_positions %}
+                    <option value="{{ pos }}">{{ pos }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="form-group">
+                <label>Select Sample</label>
+                <select id="select_thinfilm"></select>
+            </div>
+            <div class="button-row">
+                <button class="btn" onclick="addOneToRGA()">Add to Position</button>
+                <button class="btn" onclick="addAllToRGA()">Add All</button>
+            </div>
+        </section>
+
+        <!-- RGA Parameters -->
+        <section class="section" id="section-params">
+            <h2>RGA Parameters</h2>
+            <div class="form-group">
+                <label>Shutter Open (s)</label>
+                <input type="number" id="shutter_open_s" value="150" onchange="updateParams()">
+            </div>
+            <div class="form-group">
+                <label>Mass Range (amu)</label>
+                <input type="number" id="mass_range_amu" value="300" onchange="updateParams()">
+            </div>
+        </section>
+    </div>
+
+    <div class="right-panel">
+        <!-- RGA Layout Grid (6x6) -->
+        <section class="section" id="section-layout">
+            <h2>RGA Carrier Layout (A1-F6)</h2>
+            <table class="rga-grid">
+                <thead>
+                    <tr>
+                        <th></th>
+                        {% for col in range(1, 7) %}
+                        <th>{{ col }}</th>
+                        {% endfor %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in 'ABCDEF' %}
+                    <tr>
+                        <th>{{ row }}</th>
+                        {% for col in range(1, 7) %}
+                        <td>
+                            <input type="text" class="rga-cell" id="pos_{{ row }}{{ col }}"
+                                   onclick="assignToCell('{{ row }}{{ col }}')" onchange="persistLayout()"
+                                   title="Click to assign selected thin film, or type directly">
+                        </td>
+                        {% endfor %}
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            <div class="button-row" style="margin-top: 10px;">
+                <button class="btn btn-secondary" onclick="clearLayout()">Clear Layout</button>
+                <button class="btn" onclick="generateCSV()">Generate CSV</button>
+                <button class="btn btn-primary" onclick="previewAndUpload()">Preview & Upload</button>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/rga.js') }}"></script>
+{% endblock %}
