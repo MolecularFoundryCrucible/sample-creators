@@ -301,6 +301,7 @@ def upload():
                 name=tf_name,
                 slug_set=state["rga_als_uuid"],
                 description=f"TMF Perovskite Thin Film (mfid: {tf_mfid})",
+                slug_scan_type=RGA_CONFIG["scan_type_slug"],
             )
             new_als_samp = als_sc_client.sample_create(new_sample_dto)
 
