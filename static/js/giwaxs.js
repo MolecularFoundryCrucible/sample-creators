@@ -10,7 +10,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function loadGiwaxsState() {
     try {
-        const state = await api('/giwaxs/api/state');
+        const state = await api('giwaxs/api/state');
         document.getElementById('bar_name').value = state.bar_name || '';
         document.getElementById('bar_mf_uuid').value = state.bar_mf_uuid || '';
         document.getElementById('bar_als_uuid').value = state.bar_als_uuid || '';
@@ -77,7 +77,7 @@ function onBarNameChanged() {
 
 async function getNextBarName() {
     try {
-        const data = await api('/giwaxs/api/next-bar-name', 'POST');
+        const data = await api('giwaxs/api/next-bar-name', 'POST');
         document.getElementById('bar_name').value = data.bar_name;
         document.getElementById('bar_mf_uuid').value = '';
         document.getElementById('bar_als_uuid').value = '';
@@ -95,7 +95,7 @@ async function lookupBar() {
         return;
     }
     try {
-        const data = await api('/giwaxs/api/lookup-bar', 'POST', { bar_name: barName });
+        const data = await api('giwaxs/api/lookup-bar', 'POST', { bar_name: barName });
         document.getElementById('bar_mf_uuid').value = data.mf_uuid;
         document.getElementById('bar_als_uuid').value = data.als_uuid;
         updateBarButtons();
@@ -116,7 +116,7 @@ async function registerCrucible() {
         return;
     }
     try {
-        const data = await api('/giwaxs/api/register-crucible', 'POST', { bar_name: barName });
+        const data = await api('giwaxs/api/register-crucible', 'POST', { bar_name: barName });
         document.getElementById('bar_mf_uuid').value = data.mf_uuid;
         updateBarButtons();
         showAlert('success', `Bar '${data.bar_name}' created in Crucible. UUID: ${data.mf_uuid}`);
@@ -132,7 +132,7 @@ async function registerALS() {
         return;
     }
     try {
-        const data = await api('/giwaxs/api/register-als', 'POST', { bar_name: barName });
+        const data = await api('giwaxs/api/register-als', 'POST', { bar_name: barName });
         document.getElementById('bar_als_uuid').value = data.als_uuid;
         updateBarButtons();
         showAlert('success', `Bar '${data.bar_name}' added to ALS SciCat. Set ID: ${data.als_uuid}`);
@@ -150,7 +150,7 @@ async function scanTray() {
         return;
     }
     try {
-        const data = await api('/giwaxs/api/scan-tray', 'POST', { tray_uuid: uuid });
+        const data = await api('giwaxs/api/scan-tray', 'POST', { tray_uuid: uuid });
         document.getElementById('tray_name').textContent = data.tray_name;
         populateThinFilmDropdown(data.thin_films);
         showAlert('success', `Tray: ${data.tray_name} (${data.thin_films.length} samples)`);
@@ -186,7 +186,7 @@ async function persistLayout() {
         incidence_angle: document.getElementById('incidence_angle').value,
         esaf: document.getElementById('esaf').value,
     };
-    await api('/giwaxs/api/layout', 'POST', data);
+    await api('giwaxs/api/layout', 'POST', data);
 }
 
 async function updateParams() {
@@ -225,7 +225,7 @@ async function clearLayout() {
         document.getElementById(`pos_${i}_tf`).value = '';
     }
     try {
-        await api('/giwaxs/api/clear-layout', 'POST');
+        await api('giwaxs/api/clear-layout', 'POST');
         showAlert('success', 'Layout cleared');
     } catch (e) {
         showAlert('error', e.message);
@@ -257,7 +257,7 @@ async function previewAndUpload() {
         await persistLayout();
 
         showAlert('success', 'Collecting sample info from Crucible...');
-        const preview = await api('/giwaxs/api/collect-preview', 'POST');
+        const preview = await api('giwaxs/api/collect-preview', 'POST');
 
         if (!preview.samples || preview.samples.length === 0) {
             showAlert('error', 'No samples found in bar layout');
@@ -283,7 +283,7 @@ async function previewAndUpload() {
 
         showModal('Upload Preview', html, async () => {
             try {
-                const result = await api('/giwaxs/api/upload', 'POST');
+                const result = await api('giwaxs/api/upload', 'POST');
                 showAlert('success', `Successfully uploaded ${result.uploaded_count} samples to database`);
             } catch (e) {
                 showAlert('error', `Upload failed: ${e.message}`);

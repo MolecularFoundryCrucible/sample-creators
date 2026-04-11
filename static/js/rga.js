@@ -9,7 +9,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
 async function loadRGAState() {
     try {
-        const state = await api('/rga/api/state');
+        const state = await api('rga/api/state');
         document.getElementById('rga_name').value = state.rga_name || '';
         document.getElementById('rga_mf_uuid').value = state.rga_mf_uuid || '';
         document.getElementById('rga_als_uuid').value = state.rga_als_uuid || '';
@@ -75,7 +75,7 @@ function onCarrierNameChanged() {
 
 async function getNextCarrierName() {
     try {
-        const data = await api('/rga/api/next-carrier-name', 'POST');
+        const data = await api('rga/api/next-carrier-name', 'POST');
         document.getElementById('rga_name').value = data.rga_name;
         document.getElementById('rga_mf_uuid').value = '';
         document.getElementById('rga_als_uuid').value = '';
@@ -93,7 +93,7 @@ async function lookupCarrier() {
         return;
     }
     try {
-        const data = await api('/rga/api/lookup-carrier', 'POST', { rga_name: rgaName });
+        const data = await api('rga/api/lookup-carrier', 'POST', { rga_name: rgaName });
         document.getElementById('rga_mf_uuid').value = data.mf_uuid;
         document.getElementById('rga_als_uuid').value = data.als_uuid;
         updateCarrierButtons();
@@ -114,7 +114,7 @@ async function registerCrucible() {
         return;
     }
     try {
-        const data = await api('/rga/api/register-crucible', 'POST', { rga_name: rgaName });
+        const data = await api('rga/api/register-crucible', 'POST', { rga_name: rgaName });
         document.getElementById('rga_mf_uuid').value = data.mf_uuid;
         updateCarrierButtons();
         showAlert('success', `RGA '${data.rga_name}' created in Crucible. UUID: ${data.mf_uuid}`);
@@ -130,7 +130,7 @@ async function registerALS() {
         return;
     }
     try {
-        const data = await api('/rga/api/register-als', 'POST', { rga_name: rgaName });
+        const data = await api('rga/api/register-als', 'POST', { rga_name: rgaName });
         document.getElementById('rga_als_uuid').value = data.als_uuid;
         updateCarrierButtons();
         showAlert('success', `RGA '${data.rga_name}' added to ALS SciCat. Set ID: ${data.als_uuid}`);
@@ -148,7 +148,7 @@ async function scanCarrier() {
         return;
     }
     try {
-        const data = await api('/rga/api/scan-carrier', 'POST', { carrier_uuid: uuid });
+        const data = await api('rga/api/scan-carrier', 'POST', { carrier_uuid: uuid });
         document.getElementById('carrier_name').textContent = data.carrier_name;
         populateThinFilmDropdown(data.thin_films);
         showAlert('success', `Carrier: ${data.carrier_name} (${data.thin_films.length} samples)`);
@@ -182,7 +182,7 @@ async function persistLayout() {
         mass_range_amu: parseInt(document.getElementById('mass_range_amu').value),
         esaf: document.getElementById('esaf').value,
     };
-    await api('/rga/api/layout', 'POST', data);
+    await api('rga/api/layout', 'POST', data);
 }
 
 async function updateParams() {
@@ -232,7 +232,7 @@ async function clearLayout() {
         if (el) el.value = '';
     }
     try {
-        await api('/rga/api/clear-layout', 'POST');
+        await api('rga/api/clear-layout', 'POST');
         showAlert('success', 'Layout cleared');
     } catch (e) {
         showAlert('error', e.message);
@@ -246,7 +246,7 @@ async function generateCSV() {
     await persistLayout();
 
     try {
-        const res = await fetch('/rga/api/generate-csv', {
+        const res = await fetch('rga/api/generate-csv', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
         });
@@ -295,7 +295,7 @@ async function previewAndUpload() {
         await persistLayout();
 
         showAlert('success', 'Collecting sample info from Crucible...');
-        const preview = await api('/rga/api/collect-preview', 'POST');
+        const preview = await api('rga/api/collect-preview', 'POST');
 
         if (!preview.samples || preview.samples.length === 0) {
             showAlert('error', 'No samples found in RGA carrier layout');
@@ -321,7 +321,7 @@ async function previewAndUpload() {
 
         showModal('Upload Preview', html, async () => {
             try {
-                const result = await api('/rga/api/upload', 'POST');
+                const result = await api('rga/api/upload', 'POST');
                 showAlert('success', `Successfully uploaded ${result.uploaded_count} samples to database`);
             } catch (e) {
                 showAlert('error', `Upload failed: ${e.message}`);
