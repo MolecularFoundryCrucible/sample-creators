@@ -39,7 +39,7 @@
             <div class="form-group">
                 <label>RGA Name</label>
                 <div class="input-row">
-                    <input type="text" id="rga_name" placeholder="e.g. RGA000045">
+                    <input type="text" id="rga_name" placeholder="e.g. RGA000045" oninput="onCarrierNameChanged()">
                     <button class="btn btn-primary" onclick="getNextCarrierName()">Get Next #</button>
                     <button class="btn" onclick="lookupCarrier()">Search</button>
                 </div>

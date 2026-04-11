@@ -67,6 +67,12 @@ function updateCarrierButtons() {
     }
 }
 
+function onCarrierNameChanged() {
+    document.getElementById('rga_mf_uuid').value = '';
+    document.getElementById('rga_als_uuid').value = '';
+    updateCarrierButtons();
+}
+
 async function getNextCarrierName() {
     try {
         const data = await api('/rga/api/next-carrier-name', 'POST');

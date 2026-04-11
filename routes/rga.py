@@ -135,7 +135,7 @@ def register_als():
         return jsonify({"error": "Please register in Crucible first"}), 400
 
     try:
-        esaf = als_sc_client.esaf_get_by_name(state["esaf"])
+        esaf = als_sc_client.esaf_get_by_name(state["esaf"])[-1]
         new_set_dto = SampleSetCreateDto(
             name=state["rga_name"],
             slug_esaf=esaf.slug,

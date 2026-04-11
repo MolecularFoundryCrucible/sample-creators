@@ -69,6 +69,12 @@ function updateBarButtons() {
     }
 }
 
+function onBarNameChanged() {
+    document.getElementById('bar_mf_uuid').value = '';
+    document.getElementById('bar_als_uuid').value = '';
+    updateBarButtons();
+}
+
 async function getNextBarName() {
     try {
         const data = await api('/giwaxs/api/next-bar-name', 'POST');
