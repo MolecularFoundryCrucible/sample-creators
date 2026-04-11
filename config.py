@@ -1,4 +1,4 @@
-ALS_SAMPLE_TRACKER_URL = "https://sample-tracker.dataportal-staging.als.lbl.gov/"
+ALS_SAMPLE_TRACKER_URL = "https://sample-tracker.dataportal.als.lbl.gov"
 ALS_SAMPLE_TRACKER_USER = "alsadmin"
 
 GIWAXS_CONFIG = {
