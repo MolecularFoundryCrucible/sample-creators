@@ -1,9 +1,26 @@
 from flask import Flask, render_template
+import os
 import secrets
 
 from routes.shared import shared_bp
 from routes.giwaxs import giwaxs_bp
 from routes.rga import rga_bp
+
+
+class PrefixMiddleware:
+    """Set SCRIPT_NAME so Flask generates correct URLs behind a reverse proxy."""
+
+    def __init__(self, app, prefix=""):
+        self.app = app
+        self.prefix = prefix.rstrip("/")
+
+    def __call__(self, environ, start_response):
+        if self.prefix:
+            environ["SCRIPT_NAME"] = self.prefix
+            path = environ.get("PATH_INFO", "")
+            if path.startswith(self.prefix):
+                environ["PATH_INFO"] = path[len(self.prefix) :]
+        return self.app(environ, start_response)
 
 
 def create_app():
@@ -18,11 +35,14 @@ def create_app():
     def index():
         return render_template("index.html")
 
+    prefix = os.environ.get("SCRIPT_NAME", "")
+    if prefix:
+        app.wsgi_app = PrefixMiddleware(app.wsgi_app, prefix=prefix)
+
     return app
 
 
 if __name__ == "__main__":
     app = create_app()
-    import os
     port = int(os.environ.get("PORT", 5000))
     app.run(host="0.0.0.0", port=port)

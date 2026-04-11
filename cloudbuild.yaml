@@ -21,6 +21,8 @@ steps:
       - '--platform'
       - 'managed'
       - '--port=5000'
+      - '--set-env-vars'
+      - 'SCRIPT_NAME=/sample-creators'
       - '--set-secrets'
       - >-
         CRUCIBLE_API_KEY=crucible_admin_apikey:latest,

@@ -246,7 +246,8 @@ async function generateCSV() {
     await persistLayout();
 
     try {
-        const res = await fetch('/rga/api/generate-csv', {
+        const fullUrl = (typeof BASE_URL !== 'undefined' ? BASE_URL : '') + '/rga/api/generate-csv';
+        const res = await fetch(fullUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
         });

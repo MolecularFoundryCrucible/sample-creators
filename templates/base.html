@@ -38,6 +38,7 @@
         </div>
     </div>
 
+    <script>const BASE_URL = "{{ request.script_root }}";</script>
     <script src="{{ url_for('static', filename='js/shared.js') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
