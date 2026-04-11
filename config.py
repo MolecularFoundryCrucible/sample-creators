@@ -30,7 +30,7 @@ RGA_CONFIG = {
     "proposal": "PRT-00417",
     "default_esaf": "PRT-00417-001",
     "scan_type": "RGA",
-    "scan_type_slug": "12-0-1-2-12-0-1-2-rga",
+    "scan_type_slug": "12-0-1-2-rga",
     "num_positions": 36,
     "default_shutter_open_s": 150,
     "default_mass_range_amu": 300,
