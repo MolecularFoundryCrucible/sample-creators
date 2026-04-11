@@ -1,13 +1,13 @@
-ALS_SCICAT_URL = "https://dataportal-staging.als.lbl.gov/api/v3/"
-ALS_SCICAT_USER = "admin"
-ALS_SAMPLE_TRACKER_URL = "HTTPS://DATAPORTAL-STAGING.ALS.LBL.GOV/SAMPLE-TRACKING"
+ALS_SAMPLE_TRACKER_URL = "https://sample-tracker.dataportal-staging.als.lbl.gov/"
+ALS_SAMPLE_TRACKER_USER = "alsadmin"
 
 GIWAXS_CONFIG = {
     "sample_prefix": "GWBAR",
     "name_format": "GWBAR{:06d}",
     "sample_type": "giwaxs bar",
-    "group_id": "733",
-    "proposal_id": "DD-00839",
+    "beamline": "7-3-3",
+    "proposal": "DD-00839",
+    "default_esaf": "DD-00839-001",
     "scan_type": "GIWAXS",
     "num_positions": 14,
     "default_offset_mm": 20.0,
@@ -25,8 +25,9 @@ RGA_CONFIG = {
     "sample_prefix": "RGA",
     "name_format": "RGA{:06d}",
     "sample_type": "rga carrier",
-    "group_id": "1201",
-    "proposal_id": "PRT-00417",
+    "beamline": "12-0-1",
+    "proposal": "PRT-00417",
+    "default_esaf": "PRT-00417-001",
     "scan_type": "RGA",
     "num_positions": 36,
     "default_shutter_open_s": 150,

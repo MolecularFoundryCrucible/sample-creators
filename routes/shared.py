@@ -1,11 +1,37 @@
+import os
+import logging
+from dotenv import load_dotenv
+load_dotenv()
+
+logger = logging.getLogger(__name__)
+
 from flask import Blueprint, request, jsonify, session
-from backend import cruc_client
+
+from crucible import CrucibleClient
+cruc_client = CrucibleClient(api_url = 'https://crucible.lbl.gov/api/v1',
+                             api_key=os.environ.get('CRUCIBLE_API_KEY', ''))
+
+from beamline_data_toolkit.sample_tracker import SampleTrackerClient
+from config import ALS_SAMPLE_TRACKER_URL, ALS_SAMPLE_TRACKER_USER
+
+als_pw = os.environ.get('ALS_SAMPLE_TRACKER_PASSWORD', 'alsadmin')
+
+als_sc_client = SampleTrackerClient(
+    base_url=ALS_SAMPLE_TRACKER_URL,
+    username=ALS_SAMPLE_TRACKER_USER,
+    password=als_pw,
+    timeout_seconds=100000,
+    logger=logger,
+)
+
 
 shared_bp = Blueprint("shared", __name__)
 
 
-def get_next_serial_sample(sample_prefix, project):
-    project_samples = cruc_client.list_samples(project_id=project)
+def get_next_serial_sample(sample_prefix, sample_type, project):
+    project_samples = cruc_client.samples.list(
+        project_id=project, sample_type=sample_type, limit=5000
+    )
     filtered = [x["sample_name"] for x in project_samples if x["sample_name"].startswith(sample_prefix)]
     nums = sorted(int(x.replace(sample_prefix, "")) for x in filtered)
     if not nums:
@@ -20,14 +46,14 @@ def login():
     if not email:
         return jsonify({"error": "Email required"}), 400
 
-    user_info = cruc_client.get_user(email=email)
+    user_info = cruc_client.users.get(email=email)
     if user_info is None:
         return jsonify({"error": "User not found"}), 404
 
     user_name = f"{user_info['first_name']}_{user_info['last_name']}"
     orcid = user_info["orcid"]
 
-    projects = cruc_client.list_projects(orcid)
+    projects = cruc_client.projects.list(orcid=orcid)
     project_ids = sorted(x["project_id"] for x in projects)
 
     session["user"] = {

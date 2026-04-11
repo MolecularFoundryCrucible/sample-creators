@@ -1,8 +1,8 @@
 from flask import Blueprint, request, jsonify, session, render_template
-from backend import cruc_client, als_sc_client
 from config import GIWAXS_CONFIG
-from routes.shared import get_next_serial_sample
-from pycrucible.utils import get_tz_isoformat
+from routes.shared import cruc_client, als_sc_client, get_next_serial_sample
+from crucible.utils import get_tz_isoformat
+from beamline_data_toolkit.sample_tracker import SampleSetCreateDto, SampleCreateDto, SampleSetParameterValuesByNameDto
 
 giwaxs_bp = Blueprint("giwaxs", __name__)
 
@@ -17,6 +17,7 @@ def _get_giwaxs_state():
             "bar_name": "",
             "bar_mf_uuid": "",
             "bar_als_uuid": "",
+            "esaf": GIWAXS_CONFIG["default_esaf"],
             "tray_name": "",
             "tray_uuid": "",
             "thin_films": [],
@@ -30,7 +31,7 @@ def _get_giwaxs_state():
 
 @giwaxs_bp.route("/")
 def page():
-    return render_template("giwaxs.html")
+    return render_template("giwaxs.html", giwaxs_config=GIWAXS_CONFIG)
 
 
 @giwaxs_bp.route("/api/state", methods=["GET"])
@@ -45,7 +46,7 @@ def next_bar_name():
         return jsonify({"error": "Not logged in"}), 401
 
     project = user["selected_project"]
-    num = get_next_serial_sample("GWBAR", project)
+    num = get_next_serial_sample("GWBAR", "giwaxs bar", project)
     bar_name = f"GWBAR{num:06d}"
 
     state = _get_giwaxs_state()
@@ -62,7 +63,9 @@ def lookup_bar():
     if not bar_name:
         return jsonify({"error": "Bar name required"}), 400
 
-    mf_bars = cruc_client.list_samples(sample_name=bar_name)
+    user = session.get("user")
+    project = user["selected_project"] if user else None
+    mf_bars = cruc_client.samples.list(sample_name=bar_name, sample_type="giwaxs bar", project_id=project)
     mfid = ""
     alsid = ""
     if len(mf_bars) == 1:
@@ -92,9 +95,9 @@ def register_crucible():
         return jsonify({"error": "No bar name set"}), 400
 
     try:
-        new_bar = cruc_client.add_sample(
+        new_bar = cruc_client.samples.create(
             sample_name=bar_name,
-            creation_date=get_tz_isoformat(),
+            timestamp=get_tz_isoformat(),
             owner_orcid=user["orcid"],
             project_id=user["selected_project"],
             sample_type="giwaxs bar",
@@ -118,19 +121,20 @@ def register_als():
         return jsonify({"error": "Please register in Crucible first"}), 400
 
     try:
-        new_set = als_sc_client.create_set(
+        esaf = als_sc_client.esaf_get_by_name(state["esaf"])
+        new_set_dto = SampleSetCreateDto(
             name=state["bar_name"],
-            groupId=GIWAXS_CONFIG["group_id"],
-            proposalId=GIWAXS_CONFIG["proposal_id"],
+            slug_esaf=esaf.slug,
             description=f"MF Thin Film Perovskites GWBAR (mfid: {state['bar_mf_uuid']})",
         )
-        cruc_client.update_sample(
+        new_set = als_sc_client.set_create(new_set_dto)
+        cruc_client.samples.update(
             unique_id=state["bar_mf_uuid"],
-            description=f"ALS GIWAXS Bar || Set ID: {new_set.id}",
+            description=f"ALS GIWAXS Bar || Set ID: {new_set.slug}",
         )
-        state["bar_als_uuid"] = new_set.id
+        state["bar_als_uuid"] = new_set.slug
         session.modified = True
-        return jsonify({"als_uuid": new_set.id, "bar_name": state["bar_name"]})
+        return jsonify({"als_uuid": new_set.slug, "bar_name": state["bar_name"]})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -144,10 +148,10 @@ def scan_tray():
         return jsonify({"error": "Invalid tray UUID (must be 26 characters)"}), 400
 
     try:
-        tray_info = cruc_client.get_sample(sample_id=tray_uuid)
+        tray_info = cruc_client.samples.get(tray_uuid)
         tray_name = tray_info["sample_name"]
 
-        samples = cruc_client.list_samples(parent_id=tray_uuid)
+        samples = cruc_client.samples.list_children(tray_uuid, sample_type="thin film")
         sorted_names = sorted(s["sample_name"] for s in samples)
 
         state = _get_giwaxs_state()
@@ -174,6 +178,8 @@ def update_layout():
         state["wafer_width"] = float(data["wafer_width"])
     if "incidence_angle" in data:
         state["incidence_angle"] = data["incidence_angle"]
+    if "esaf" in data:
+        state["esaf"] = data["esaf"]
 
     session.modified = True
     return jsonify(state)
@@ -202,24 +208,43 @@ def collect_preview():
         if not tf_name:
             continue
 
-        tf_found = cruc_client.list_samples(sample_name=tf_name, project_id=project)
+        tf_found = cruc_client.samples.list(
+            sample_name=tf_name, project_id=project, sample_type="thin film"
+        )
         if len(tf_found) != 1:
             continue
 
         tf = tf_found[0]
         tf_mfid = tf["unique_id"]
+        tf_descrip = tf.get("description", "")
+
+        # Get spin_run synthesis metadata
+        sample_syn_md = {}
+        if tf_name != "TF000000":
+            sample_ds = cruc_client.datasets.list(
+                sample_id=tf_mfid, measurement="spin_run", include_metadata=True
+            )
+            sample_synds = [ds for ds in sample_ds if ds["measurement"] == "spin_run"]
+            if sample_synds:
+                sample_syn_md = sample_synds[0]["scientific_metadata"]["scientific_metadata"]
 
         mm = ((i - 1) * state["wafer_width"]) + state["offset_mm"]
-        params = dict(GIWAXS_CONFIG["default_sample_parameters"])
-        params["mfid"] = tf_mfid
-        params["sample_center_position"] = mm
-        params["incident_angles"] = state["incidence_angle"]
+        scan_params = dict(GIWAXS_CONFIG["default_sample_parameters"])
+        scan_params["mfid"] = tf_mfid
+        scan_params["sample_center_position"] = mm
+        scan_params["incident_angles"] = state["incidence_angle"]
+
+        # Merged for upload
+        all_params = {**scan_params, **sample_syn_md}
 
         samples.append({
             "bar_position": i,
             "tf_name": tf_name,
             "tf_mfid": tf_mfid,
-            "sample_parameters": params,
+            "tf_descrip": tf_descrip,
+            "sample_parameters": all_params,
+            "scan_params": scan_params,
+            "scientific_metadata": sample_syn_md,
         })
 
     samples.sort(key=lambda x: x["bar_position"])
@@ -259,24 +284,32 @@ def upload():
             tf_name = tf["tf_name"]
             tf_mfid = tf["tf_mfid"]
 
-            cruc_client.link_samples(
+            cruc_client.samples.link(
                 parent_id=state["bar_mf_uuid"],
                 child_id=tf_mfid,
             )
 
-            new_als_samp = als_sc_client.create_sample(
+            new_sample_dto = SampleCreateDto(
                 name=tf_name,
-                group_id=GIWAXS_CONFIG["group_id"],
-                proposal_id=GIWAXS_CONFIG["proposal_id"],
-                scan_type=GIWAXS_CONFIG["scan_type"],
-                set_id=state["bar_als_uuid"],
+                slug_set=state["bar_als_uuid"],
                 description=f"TMF Perovskite Thin Film (mfid: {tf_mfid})",
-                parameters=tf["sample_parameters"],
             )
+            new_als_samp = als_sc_client.sample_create(new_sample_dto)
 
-            cruc_client.update_sample(
+            # Set parameter values
+            filtered_params = {k: v for k, v in tf["sample_parameters"].items() if v is not None}
+            values_dto = SampleSetParameterValuesByNameDto(
+                create_parameters_if_missing=True,
+                add_parameters_to_scan_type_if_missing=True,
+                remove_other_values=True,
+                values=filtered_params,
+            )
+            als_sc_client.sample_set_parameter_values_by_name(new_als_samp.slug, values_dto)
+
+            updated_desc = f"{tf.get('tf_descrip', '')} || als_giwaxs_id: {new_als_samp.slug}".strip()
+            cruc_client.samples.update(
                 tf_mfid,
-                description=f"als_giwaxs_id: {new_als_samp.id}",
+                description=updated_desc,
             )
 
         count = len(samples)

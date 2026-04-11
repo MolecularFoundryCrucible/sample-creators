@@ -1,0 +1,64 @@
+
+import os
+
+from beamline_data_toolkit.sample_tracker import SampleTrackerClient,  SampleSetCreateDto, SampleCreateDto, SampleSetParameterValuesByNameDto
+from logging import getLogger
+
+logger = getLogger(__name__)
+user_name = 'admin'
+password = os.environ.get("ALS_SAMPLE_TRACKER_PASSWORD", "admin")
+new_url = "https://sample-tracker.dataportal-staging.als.lbl.gov/"
+
+als_client = SampleTrackerClient(
+    base_url=new_url,
+    username=user_name,
+    password=password,
+    timeout_seconds=100000,
+    logger=logger
+)
+
+beamline_to_use = "7-3-3"
+beamline_name_to_use = "7.3.3"
+proposal_name = "DD-00839"
+esaf_to_use = "DD-00839-001"
+new_beamline = als_client.beamline_get_one(beamline_to_use)
+beamline_details = als_client.beamline_get_details(beamline_to_use)
+scan_types_by_name = {scan_type.name: scan_type for scan_type in beamline_details.scan_types}
+esaf = als_client.esaf_get_by_name(esaf_to_use)
+
+
+# create a set
+set_name = 'GWBAR000001'
+description = f"MF Thin Film Perovskites GWBAR (mfid: {state['bar_mf_uuid']})"
+
+new_set_dto = SampleSetCreateDto(
+                slug=id,
+                name=set_name,
+                slug_esaf=esaf_to_use.slug,
+                description=description,
+            )
+new_set = als_client.set_create(new_set_dto)
+logger.info(f"Created set {new_set.name} , slug: {new_set.slug}.")
+
+# add samples to set
+new_sample_dto = SampleCreateDto(
+                    slug=sample_id,
+                    name=tf_name,
+                    description= f"TMF Perovskite Thin Film (mfid: {tf_mfid})",
+                    slug_set=new_set.slug
+                )
+new_sample = als_client.sample_create(new_sample_dto)
+
+logger.info(f"Created sample {new_sample.name} , slug: {new_sample.slug} in set {new_set.name} , id: {new_set.slug}.")
+
+# Filter out any null values
+filtered_parameters = {k: v for k, v in sample_parameters.items() if v is not None}
+
+values_dto = SampleSetParameterValuesByNameDto(
+create_parameters_if_missing=True,
+add_parameters_to_scan_type_if_missing=True,
+remove_other_values=True,
+values=filtered_parameters
+)
+result = als_client.sample_set_parameter_values_by_name(new_sample.slug, values_dto)
+logger.info(f"Set parameter values.")

@@ -3,10 +3,10 @@ import io
 import os
 from flask import Blueprint, request, jsonify, session, render_template, Response
 import pandas as pd
-from backend import cruc_client, als_sc_client
 from config import RGA_CONFIG, RGA_POSITIONS, COORDS_FILE
-from routes.shared import get_next_serial_sample
-from pycrucible.utils import get_tz_isoformat
+from routes.shared import cruc_client, als_sc_client, get_next_serial_sample
+from crucible.utils import get_tz_isoformat
+from beamline_data_toolkit.sample_tracker import SampleSetCreateDto, SampleCreateDto, SampleSetParameterValuesByNameDto
 
 rga_bp = Blueprint("rga", __name__)
 
@@ -20,6 +20,7 @@ def _get_rga_state():
             "rga_name": "",
             "rga_mf_uuid": "",
             "rga_als_uuid": "",
+            "esaf": RGA_CONFIG["default_esaf"],
             "carrier_name": "",
             "carrier_uuid": "",
             "thin_films": [],
@@ -32,7 +33,7 @@ def _get_rga_state():
 
 @rga_bp.route("/")
 def page():
-    return render_template("rga.html", rga_positions=RGA_POSITIONS)
+    return render_template("rga.html", rga_positions=RGA_POSITIONS, rga_config=RGA_CONFIG)
 
 
 @rga_bp.route("/api/state", methods=["GET"])
@@ -47,7 +48,7 @@ def next_carrier_name():
         return jsonify({"error": "Not logged in"}), 401
 
     project = user["selected_project"]
-    num = get_next_serial_sample("RGA", project)
+    num = get_next_serial_sample("RGA", "rga carrier", project)
     rga_name = f"RGA{num:06d}"
 
     state = _get_rga_state()
@@ -64,7 +65,9 @@ def lookup_carrier():
     if not rga_name:
         return jsonify({"error": "RGA name required"}), 400
 
-    mf_rgas = cruc_client.list_samples(sample_name=rga_name)
+    user = session.get("user")
+    project = user["selected_project"] if user else None
+    mf_rgas = cruc_client.samples.list(sample_name=rga_name, sample_type="rga carrier", project_id=project)
     mfid = ""
     alsid = ""
     if len(mf_rgas) == 1:
@@ -94,9 +97,9 @@ def register_crucible():
         return jsonify({"error": "No RGA name set"}), 400
 
     try:
-        new_rga = cruc_client.add_sample(
+        new_rga = cruc_client.samples.create(
             sample_name=rga_name,
-            creation_date=get_tz_isoformat(),
+            timestamp=get_tz_isoformat(),
             owner_orcid=user["orcid"],
             project_id=user["selected_project"],
             sample_type="rga carrier",
@@ -120,19 +123,20 @@ def register_als():
         return jsonify({"error": "Please register in Crucible first"}), 400
 
     try:
-        new_set = als_sc_client.create_set(
+        esaf = als_sc_client.esaf_get_by_name(state["esaf"])
+        new_set_dto = SampleSetCreateDto(
             name=state["rga_name"],
-            groupId=RGA_CONFIG["group_id"],
-            proposalId=RGA_CONFIG["proposal_id"],
+            slug_esaf=esaf.slug,
             description=f"MF RGA Carrier (mfid: {state['rga_mf_uuid']})",
         )
-        cruc_client.update_sample(
+        new_set = als_sc_client.set_create(new_set_dto)
+        cruc_client.samples.update(
             unique_id=state["rga_mf_uuid"],
-            description=f"ALS RGA Carrier || Set ID: {new_set.id}",
+            description=f"ALS RGA Carrier || Set ID: {new_set.slug}",
         )
-        state["rga_als_uuid"] = new_set.id
+        state["rga_als_uuid"] = new_set.slug
         session.modified = True
-        return jsonify({"als_uuid": new_set.id, "rga_name": state["rga_name"]})
+        return jsonify({"als_uuid": new_set.slug, "rga_name": state["rga_name"]})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -146,10 +150,10 @@ def scan_carrier():
         return jsonify({"error": "Invalid carrier UUID (must be 26 characters)"}), 400
 
     try:
-        carrier_info = cruc_client.get_sample(sample_id=carrier_uuid)
+        carrier_info = cruc_client.samples.get(carrier_uuid)
         carrier_name = carrier_info["sample_name"]
 
-        samples = cruc_client.list_samples(parent_id=carrier_uuid)
+        samples = cruc_client.samples.list_children(carrier_uuid, sample_type="thin film")
         sorted_names = sorted(s["sample_name"] for s in samples)
 
         state = _get_rga_state()
@@ -174,6 +178,8 @@ def update_layout():
         state["shutter_open_s"] = int(data["shutter_open_s"])
     if "mass_range_amu" in data:
         state["mass_range_amu"] = int(data["mass_range_amu"])
+    if "esaf" in data:
+        state["esaf"] = data["esaf"]
 
     session.modified = True
     return jsonify(state)
@@ -202,7 +208,9 @@ def collect_preview():
         if not tf_name:
             continue
 
-        tf_found = cruc_client.list_samples(sample_name=tf_name, project_id=project)
+        tf_found = cruc_client.samples.list(
+            sample_name=tf_name, project_id=project, sample_type="thin film"
+        )
         if len(tf_found) != 1:
             continue
 
@@ -212,23 +220,28 @@ def collect_preview():
 
         # Get spin_run metadata if available
         sample_syn_md = {}
+        scan_params = {"mfid": tf_mfid}
         if tf_name != "TF000000":
-            sample_ds = cruc_client.list_datasets(
+            sample_ds = cruc_client.datasets.list(
                 sample_id=tf_mfid, measurement="spin_run", include_metadata=True
             )
             sample_synds = [ds for ds in sample_ds if ds["measurement"] == "spin_run"]
             if sample_synds:
                 sample_syn_md = sample_synds[0]["scientific_metadata"]["scientific_metadata"]
-                sample_syn_md["mfid"] = tf_mfid
             elif tf_name != "TF000000":
                 continue
+
+        # Merged for upload
+        all_params = {**scan_params, **sample_syn_md}
 
         samples.append({
             "rga_position": pos,
             "tf_name": tf_name,
             "tf_mfid": tf_mfid,
             "tf_descrip": tf_descrip,
-            "sample_parameters": sample_syn_md,
+            "sample_parameters": all_params,
+            "scan_params": scan_params,
+            "scientific_metadata": sample_syn_md,
         })
 
     samples.sort(key=lambda x: RGA_POSITIONS.index(x["rga_position"]))
@@ -267,23 +280,30 @@ def upload():
             tf_name = tf["tf_name"]
             tf_mfid = tf["tf_mfid"]
 
-            cruc_client.link_samples(
+            cruc_client.samples.link(
                 parent_id=state["rga_mf_uuid"],
                 child_id=tf_mfid,
             )
 
-            new_als_samp = als_sc_client.create_sample(
+            new_sample_dto = SampleCreateDto(
                 name=tf_name,
-                group_id=RGA_CONFIG["group_id"],
-                proposal_id=RGA_CONFIG["proposal_id"],
-                scan_type=RGA_CONFIG["scan_type"],
-                set_id=state["rga_als_uuid"],
+                slug_set=state["rga_als_uuid"],
                 description=f"TMF Perovskite Thin Film (mfid: {tf_mfid})",
-                parameters=tf["sample_parameters"],
             )
+            new_als_samp = als_sc_client.sample_create(new_sample_dto)
 
-            updated_desc = f"{tf.get('tf_descrip', '')} || rga_als_id: {new_als_samp.id}".strip()
-            cruc_client.update_sample(tf_mfid, description=updated_desc)
+            # Set parameter values
+            filtered_params = {k: v for k, v in tf["sample_parameters"].items() if v is not None}
+            values_dto = SampleSetParameterValuesByNameDto(
+                create_parameters_if_missing=True,
+                add_parameters_to_scan_type_if_missing=True,
+                remove_other_values=True,
+                values=filtered_params,
+            )
+            als_sc_client.sample_set_parameter_values_by_name(new_als_samp.slug, values_dto)
+
+            updated_desc = f"{tf.get('tf_descrip', '')} || rga_als_id: {new_als_samp.slug}".strip()
+            cruc_client.samples.update(tf_mfid, description=updated_desc)
 
         count = len(samples)
         _pending_uploads.pop(sid, None)

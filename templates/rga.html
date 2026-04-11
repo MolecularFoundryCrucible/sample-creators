@@ -57,6 +57,10 @@
                     <label>ALS RGA UUID</label>
                     <input type="text" id="rga_als_uuid" readonly>
                 </div>
+                <div class="form-group">
+                    <label>ESAF</label>
+                    <input type="text" id="esaf" value="{{ rga_config.default_esaf }}" onchange="updateParams()">
+                </div>
                 <p class="help-text">Step 2: Register in Crucible first, then ALS.</p>
                 <div class="button-row">
                     <button class="btn btn-primary" onclick="registerCrucible()">1. Add to Crucible</button>

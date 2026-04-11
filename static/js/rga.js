@@ -30,6 +30,7 @@ async function loadRGAState() {
         }
 
         // Restore parameters
+        if (state.esaf) document.getElementById('esaf').value = state.esaf;
         document.getElementById('shutter_open_s').value = state.shutter_open_s;
         document.getElementById('mass_range_amu').value = state.mass_range_amu;
 
@@ -146,6 +147,7 @@ async function persistLayout() {
         positions: getLayoutPositions(),
         shutter_open_s: parseInt(document.getElementById('shutter_open_s').value),
         mass_range_amu: parseInt(document.getElementById('mass_range_amu').value),
+        esaf: document.getElementById('esaf').value,
     };
     await api('/rga/api/layout', 'POST', data);
 }
@@ -271,9 +273,16 @@ async function previewAndUpload() {
         html += `<p><strong>Crucible UUID:</strong> ${preview.rga_mf_uuid}</p>`;
         html += `<p><strong>ALS Set ID:</strong> ${preview.rga_als_uuid}</p>`;
         html += `<p><strong>Samples:</strong> ${preview.samples.length}</p>`;
-        html += '<table class="preview-table"><thead><tr><th>Pos</th><th>Thin Film</th><th>MFID</th></tr></thead><tbody>';
+        html += '<table class="preview-table"><thead><tr><th>Pos</th><th>Thin Film</th><th>MFID</th><th>Parameters</th></tr></thead><tbody>';
         for (const s of preview.samples) {
-            html += `<tr><td>${s.rga_position}</td><td>${s.tf_name}</td><td>${s.tf_mfid}</td></tr>`;
+            const scanLines = Object.entries(s.scan_params || {})
+                .map(([k, v]) => `<span class="param-key">${k}:</span> ${v}`)
+                .join('<br>');
+            const mdLines = Object.entries(s.scientific_metadata || {})
+                .map(([k, v]) => `<span class="param-key meta-key">${k}:</span> <span class="meta-val">${v}</span>`)
+                .join('<br>');
+            const divider = scanLines && mdLines ? '<div class="param-divider"></div>' : '';
+            html += `<tr><td>${s.rga_position}</td><td>${s.tf_name}</td><td class="mfid-cell">${s.tf_mfid}</td><td class="params-cell">${scanLines}${divider}${mdLines}</td></tr>`;
         }
         html += '</tbody></table>';
 

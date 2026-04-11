@@ -450,3 +450,32 @@ input[readonly] {
 .preview-table th {
     background: #f7fafc;
 }
+
+.params-cell {
+    font-size: 11px;
+    line-height: 1.6;
+    max-width: 300px;
+}
+
+.param-key {
+    font-weight: 600;
+    color: #1a202c;
+}
+
+.meta-key {
+    color: #4a5568;
+}
+
+.meta-val {
+    color: #4a5568;
+}
+
+.param-divider {
+    border-top: 1px solid #e2e8f0;
+    margin: 4px 0;
+}
+
+.mfid-cell {
+    font-size: 11px;
+    word-break: break-all;
+}

@@ -1,0 +1,38 @@
+steps:
+  # Step 1: Build the Docker image
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['build', '-t', '${_IMAGE_PATH}', '.']
+
+  # Step 2: Push the image to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args: ['push', '${_IMAGE_PATH}']
+
+  # Step 3: Deploy to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk:stable'
+    entrypoint: gcloud
+    args:
+      - 'run'
+      - 'deploy'
+      - '${_SERVICE_NAME}'
+      - '--image'
+      - '${_IMAGE_PATH}'
+      - '--region'
+      - 'us-central1'
+      - '--platform'
+      - 'managed'
+      - '--set-secrets'
+      - >-
+        CRUCIBLE_API_KEY=crucible_admin_apikey:latest,
+        ALS_SAMPLE_TRACKER_PASSWORD=als_sample_tracker_password:latest
+      - '--service-account'
+      - 'sample-creators-cloudrun@mf-crucible.iam.gserviceaccount.com'
+      - '--allow-unauthenticated'
+
+substitutions:
+  _SERVICE_NAME: 'sample-creators'
+  _REGION: 'us-central1'
+  _IMAGE_PATH: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${BRANCH_NAME}'
+  _SERVICE_URL: 'https://${_SERVICE_NAME}-${PROJECT_NUMBER}.us-central1.run.app'
+
+images:
+  - '${_IMAGE_PATH}'
