@@ -15,7 +15,7 @@ steps:
       - 'deploy'
       - '${_SERVICE_NAME}'
       - '--image'
-      - '${_IMAGE_PATH}'
+      - '${_IMAGE_PATH}:latest'
       - '--region'
       - 'us-central1'
       - '--platform'
