@@ -35,56 +35,30 @@
         <section class="section" id="section-bar">
             <h2>Bar Setup</h2>
 
-            <div class="workflow-tabs">
-                <button class="tab-btn active" onclick="showBarTab('new')">Create New Bar</button>
-                <button class="tab-btn" onclick="showBarTab('existing')">Find Existing Bar</button>
-            </div>
-
-            <div id="bar-tab-new" class="tab-content">
-                <p class="help-text">Step 1: Get the next available bar number, then register it in both databases.</p>
-                <div class="form-group">
-                    <label>Bar Name</label>
-                    <div class="input-row">
-                        <input type="text" id="bar_name" placeholder="GWBAR000001" readonly>
-                        <button class="btn btn-primary" onclick="getNextBarName()">Get Next Bar #</button>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>MF Bar UUID</label>
-                    <input type="text" id="bar_mf_uuid" readonly>
-                </div>
-                <div class="form-group">
-                    <label>ALS Bar UUID</label>
-                    <input type="text" id="bar_als_uuid" readonly>
-                </div>
-                <div class="form-group">
-                    <label>ESAF</label>
-                    <input type="text" id="esaf" value="{{ giwaxs_config.default_esaf }}" onchange="updateParams()">
-                </div>
-                <p class="help-text">Step 2: Register in Crucible first, then ALS.</p>
-                <div class="button-row">
-                    <button class="btn btn-primary" id="btn-reg-crucible" onclick="registerCrucible()">1. Add to Crucible</button>
-                    <button class="btn btn-primary" id="btn-reg-als" onclick="registerALS()">2. Add to ALS DB</button>
+            <p class="help-text">Enter a bar name or get the next available number. Use Search to find an existing bar.</p>
+            <div class="form-group">
+                <label>Bar Name</label>
+                <div class="input-row">
+                    <input type="text" id="bar_name" placeholder="e.g. GWBAR000123">
+                    <button class="btn btn-primary" onclick="getNextBarName()">Get Next #</button>
+                    <button class="btn" onclick="lookupBar()">Search</button>
                 </div>
             </div>
-
-            <div id="bar-tab-existing" class="tab-content hidden">
-                <p class="help-text">Search for an existing bar by name. The UUIDs will auto-populate.</p>
-                <div class="form-group">
-                    <label>Bar Name</label>
-                    <div class="input-row">
-                        <input type="text" id="bar_name_search" placeholder="e.g. GWBAR000123" onchange="lookupBar()">
-                        <button class="btn btn-primary" onclick="lookupBar()">Search</button>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <label>MF Bar UUID</label>
-                    <input type="text" id="bar_mf_uuid_search" readonly>
-                </div>
-                <div class="form-group">
-                    <label>ALS Bar UUID</label>
-                    <input type="text" id="bar_als_uuid_search" readonly>
-                </div>
+            <div class="form-group">
+                <label>MF Bar UUID</label>
+                <input type="text" id="bar_mf_uuid" readonly>
+            </div>
+            <div class="form-group">
+                <label>ALS Bar UUID</label>
+                <input type="text" id="bar_als_uuid" readonly>
+            </div>
+            <div class="form-group">
+                <label>ESAF</label>
+                <input type="text" id="esaf" value="{{ giwaxs_config.default_esaf }}" onchange="updateParams()">
+            </div>
+            <div class="button-row">
+                <button class="btn btn-primary" id="btn-reg-crucible" onclick="registerCrucible()">Add to Crucible</button>
+                <button class="btn btn-primary" id="btn-reg-als" onclick="registerALS()">Add to ALS DB</button>
             </div>
         </section>
 

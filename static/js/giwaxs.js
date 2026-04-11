@@ -11,13 +11,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadGiwaxsState() {
     try {
         const state = await api('/giwaxs/api/state');
-        // Restore bar info (populate both tabs)
         document.getElementById('bar_name').value = state.bar_name || '';
         document.getElementById('bar_mf_uuid').value = state.bar_mf_uuid || '';
         document.getElementById('bar_als_uuid').value = state.bar_als_uuid || '';
-        document.getElementById('bar_name_search').value = state.bar_name || '';
-        document.getElementById('bar_mf_uuid_search').value = state.bar_mf_uuid || '';
-        document.getElementById('bar_als_uuid_search').value = state.bar_als_uuid || '';
 
         // Restore tray info
         document.getElementById('tray_name').textContent = state.tray_name || 'No Tray Scanned';
@@ -41,23 +37,37 @@ async function loadGiwaxsState() {
             const tf = state.positions[String(i)] || '';
             document.getElementById(`pos_${i}_tf`).value = tf;
         }
+
+        updateBarButtons();
     } catch {
         // No state yet
     }
 }
 
-// ========== Tab Switching ==========
-
-function showBarTab(tab) {
-    document.getElementById('bar-tab-new').classList.toggle('hidden', tab !== 'new');
-    document.getElementById('bar-tab-existing').classList.toggle('hidden', tab !== 'existing');
-    for (const btn of document.querySelectorAll('#section-bar .tab-btn')) {
-        btn.classList.remove('active');
-    }
-    event.target.classList.add('active');
-}
-
 // ========== Bar Registration ==========
+
+function updateBarButtons() {
+    const mfUuid = document.getElementById('bar_mf_uuid').value;
+    const alsUuid = document.getElementById('bar_als_uuid').value;
+    const btnCrucible = document.getElementById('btn-reg-crucible');
+    const btnAls = document.getElementById('btn-reg-als');
+
+    if (mfUuid) {
+        btnCrucible.disabled = true;
+        btnCrucible.textContent = 'In Crucible ✓';
+    } else {
+        btnCrucible.disabled = false;
+        btnCrucible.textContent = 'Add to Crucible';
+    }
+
+    if (alsUuid) {
+        btnAls.disabled = true;
+        btnAls.textContent = 'In ALS DB ✓';
+    } else {
+        btnAls.disabled = false;
+        btnAls.textContent = 'Add to ALS DB';
+    }
+}
 
 async function getNextBarName() {
     try {
@@ -65,6 +75,7 @@ async function getNextBarName() {
         document.getElementById('bar_name').value = data.bar_name;
         document.getElementById('bar_mf_uuid').value = '';
         document.getElementById('bar_als_uuid').value = '';
+        updateBarButtons();
         showAlert('success', `Next bar name: ${data.bar_name}`);
     } catch (e) {
         showAlert('error', e.message);
@@ -72,16 +83,20 @@ async function getNextBarName() {
 }
 
 async function lookupBar() {
-    const barName = document.getElementById('bar_name_search').value.trim();
-    if (!barName) return;
+    const barName = document.getElementById('bar_name').value.trim();
+    if (!barName) {
+        showAlert('error', 'Enter a bar name first');
+        return;
+    }
     try {
         const data = await api('/giwaxs/api/lookup-bar', 'POST', { bar_name: barName });
-        document.getElementById('bar_mf_uuid_search').value = data.mf_uuid;
-        document.getElementById('bar_als_uuid_search').value = data.als_uuid;
+        document.getElementById('bar_mf_uuid').value = data.mf_uuid;
+        document.getElementById('bar_als_uuid').value = data.als_uuid;
+        updateBarButtons();
         if (data.mf_uuid) {
             showAlert('success', `Found bar '${barName}'`);
         } else {
-            showAlert('error', `Bar '${barName}' not found in Crucible`);
+            showAlert('info', `Bar '${barName}' not found in Crucible — ready to create`);
         }
     } catch (e) {
         showAlert('error', e.message);
@@ -89,9 +104,15 @@ async function lookupBar() {
 }
 
 async function registerCrucible() {
+    const barName = document.getElementById('bar_name').value.trim();
+    if (!barName) {
+        showAlert('error', 'Enter a bar name first');
+        return;
+    }
     try {
-        const data = await api('/giwaxs/api/register-crucible', 'POST');
+        const data = await api('/giwaxs/api/register-crucible', 'POST', { bar_name: barName });
         document.getElementById('bar_mf_uuid').value = data.mf_uuid;
+        updateBarButtons();
         showAlert('success', `Bar '${data.bar_name}' created in Crucible. UUID: ${data.mf_uuid}`);
     } catch (e) {
         showAlert('error', e.message);
@@ -99,9 +120,15 @@ async function registerCrucible() {
 }
 
 async function registerALS() {
+    const barName = document.getElementById('bar_name').value.trim();
+    if (!barName) {
+        showAlert('error', 'Enter a bar name first');
+        return;
+    }
     try {
-        const data = await api('/giwaxs/api/register-als', 'POST');
+        const data = await api('/giwaxs/api/register-als', 'POST', { bar_name: barName });
         document.getElementById('bar_als_uuid').value = data.als_uuid;
+        updateBarButtons();
         showAlert('success', `Bar '${data.bar_name}' added to ALS SciCat. Set ID: ${data.als_uuid}`);
     } catch (e) {
         showAlert('error', e.message);
@@ -203,12 +230,12 @@ async function clearLayout() {
 
 async function previewAndUpload() {
     try {
-        const barName = document.getElementById('bar_name').value || document.getElementById('bar_name_search').value;
-        const mfUuid = document.getElementById('bar_mf_uuid').value || document.getElementById('bar_mf_uuid_search').value;
-        const alsUuid = document.getElementById('bar_als_uuid').value || document.getElementById('bar_als_uuid_search').value;
+        const barName = document.getElementById('bar_name').value;
+        const mfUuid = document.getElementById('bar_mf_uuid').value;
+        const alsUuid = document.getElementById('bar_als_uuid').value;
 
         if (!barName) {
-            showAlert('error', 'No bar specified. Create a new bar or search for an existing one first.');
+            showAlert('error', 'No bar specified. Enter a name or use Get Next #.');
             return;
         }
         if (!mfUuid) {

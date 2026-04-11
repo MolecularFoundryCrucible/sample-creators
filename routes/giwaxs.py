@@ -89,7 +89,14 @@ def register_crucible():
     if not user:
         return jsonify({"error": "Not logged in"}), 401
 
+    data = request.get_json() or {}
     state = _get_giwaxs_state()
+
+    # Allow the client to send the current bar name (editable field)
+    if data.get("bar_name"):
+        state["bar_name"] = data["bar_name"].strip()
+        session.modified = True
+
     bar_name = state["bar_name"]
     if not bar_name:
         return jsonify({"error": "No bar name set"}), 400
@@ -116,12 +123,19 @@ def register_als():
     if not user:
         return jsonify({"error": "Not logged in"}), 401
 
+    data = request.get_json() or {}
     state = _get_giwaxs_state()
+
+    if data.get("bar_name"):
+        state["bar_name"] = data["bar_name"].strip()
+        session.modified = True
+
     if not state["bar_mf_uuid"]:
         return jsonify({"error": "Please register in Crucible first"}), 400
 
     try:
-        esaf = als_sc_client.esaf_get_by_name(state["esaf"])
+        esaf = als_sc_client.esaf_get_by_name(state["esaf"])[-1]
+        print(esaf.slug)
         new_set_dto = SampleSetCreateDto(
             name=state["bar_name"],
             slug_esaf=esaf.slug,

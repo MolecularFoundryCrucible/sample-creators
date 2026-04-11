@@ -10,13 +10,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 async function loadRGAState() {
     try {
         const state = await api('/rga/api/state');
-        // Restore carrier info (populate both tabs)
         document.getElementById('rga_name').value = state.rga_name || '';
         document.getElementById('rga_mf_uuid').value = state.rga_mf_uuid || '';
         document.getElementById('rga_als_uuid').value = state.rga_als_uuid || '';
-        document.getElementById('rga_name_search').value = state.rga_name || '';
-        document.getElementById('rga_mf_uuid_search').value = state.rga_mf_uuid || '';
-        document.getElementById('rga_als_uuid_search').value = state.rga_als_uuid || '';
 
         // Restore source carrier info
         document.getElementById('carrier_name').textContent = state.carrier_name || 'No Tray Scanned';
@@ -39,23 +35,37 @@ async function loadRGAState() {
             const el = document.getElementById(`pos_${pos}`);
             if (el) el.value = tf || '';
         }
+
+        updateCarrierButtons();
     } catch {
         // No state yet
     }
 }
 
-// ========== Tab Switching ==========
-
-function showCarrierTab(tab) {
-    document.getElementById('carrier-tab-new').classList.toggle('hidden', tab !== 'new');
-    document.getElementById('carrier-tab-existing').classList.toggle('hidden', tab !== 'existing');
-    for (const btn of document.querySelectorAll('#section-rga .tab-btn')) {
-        btn.classList.remove('active');
-    }
-    event.target.classList.add('active');
-}
-
 // ========== Carrier Registration ==========
+
+function updateCarrierButtons() {
+    const mfUuid = document.getElementById('rga_mf_uuid').value;
+    const alsUuid = document.getElementById('rga_als_uuid').value;
+    const btnCrucible = document.getElementById('btn-reg-crucible');
+    const btnAls = document.getElementById('btn-reg-als');
+
+    if (mfUuid) {
+        btnCrucible.disabled = true;
+        btnCrucible.textContent = 'In Crucible ✓';
+    } else {
+        btnCrucible.disabled = false;
+        btnCrucible.textContent = 'Add to Crucible';
+    }
+
+    if (alsUuid) {
+        btnAls.disabled = true;
+        btnAls.textContent = 'In ALS DB ✓';
+    } else {
+        btnAls.disabled = false;
+        btnAls.textContent = 'Add to ALS DB';
+    }
+}
 
 async function getNextCarrierName() {
     try {
@@ -63,6 +73,7 @@ async function getNextCarrierName() {
         document.getElementById('rga_name').value = data.rga_name;
         document.getElementById('rga_mf_uuid').value = '';
         document.getElementById('rga_als_uuid').value = '';
+        updateCarrierButtons();
         showAlert('success', `Next RGA name: ${data.rga_name}`);
     } catch (e) {
         showAlert('error', e.message);
@@ -70,16 +81,20 @@ async function getNextCarrierName() {
 }
 
 async function lookupCarrier() {
-    const rgaName = document.getElementById('rga_name_search').value.trim();
-    if (!rgaName) return;
+    const rgaName = document.getElementById('rga_name').value.trim();
+    if (!rgaName) {
+        showAlert('error', 'Enter a carrier name first');
+        return;
+    }
     try {
         const data = await api('/rga/api/lookup-carrier', 'POST', { rga_name: rgaName });
-        document.getElementById('rga_mf_uuid_search').value = data.mf_uuid;
-        document.getElementById('rga_als_uuid_search').value = data.als_uuid;
+        document.getElementById('rga_mf_uuid').value = data.mf_uuid;
+        document.getElementById('rga_als_uuid').value = data.als_uuid;
+        updateCarrierButtons();
         if (data.mf_uuid) {
             showAlert('success', `Found carrier '${rgaName}'`);
         } else {
-            showAlert('error', `Carrier '${rgaName}' not found in Crucible`);
+            showAlert('info', `Carrier '${rgaName}' not found in Crucible — ready to create`);
         }
     } catch (e) {
         showAlert('error', e.message);
@@ -87,9 +102,15 @@ async function lookupCarrier() {
 }
 
 async function registerCrucible() {
+    const rgaName = document.getElementById('rga_name').value.trim();
+    if (!rgaName) {
+        showAlert('error', 'Enter a carrier name first');
+        return;
+    }
     try {
-        const data = await api('/rga/api/register-crucible', 'POST');
+        const data = await api('/rga/api/register-crucible', 'POST', { rga_name: rgaName });
         document.getElementById('rga_mf_uuid').value = data.mf_uuid;
+        updateCarrierButtons();
         showAlert('success', `RGA '${data.rga_name}' created in Crucible. UUID: ${data.mf_uuid}`);
     } catch (e) {
         showAlert('error', e.message);
@@ -97,9 +118,15 @@ async function registerCrucible() {
 }
 
 async function registerALS() {
+    const rgaName = document.getElementById('rga_name').value.trim();
+    if (!rgaName) {
+        showAlert('error', 'Enter a carrier name first');
+        return;
+    }
     try {
-        const data = await api('/rga/api/register-als', 'POST');
+        const data = await api('/rga/api/register-als', 'POST', { rga_name: rgaName });
         document.getElementById('rga_als_uuid').value = data.als_uuid;
+        updateCarrierButtons();
         showAlert('success', `RGA '${data.rga_name}' added to ALS SciCat. Set ID: ${data.als_uuid}`);
     } catch (e) {
         showAlert('error', e.message);
@@ -242,12 +269,12 @@ async function generateCSV() {
 
 async function previewAndUpload() {
     try {
-        const rgaName = document.getElementById('rga_name').value || document.getElementById('rga_name_search').value;
-        const mfUuid = document.getElementById('rga_mf_uuid').value || document.getElementById('rga_mf_uuid_search').value;
-        const alsUuid = document.getElementById('rga_als_uuid').value || document.getElementById('rga_als_uuid_search').value;
+        const rgaName = document.getElementById('rga_name').value;
+        const mfUuid = document.getElementById('rga_mf_uuid').value;
+        const alsUuid = document.getElementById('rga_als_uuid').value;
 
         if (!rgaName) {
-            showAlert('error', 'No carrier specified. Create a new carrier or search for an existing one first.');
+            showAlert('error', 'No carrier specified. Enter a name or use Get Next #.');
             return;
         }
         if (!mfUuid) {

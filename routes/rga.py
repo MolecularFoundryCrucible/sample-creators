@@ -91,7 +91,13 @@ def register_crucible():
     if not user:
         return jsonify({"error": "Not logged in"}), 401
 
+    data = request.get_json() or {}
     state = _get_rga_state()
+
+    if data.get("rga_name"):
+        state["rga_name"] = data["rga_name"].strip()
+        session.modified = True
+
     rga_name = state["rga_name"]
     if not rga_name:
         return jsonify({"error": "No RGA name set"}), 400
@@ -118,7 +124,13 @@ def register_als():
     if not user:
         return jsonify({"error": "Not logged in"}), 401
 
+    data = request.get_json() or {}
     state = _get_rga_state()
+
+    if data.get("rga_name"):
+        state["rga_name"] = data["rga_name"].strip()
+        session.modified = True
+
     if not state["rga_mf_uuid"]:
         return jsonify({"error": "Please register in Crucible first"}), 400
 
