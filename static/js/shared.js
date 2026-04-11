@@ -55,7 +55,7 @@ async function loginUser() {
         return;
     }
     try {
-        const user = await api('api/user/login', 'POST', { email });
+        const user = await api('/api/user/login', 'POST', { email });
         populateUserInfo(user);
         showAlert('success', `Logged in as ${user.user_name}`);
     } catch (e) {
@@ -65,7 +65,7 @@ async function loginUser() {
 
 async function logoutUser() {
     try {
-        await api('api/user/logout', 'POST');
+        await api('/api/user/logout', 'POST');
         clearUserInfo();
         showAlert('success', 'Logged out');
     } catch (e) {
@@ -75,7 +75,7 @@ async function logoutUser() {
 
 async function loadUserState() {
     try {
-        const user = await api('api/user');
+        const user = await api('/api/user');
         populateUserInfo(user);
     } catch {
         // Not logged in, that's fine
@@ -115,7 +115,7 @@ function clearUserInfo() {
 
 async function setProject() {
     const project = document.getElementById('project').value;
-    await api('api/user/project', 'POST', { project });
+    await api('/api/user/project', 'POST', { project });
 }
 
 // ========== Thin Film Dropdown ==========

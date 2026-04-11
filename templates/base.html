@@ -3,17 +3,16 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}10K Apps{% endblock %}</title>
-    <base href="{{ request.script_root|default('', true) }}/">
-    <link rel="stylesheet" href="static/css/style.css">
+    <title>{% block title %}Sample Creation Apps{% endblock %}</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
     <nav class="navbar">
-        <div class="nav-brand">10K Sample Apps</div>
+        <div class="nav-brand">Sample Creation Apps</div>
         <div class="nav-links">
-            <a href="./">Home</a>
-            <a href="giwaxs/">GIWAXS Bar</a>
-            <a href="rga/">RGA Carrier</a>
+            <a href="{{ url_for('index') }}">Home</a>
+            <a href="{{ url_for('giwaxs.page') }}">GIWAXS Bar</a>
+            <a href="{{ url_for('rga.page') }}">RGA Carrier</a>
         </div>
         <div class="nav-user" id="nav-user-info"></div>
     </nav>
@@ -39,7 +38,7 @@
         </div>
     </div>
 
-    <script src="static/js/shared.js"></script>
+    <script src="{{ url_for('static', filename='js/shared.js') }}"></script>
     {% block scripts %}{% endblock %}
 </body>
 </html>
