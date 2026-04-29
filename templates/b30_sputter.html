@@ -31,34 +31,48 @@
         <!-- Sample Lookup / Creation -->
         <section class="section" id="section-sample">
             <h2>Sample</h2>
-            <p class="help-text">Scan a sample barcode. If the sample doesn't exist yet, fill in the details and click Create.</p>
 
+            <!-- Search subsection -->
+            <div class="subsection-header">Search</div>
             <div class="form-group">
                 <label>Barcode (Crucible ID)</label>
                 <div class="input-row">
                     <input type="text" id="sample_barcode" placeholder="Scan or paste sample barcode">
                     <button class="btn btn-primary" onclick="lookupSample()">Lookup</button>
+                    <button class="btn btn-secondary" onclick="clearSample()">Clear</button>
                 </div>
             </div>
-
-            <div class="form-group">
-                <label>Sample Name</label>
-                <input type="text" id="sample_name" placeholder="e.g. TF000123">
-            </div>
-            <div class="form-group">
-                <label>Sample Type</label>
-                <input type="text" id="sample_type" placeholder="e.g. thin film">
-            </div>
-            <div class="form-group">
-                <label>Description</label>
-                <input type="text" id="sample_description" placeholder="Optional description">
-            </div>
-
-            <div class="button-row">
-                <button class="btn btn-primary" id="btn-create-sample" onclick="createSample()">Create Sample</button>
-                <button class="btn btn-secondary" onclick="clearSample()">Clear</button>
-            </div>
             <div id="sample-status" class="info-text"></div>
+
+            <!-- Detail panel: shown after lookup, hidden by default -->
+            <div id="sample-detail-panel" class="hidden">
+                <div class="subsection-divider"></div>
+                <div id="sample-panel-header" class="subsection-header">Sample Details</div>
+
+                <div class="form-group">
+                    <label>Sample Name</label>
+                    <input type="text" id="sample_name" placeholder="e.g. TF000123">
+                    <span id="sample_name_text" class="field-text hidden"></span>
+                </div>
+                <div class="form-group">
+                    <label>Sample Type</label>
+                    <input type="text" id="sample_type" placeholder="e.g. thin film">
+                    <span id="sample_type_text" class="field-text hidden"></span>
+                </div>
+                <div class="form-group">
+                    <label>Description</label>
+                    <input type="text" id="sample_description" placeholder="Optional description">
+                    <span id="sample_description_text" class="field-text hidden"></span>
+                </div>
+
+                <!-- Create button row: only visible in create mode -->
+                <div class="button-row hidden" id="create-btn-row">
+                    <button class="btn btn-primary" id="btn-create-sample" onclick="createSample()">Create Sample</button>
+                </div>
+                <div class="button-row" style="margin-top: 6px;">
+                    <button class="btn" onclick="printSampleBarcode()">Print Barcode</button>
+                </div>
+            </div>
         </section>
 
     </div>
