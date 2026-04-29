@@ -5,7 +5,7 @@ import secrets
 from routes.shared import shared_bp
 from routes.giwaxs import giwaxs_bp
 from routes.rga import rga_bp
-
+from routes.b30 import b30_sputter_bp
 
 class PrefixMiddleware:
     """Set SCRIPT_NAME so Flask generates correct URLs behind a reverse proxy."""
@@ -30,7 +30,7 @@ def create_app():
     app.register_blueprint(shared_bp)
     app.register_blueprint(giwaxs_bp, url_prefix="/giwaxs")
     app.register_blueprint(rga_bp, url_prefix="/rga")
-
+    app.register_blueprint(b30_sputter_bp, url_prefix="/b30-sputter")
     @app.route("/")
     def index():
         return render_template("index.html")
