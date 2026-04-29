@@ -16,11 +16,51 @@ async function loadB30State() {
     try {
         const state = await api('/b30-sputter/api/state');
         if (state.sample_unique_id) {
+            document.getElementById('sample_barcode').value = state.sample_unique_id;
             populateSampleFields(state);
             setSampleStatus('found', state.sample_name);
+            showSamplePanel('found');
         }
     } catch {
         // No state yet, that's fine
+    }
+}
+
+// ========== Sample Panel Mode ==========
+
+function showSamplePanel(mode) {
+    const panel = document.getElementById('sample-detail-panel');
+    const header = document.getElementById('sample-panel-header');
+    const createRow = document.getElementById('create-btn-row');
+    const fieldIds = ['sample_name', 'sample_type', 'sample_description'];
+
+    if (mode === 'hidden') {
+        panel.classList.add('hidden');
+        for (const id of fieldIds) {
+            document.getElementById(id).classList.remove('hidden');
+            document.getElementById(id + '_text').classList.add('hidden');
+        }
+        return;
+    }
+
+    panel.classList.remove('hidden');
+    if (mode === 'found') {
+        header.textContent = 'Sample Details';
+        createRow.classList.add('hidden');
+        for (const id of fieldIds) {
+            const input = document.getElementById(id);
+            const span = document.getElementById(id + '_text');
+            span.textContent = input.value;
+            input.classList.add('hidden');
+            span.classList.remove('hidden');
+        }
+    } else {
+        header.textContent = 'Add New';
+        createRow.classList.remove('hidden');
+        for (const id of fieldIds) {
+            document.getElementById(id).classList.remove('hidden');
+            document.getElementById(id + '_text').classList.add('hidden');
+        }
     }
 }
 
@@ -37,12 +77,13 @@ async function lookupSample() {
         if (data.found) {
             populateSampleFields(data);
             setSampleStatus('found', data.sample_name);
-            lockSampleFields(true);
+            showSamplePanel('found');
             showAlert('success', `Found sample: ${data.sample_name}`);
         } else {
+            document.getElementById('sample_barcode').value = '';
             clearSampleFields();
-            lockSampleFields(false);
             setSampleStatus('not-found', '');
+            showSamplePanel('create');
             showAlert('info', 'Sample not found — enter details and click Create');
         }
     } catch (e) {
@@ -69,8 +110,8 @@ async function createSample() {
         });
         document.getElementById('sample_barcode').value = data.unique_id;
         populateSampleFields(data);
-        lockSampleFields(true);
         setSampleStatus('created', data.sample_name);
+        showSamplePanel('found');
         showAlert('success', `Created sample: ${data.sample_name} (${data.unique_id})`);
     } catch (e) {
         showAlert('error', e.message);
@@ -80,8 +121,14 @@ async function createSample() {
 function clearSample() {
     document.getElementById('sample_barcode').value = '';
     clearSampleFields();
-    lockSampleFields(false);
+    showSamplePanel('hidden');
     setSampleStatus('', '');
+}
+
+function printSampleBarcode() {
+    const barcode = document.getElementById('sample_barcode').value.trim();
+    const name = document.getElementById('sample_name').value.trim();
+    printBarcode(barcode, name);
 }
 
 // ========== Dataset Upload ==========
@@ -142,14 +189,6 @@ function clearSampleFields() {
     document.getElementById('sample_name').value = '';
     document.getElementById('sample_type').value = '';
     document.getElementById('sample_description').value = '';
-}
-
-function lockSampleFields(locked) {
-    const ids = ['sample_name', 'sample_type', 'sample_description'];
-    for (const id of ids) {
-        document.getElementById(id).readOnly = locked;
-    }
-    document.getElementById('btn-create-sample').disabled = locked;
 }
 
 function setSampleStatus(state, name) {

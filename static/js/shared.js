@@ -119,6 +119,13 @@ async function setProject() {
     await api('/api/user/project', 'POST', { project });
 }
 
+// ========== Barcode Printing ==========
+
+function printBarcode(barcode, label) {
+    // TODO: integrate with label printer (e.g. Dymo, Zebra ZPL, or browser print dialog)
+    showAlert('info', `Print barcode: ${barcode}${label ? ' — ' + label : ''} (not yet implemented)`);
+}
+
 // ========== Thin Film Dropdown ==========
 
 function populateThinFilmDropdown(thinFilms) {
