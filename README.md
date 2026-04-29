@@ -1,4 +1,4 @@
-# ALS Data Entry Apps
+# Sample Data Entry Apps
 
 Flask web apps for beamline data entry (GIWAXS, RGA, B30 sputter).
 
