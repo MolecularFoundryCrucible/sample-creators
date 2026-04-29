@@ -39,3 +39,24 @@ RGA_CONFIG = {
 RGA_POSITIONS = [f"{row}{col}" for row in "ABCDEF" for col in range(1, 7)]
 
 COORDS_FILE = "coords_36sample.txt"
+
+B30_SPUTTER_CONFIG = {
+    "dataset_name_prefix": "Sputtering Parameters for",
+    "dataset_type": "Sputtering Parameters",
+    "instrument_name": "Sputtering System",
+    "measurement": "Sputtering",
+    # Fields shown on the upload form. To add/remove fields, edit this list.
+    # Each entry: {"key": used in Crucible metadata, "label": shown to user, "type": html input type}
+    "dataset_fields": [
+        {"key": "React. gas",       "label": "Reactive Gas",          "type": "text"},
+        {"key": "Dep. press. (Torr)", "label": "Dep. Pressure (Torr)", "type": "text"},
+        {"key": "Target",           "label": "Target",                "type": "text"},
+        {"key": "Source",           "label": "Source",                "type": "text"},
+        {"key": "Power (W)",        "label": "Power (W)",             "type": "number"},
+        {"key": "Sub. temp",        "label": "Sub. Temp",             "type": "text"},
+        {"key": "DCV (V)",          "label": "DCV (V)",               "type": "number"},
+        {"key": "Dep. time",        "label": "Dep. Time",             "type": "text"},
+        {"key": "Dep. rate (Å/s)", "label": "Dep. Rate (Å/s)",      "type": "number"},
+        {"key": "Comment",          "label": "Comment",               "type": "text"},
+    ],
+}

@@ -1,0 +1,94 @@
+{% extends "base.html" %}
+{% block title %}B30 Sputter Data Entry{% endblock %}
+
+{% block content %}
+<h1>B30 Sputter Data Entry</h1>
+
+<div class="two-column">
+    <div class="left-panel">
+
+        <!-- User Login -->
+        <section class="section" id="section-login">
+            <h2>User Login</h2>
+            <div class="form-group">
+                <label>Email</label>
+                <div class="input-row">
+                    <input type="email" id="email" placeholder="user-email@lbl.gov">
+                    <button class="btn btn-primary" onclick="loginUser()">Login</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="username" readonly>
+            </div>
+            <div class="form-group">
+                <label>Project</label>
+                <select id="project" onchange="setProject()"></select>
+            </div>
+            <button class="btn btn-secondary" onclick="logoutUser()">Logout</button>
+        </section>
+
+        <!-- Sample Lookup / Creation -->
+        <section class="section" id="section-sample">
+            <h2>Sample</h2>
+            <p class="help-text">Scan a sample barcode. If the sample doesn't exist yet, fill in the details and click Create.</p>
+
+            <div class="form-group">
+                <label>Barcode (Crucible ID)</label>
+                <div class="input-row">
+                    <input type="text" id="sample_barcode" placeholder="Scan or paste sample barcode">
+                    <button class="btn btn-primary" onclick="lookupSample()">Lookup</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Sample Name</label>
+                <input type="text" id="sample_name" placeholder="e.g. TF000123">
+            </div>
+            <div class="form-group">
+                <label>Sample Type</label>
+                <input type="text" id="sample_type" placeholder="e.g. thin film">
+            </div>
+            <div class="form-group">
+                <label>Description</label>
+                <input type="text" id="sample_description" placeholder="Optional description">
+            </div>
+
+            <div class="button-row">
+                <button class="btn btn-primary" id="btn-create-sample" onclick="createSample()">Create Sample</button>
+                <button class="btn btn-secondary" onclick="clearSample()">Clear</button>
+            </div>
+            <div id="sample-status" class="info-text"></div>
+        </section>
+
+    </div>
+
+    <div class="right-panel">
+
+        <!-- Dataset Fields -->
+        <section class="section" id="section-dataset">
+            <h2>Sputtering Parameters</h2>
+            <p class="help-text">Fill in the deposition parameters then click Upload.</p>
+
+            {% for field in config.dataset_fields %}
+            <div class="form-group">
+                <label>{{ field.label }}</label>
+                <input type="{{ field.type }}" id="field_{{ loop.index0 }}"
+                       data-key="{{ field.key }}"
+                       placeholder="{{ field.label }}"
+                       {% if field.type == 'number' %}step="any"{% endif %}>
+            </div>
+            {% endfor %}
+
+            <div class="button-row" style="margin-top: 16px;">
+                <button class="btn btn-primary" onclick="uploadDataset()">Upload</button>
+            </div>
+        </section>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/b30_sputter.js') }}"></script>
+{% endblock %}

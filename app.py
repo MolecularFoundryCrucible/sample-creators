@@ -5,7 +5,7 @@ import secrets
 from routes.shared import shared_bp
 from routes.giwaxs import giwaxs_bp
 from routes.rga import rga_bp
-from routes.b30 import b30_sputter_bp
+from routes.b30_sputter import b30_sputter_bp
 
 class PrefixMiddleware:
     """Set SCRIPT_NAME so Flask generates correct URLs behind a reverse proxy."""
