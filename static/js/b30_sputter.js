@@ -3,12 +3,23 @@
 document.addEventListener('DOMContentLoaded', async () => {
     await loadUserState();
     await loadB30State();
+    initDatasetGridResponsive();
+    initRunTimer();
+    initDepositionRateAutofill();
+    initDepositionTimeAutocalc();
 
     // Allow barcode field to trigger lookup on Enter
     document.getElementById('sample_barcode').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') lookupSample();
     });
 });
+
+function refreshTimerFromDepositionTimeIfIdle() {
+    // only reset timer when not actively counting down
+    if (runTimerInterval) return;
+    syncTimerFromDepositionTime();
+    updateTimerUI(runRemainingSeconds);
+}
 
 // ========== State ==========
 
@@ -131,6 +142,224 @@ function printSampleBarcode() {
     printBarcode(barcode, name);
 }
 
+// ========== Look up deposition rates ==========
+
+function initDepositionRateAutofill() {
+    // Keys used to lookup rate from CSV-backed API
+    const triggerKeys = ['target_material', 'gas1', 'gas1_pc', 'power_w', 'pressure_mtorr', 'power_source'];
+
+    // Change this if your deposition-rate field key is different
+    const rateKey = 'rate_A_s';
+
+    const keyToEl = {};
+    document.querySelectorAll('[data-key]').forEach(el => {
+        keyToEl[el.getAttribute('data-key')] = el;
+    });
+
+    const rateEl = keyToEl[rateKey];
+    if (!rateEl) {
+        console.warn(`Deposition rate field not found for data-key="${rateKey}"`);
+        return;
+    }
+
+    const lookup = debounce(async () => {
+        const payload = {};
+
+        for (const key of triggerKeys) {
+            const el = keyToEl[key];
+            if (!el) {
+                rateEl.value = 0;
+                rateEl.dispatchEvent(new Event('input', { bubbles: true }));
+                return;
+            }
+            const val = String(el.value ?? '').trim();
+            if (!val) {
+                rateEl.value = 0;   // <-- important
+                rateEl.dispatchEvent(new Event('input', { bubbles: true }));
+                return;
+            }
+            payload[key] = val;
+        }
+
+        try {
+            const res = await api('/b30-sputter/api/lookup-rate', 'POST', payload);
+            if (res && res.found) {
+                rateEl.value = res.rate_A_s;
+                rateEl.dispatchEvent(new Event('input', { bubbles: true }));
+            } else {
+                rateEl.value = 0;
+                rateEl.dispatchEvent(new Event('input', { bubbles: true }));
+            }
+        } catch (e) {
+            console.error('Rate lookup failed:', e);
+            rateEl.value = 0;
+            rateEl.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+    }, 250);
+
+    // Trigger lookup whenever source fields change
+    triggerKeys.forEach(key => {
+        keyToEl[key]?.addEventListener('change', lookup);
+        keyToEl[key]?.addEventListener('blur', lookup);
+        keyToEl[key]?.addEventListener('input', lookup);
+    });
+
+    // Optional initial lookup if fields already pre-populated
+    lookup();
+}
+
+function debounce(fn, ms) {
+    let t = null;
+    return (...args) => {
+        clearTimeout(t);
+        t = setTimeout(() => fn(...args), ms);
+    };
+}
+
+// ========== Auto-calculate deposition time based on rate and thickness ==========
+
+function initDepositionTimeAutocalc() {
+    const keyToEl = {};
+    document.querySelectorAll('[data-key]').forEach(el => {
+        keyToEl[el.getAttribute('data-key')] = el;
+    });
+
+    const rateEl = keyToEl['rate_A_s'];
+    const thicknessEl = keyToEl['layer_thickness_nm'];
+    const timeEl = keyToEl['deposition_time_s'];
+
+    if (!rateEl || !thicknessEl || !timeEl) return;
+
+    function recalc() {
+        const rate = parseFloat(rateEl.value);
+        const thicknessNm = parseFloat(thicknessEl.value);
+
+        if (!Number.isFinite(rate) || rate <= 0 || !Number.isFinite(thicknessNm) || thicknessNm < 0) {
+            timeEl.value = '';
+            refreshTimerFromDepositionTimeIfIdle();
+            return;
+        }
+
+        // time [s] = thickness [nm] * 10 [Å/nm] / rate [Å/s]
+        const timeSec = (thicknessNm * 10) / rate;
+        timeEl.value = String(Math.round(timeSec)); // integer seconds
+        refreshTimerFromDepositionTimeIfIdle();
+    }
+
+    rateEl.addEventListener('input', recalc);
+    rateEl.addEventListener('change', recalc);
+    thicknessEl.addEventListener('input', recalc);
+    thicknessEl.addEventListener('change', recalc);
+
+    recalc();
+}
+
+// ========== Run Timer (countdown from deposition_time_s) ==========
+
+let runTimerInterval = null;
+let runRemainingSeconds = 0;
+
+function initRunTimer() {
+    const goBtn = document.getElementById('go-btn');
+    const stopBtn = document.getElementById('stop-btn');
+    const resetBtn = document.getElementById('reset-timer-btn');
+
+    if (goBtn) goBtn.addEventListener('click', startRunTimer);
+    if (stopBtn) stopBtn.addEventListener('click', stopRunTimer);
+    if (resetBtn) resetBtn.addEventListener('click', resetRunTimer);
+
+    // Initialize from deposition_time_s field
+    syncTimerFromDepositionTime();
+    updateTimerUI(runRemainingSeconds);
+}
+
+function getFieldByDataKey(key) {
+    return document.querySelector(`[data-key="${key}"]`);
+}
+
+function getDepositionTimeSeconds() {
+    const depTimeEl = getFieldByDataKey('deposition_time_s');
+    if (!depTimeEl) return 0;
+    const v = parseInt(String(depTimeEl.value || '').trim(), 10);
+    return Number.isFinite(v) && v > 0 ? v : 0;
+}
+
+function syncTimerFromDepositionTime() {
+    runRemainingSeconds = getDepositionTimeSeconds();
+}
+
+function startRunTimer() {
+    if (runTimerInterval) return; // already running
+
+    // If timer is at/below 0, reload from deposition_time_s
+    if (runRemainingSeconds <= 0) {
+        syncTimerFromDepositionTime();
+        updateTimerUI(runRemainingSeconds);
+    }
+
+    if (runRemainingSeconds <= 0) {
+        showAlert('error', 'Deposition time is 0 or missing.');
+        return;
+    }
+
+    runTimerInterval = setInterval(() => {
+        runRemainingSeconds -= 1;
+
+        if (runRemainingSeconds <= 0) {
+            runRemainingSeconds = 0;
+            updateTimerUI(runRemainingSeconds);
+            stopRunTimer();
+            showAlert('success', 'Countdown complete.');
+            return;
+        }
+
+        updateTimerUI(runRemainingSeconds);
+    }, 1000);
+}
+
+function stopRunTimer() {
+    if (!runTimerInterval) return;
+    clearInterval(runTimerInterval);
+    runTimerInterval = null;
+}
+
+function resetRunTimer() {
+    stopRunTimer();
+    syncTimerFromDepositionTime();
+    updateTimerUI(runRemainingSeconds);
+}
+
+function updateTimerUI(totalSeconds) {
+    const display = document.getElementById('run-timer-display');
+    if (display) display.textContent = formatElapsed(totalSeconds);
+
+    const hidden = document.getElementById('run_elapsed_seconds');
+    // Keep existing upload key, but now store remaining countdown seconds
+    if (hidden) hidden.value = String(totalSeconds);
+}
+
+function formatElapsed(totalSeconds) {
+    const h = Math.floor(totalSeconds / 3600);
+    const m = Math.floor((totalSeconds % 3600) / 60);
+    const s = totalSeconds % 60;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+// ========== Column Flexibility ==========
+
+function initDatasetGridResponsive() {
+    const grid = document.getElementById('dataset-grid');
+    if (!grid) return;
+
+    function updateDatasetGridColumns() {
+        grid.style.gridTemplateColumns =
+            window.innerWidth <= 700 ? '1fr' : 'repeat(2, minmax(0, 1fr))';
+    }
+
+    updateDatasetGridColumns();
+    window.addEventListener('resize', updateDatasetGridColumns);
+}
+
 // ========== Dataset Upload ==========
 
 async function uploadDataset() {
@@ -147,6 +376,7 @@ async function uploadDataset() {
         const val = el.value.trim();
         if (val) payload[key] = val;
     });
+    payload.run_elapsed_seconds = String(runRemainingSeconds);
 
     const sampleName = document.getElementById('sample_name').value || barcode;
 
