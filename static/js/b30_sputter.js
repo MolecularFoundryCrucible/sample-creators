@@ -3,6 +3,13 @@
 document.addEventListener('DOMContentLoaded', async () => {
     await loadUserState();
     await loadB30State();
+
+    // Show create fields by default if no sample already loaded
+    const hasLoadedSample = !!document.getElementById('sample_barcode').value.trim();
+    if (!hasLoadedSample) {
+        showSamplePanel('create');
+    }
+
     initDatasetGridResponsive();
     initRunTimer();
     initDepositionRateAutofill();
@@ -132,7 +139,7 @@ async function createSample() {
 function clearSample() {
     document.getElementById('sample_barcode').value = '';
     clearSampleFields();
-    showSamplePanel('hidden');
+    showSamplePanel('create'); // changed from 'hidden'
     setSampleStatus('', '');
 }
 
@@ -186,6 +193,11 @@ function initDepositionRateAutofill() {
             if (res && res.found) {
                 rateEl.value = res.rate_A_s;
                 rateEl.dispatchEvent(new Event('input', { bubbles: true }));
+
+                const updatedDt = parseUpdatedOnDate(res.updated_on);
+                if (updatedDt && isOlderThanThreeMonths(updatedDt)) {
+                    showAlert('error', `Warning: Deposition rate was calibrated more than 3 months ago (on ${res.updated_on}).`);
+                }
             } else {
                 rateEl.value = 0;
                 rateEl.dispatchEvent(new Event('input', { bubbles: true }));
@@ -214,6 +226,25 @@ function debounce(fn, ms) {
         clearTimeout(t);
         t = setTimeout(() => fn(...args), ms);
     };
+}
+
+// ========== Warn if rate is outdated ==========
+
+function parseUpdatedOnDate(s) {
+    // expected: YYYY_MM_DD
+    if (!s) return null;
+    const m = String(s).match(/^(\d{4})_(\d{2})_(\d{2})$/);
+    if (!m) return null;
+    const y = Number(m[1]), mo = Number(m[2]) - 1, d = Number(m[3]);
+    const dt = new Date(y, mo, d);
+    return Number.isNaN(dt.getTime()) ? null : dt;
+}
+
+function isOlderThanThreeMonths(dt) {
+    if (!dt) return false;
+    const cutoff = new Date();
+    cutoff.setMonth(cutoff.getMonth() - 3);
+    return dt < cutoff;
 }
 
 // ========== Auto-calculate deposition time based on rate and thickness ==========

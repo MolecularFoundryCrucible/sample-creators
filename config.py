@@ -43,7 +43,7 @@ COORDS_FILE = "coords_36sample.txt"
 B30_SPUTTER_CONFIG = {
     "dataset_name_prefix": "Sputtering Parameters for",
     "dataset_type": "Sputtering Parameters",
-    "instrument_name": "Sputtering System",
+    "instrument_name": "b30 - aja sputter tool",
     "measurement": "Sputtering",
     # Fields shown on the upload form. To add/remove fields, edit this list.
     # Each entry: {"key": used in Crucible metadata, "label": shown to user, "type": html input type}
@@ -53,8 +53,8 @@ B30_SPUTTER_CONFIG = {
         {"key": "gas2",       "label": "Gas 2",          "type": "select",  "options": ["None", "Ar", "N2", "O2", "Other"]},
         {"key": "gas2_pc",       "label": "Gas 2 (%)",          "type": "number", "default": 0},
         {"key": "pressure_mtorr", "label": "Deposition pressure (mTorr)", "type": "number", "default": 3},
-        {"key": "target_material",           "label": "Target material",                "type": "select",  "options": ["Ag", "Al", "Al2O3", "Au", "Bi2O3", "BVO", "C", "Co", "Co3O4", "Cu", "CuAlO2", "Fe", "Ga2O3", "Gd", "Ge", "In", "Ir", "ITO", "Mn", "Nb", "Ni", "Ni75Mo25", "Ni85Mo15", "Pd", "Pt", "Ru", "Sb", "SiO2", "Sn", "SnO2", "SrTiO3", "Ta", "Ta2O5", "Ti", "V", "W", "Zn", "Zr", "Other"]},
-        {"key": "power_source",           "label": "Power source",                "type": "select",  "options": ["RF 1-1", "RF 1-2", "RF 1-3", "RF 2-1", "RF 2-2", "RF 2-3", "DC-1", "DC-2", "DC-3", "DC-4", "Pulsed DC", "Other"]},
+        {"key": "target_material",           "label": "Target material",                "type": "select",  "options": ["Ag", "Al", "Al2O3", "Au", "Bi2O3", "BVO", "C", "Co", "Co3O4", "Cu", "CuAlO2", "Fe", "Ga2O3", "Gd", "Ge", "In", "Ir", "ITO", "Mn", "Nb", "Ni", "Ni75Mo25", "Ni85Mo15", "Pd", "Pt", "Ru", "Sb", "SiO2", "Sn", "SnO2", "SrTiO3", "Ta", "Ta2O5", "Ti", "V", "W", "Zn", "Zr", "None", "Other"]},
+        {"key": "power_source",           "label": "Power source",                "type": "select",  "options": ["RF 1-1", "RF 1-2", "RF 1-3", "RF 2-1", "RF 2-2", "RF 2-3", "DC 1", "DC 2", "DC 3", "DC 4", "Pulsed DC", "Other"]},
         {"key": "power_w",        "label": "Power (W)",             "type": "number", "default": 150},
         {"key": "substrate_temperature_C",        "label": "Substrate temperature (C)",             "type": "number", "default": 25},
         {"key": "DC_voltage_V",          "label": "DC voltage (V)",               "type": "number"},

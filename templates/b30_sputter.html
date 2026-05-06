@@ -75,18 +75,6 @@
             </div>
         </section>
 
-        <!-- Timer -->
-        <section class="section" id="section-timer">
-            <h2>Run Timer</h2>
-            <div class="button-row" style="margin-top: 8px; align-items: center; gap: 8px; flex-wrap: wrap;">
-                <button class="btn btn-primary" type="button" id="go-btn">Go</button>
-                <button class="btn btn-secondary" type="button" id="stop-btn">Stop</button>
-                <button class="btn" type="button" id="reset-timer-btn">Reset</button>
-                <span class="info-text"><strong>Remaining:</strong> <span id="run-timer-display">00:00:00</span></span>
-            </div>
-            <input type="hidden" id="run_elapsed_seconds" data-key="run_elapsed_seconds" value="0">
-        </section>
-
     </div>
 
     <div class="right-panel">     
@@ -121,6 +109,18 @@
             <div class="button-row" style="margin-top: 16px;">
                 <button class="btn btn-primary" onclick="uploadDataset()">Upload</button>
             </div>
+        </section>
+
+        <!-- Timer -->
+        <section class="section" id="section-timer">
+            <h2>Run Timer</h2>
+            <div class="button-row" style="margin-top: 8px; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <button class="btn btn-primary" type="button" id="go-btn">Go</button>
+                <button class="btn btn-secondary" type="button" id="stop-btn">Stop</button>
+                <button class="btn" type="button" id="reset-timer-btn">Reset</button>
+                <span class="info-text"><strong>Remaining:</strong> <span id="run-timer-display">00:00:00</span></span>
+            </div>
+            <input type="hidden" id="run_elapsed_seconds" data-key="run_elapsed_seconds" value="0">
         </section>
 
     </div>

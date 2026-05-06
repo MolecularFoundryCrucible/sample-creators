@@ -69,7 +69,10 @@ def load_b30_rate_csv(force=False):
                     row["pressure_mtorr"],
                     row["power_source"],
                 )
-                rate_map[key] = float(row["rate_A_s"])
+                rate_map[key] = {
+                    "rate": float(row["rate_A_s"]),
+                    "updated_on": str(row.get("Updated on", "")).strip(),  # e.g. 2026_05_04
+                }
             except Exception as e:
                 current_app.logger.warning(f"Skipping bad CSV row {i}: {e}; row={row}")
 
@@ -118,11 +121,15 @@ def lookup_rate():
     except Exception:
         return jsonify({"found": False, "error": "Invalid lookup values"}), 400
 
-    rate = load_b30_rate_csv().get(key)
-    if rate is None:
+    entry = load_b30_rate_csv().get(key)
+    if entry is None:
         return jsonify({"found": False}), 200
 
-    return jsonify({"found": True, "rate_A_s": rate}), 200
+    return jsonify({
+        "found": True,
+        "rate_A_s": entry["rate"],
+        "updated_on": entry["updated_on"],
+    }), 200
 
 
 # ---------- Sample lookup (barcode scan) ----------
