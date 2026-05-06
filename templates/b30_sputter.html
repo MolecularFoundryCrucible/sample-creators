@@ -2,7 +2,7 @@
 {% block title %}B30 Sputter Data Entry{% endblock %}
 
 {% block content %}
-<h1>B30 Sputter Data Entry</h1>
+<h1>B30 - AJA Sputter Tool Data Entry</h1>
 
 <div class="two-column">
     <div class="left-panel">
@@ -77,26 +77,50 @@
 
     </div>
 
-    <div class="right-panel">
+    <div class="right-panel">     
 
         <!-- Dataset Fields -->
         <section class="section" id="section-dataset">
             <h2>Sputtering Parameters</h2>
-            <p class="help-text">Fill in the deposition parameters then click Upload.</p>
+            <p class="help-text">Fill in the deposition parameters, then click Upload.</p>
 
-            {% for field in config.dataset_fields %}
-            <div class="form-group">
-                <label>{{ field.label }}</label>
-                <input type="{{ field.type }}" id="field_{{ loop.index0 }}"
-                       data-key="{{ field.key }}"
-                       placeholder="{{ field.label }}"
-                       {% if field.type == 'number' %}step="any"{% endif %}>
+            <div id="dataset-grid" style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px 12px;">
+                {% for field in config.dataset_fields %}
+                <div class="form-group" style="margin-bottom:0;">
+                    <label>{{ field.label }}</label>
+
+                    {% if field.type == 'select' %}
+                    <select id="field_{{ loop.index0 }}" data-key="{{ field.key }}">
+                        {% for opt in field.options %}
+                        <option value="{{ opt }}">{{ opt }}</option>
+                        {% endfor %}
+                    </select>
+                    {% else %}
+                    <input type="{{ field.type }}" id="field_{{ loop.index0 }}"
+                        data-key="{{ field.key }}"
+                        placeholder="{{ field.label }}"
+                        value="{{ field.default if field.default is defined else '' }}"
+                        {% if field.type == 'number' %}step="any"{% endif %}>
+                    {% endif %}
+                </div>
+                {% endfor %}
             </div>
-            {% endfor %}
 
             <div class="button-row" style="margin-top: 16px;">
                 <button class="btn btn-primary" onclick="uploadDataset()">Upload</button>
             </div>
+        </section>
+
+        <!-- Timer -->
+        <section class="section" id="section-timer">
+            <h2>Run Timer</h2>
+            <div class="button-row" style="margin-top: 8px; align-items: center; gap: 8px; flex-wrap: wrap;">
+                <button class="btn btn-primary" type="button" id="go-btn">Go</button>
+                <button class="btn btn-secondary" type="button" id="stop-btn">Stop</button>
+                <button class="btn" type="button" id="reset-timer-btn">Reset</button>
+                <span class="info-text"><strong>Remaining:</strong> <span id="run-timer-display">00:00:00</span></span>
+            </div>
+            <input type="hidden" id="run_elapsed_seconds" data-key="run_elapsed_seconds" value="0">
         </section>
 
     </div>

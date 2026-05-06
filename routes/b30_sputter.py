@@ -1,11 +1,84 @@
-from flask import Blueprint, request, jsonify, session, render_template
+from flask import Blueprint, request, jsonify, session, render_template, current_app
 from routes.shared import cruc_client
 from crucible import Dataset
 from crucible.utils import get_tz_isoformat
 from config import B30_SPUTTER_CONFIG
+import csv
+from pathlib import Path
 
 b30_sputter_bp = Blueprint("b30_sputter", __name__)
 
+#CSV lookup for deposition rates. Keyed by tuples of (target_material, gas1, gas1_pc, power_w, pressure_mtorr).
+_B30_RATE_MAP = None
+
+def _norm_text(v):
+    return str(v).strip().lower()
+
+def _norm_num(v, ndigits=3):
+    return round(float(v), ndigits)
+
+def _norm_power_source(v):
+    # Examples:
+    # "RF 1-1" -> "rf"
+    # "RF 2-1" -> "rf"
+    # "DC 3-2" -> "dc"
+    s = str(v).strip().lower()
+    if not s:
+        return ""
+    return s.split()[0]  # keep only first token
+
+def _build_rate_key(target_material, gas1, gas1_pc, power_w, pressure_mtorr, power_source):
+    return (
+        _norm_text(target_material),
+        _norm_text(gas1),
+        _norm_num(gas1_pc),
+        _norm_num(power_w),
+        _norm_num(pressure_mtorr),
+        _norm_power_source(power_source),  # <-- changed
+    )
+
+def load_b30_rate_csv(force=False):
+    global _B30_RATE_MAP
+    if _B30_RATE_MAP is not None and not force:
+        return _B30_RATE_MAP
+
+    # CSV is in same folder as app.py
+    csv_path = current_app.config.get(
+        "B30_RATE_CSV_PATH",
+        str(Path(current_app.root_path) / "b30_aja_sputter_rates.csv")
+    )
+
+    rate_map = {}
+    p = Path(csv_path)
+    if not p.exists():
+        current_app.logger.warning(f"B30 rate CSV not found: {csv_path}")
+        _B30_RATE_MAP = {}
+        return _B30_RATE_MAP
+
+    with p.open("r", newline="", encoding="utf-8-sig") as f:
+        reader = csv.DictReader(f)
+        for i, row in enumerate(reader, start=2):
+            try:
+                # Expected header:
+                # Updated on,target_material,gas1,gas1_pc,power_w,pressure_mtorr,power_source,rate_A_s
+                key = _build_rate_key(
+                    row["target_material"],
+                    row["gas1"],
+                    row["gas1_pc"],
+                    row["power_w"],
+                    row["pressure_mtorr"],
+                    row["power_source"],
+                )
+                rate_map[key] = {
+                    "rate": float(row["rate_A_s"]),
+                    "updated_on": str(row.get("Updated on", "")).strip(),  # e.g. 2026_05_04
+                }
+            except Exception as e:
+                current_app.logger.warning(f"Skipping bad CSV row {i}: {e}; row={row}")
+
+    _B30_RATE_MAP = rate_map
+    current_app.logger.info(f"Loaded {len(_B30_RATE_MAP)} B30 rates from {csv_path}")
+    return _B30_RATE_MAP
 
 def _get_state():
     if "b30_sputter" not in session:
@@ -17,15 +90,46 @@ def _get_state():
         }
     return session["b30_sputter"]
 
+# ---------- Routes ----------
 
 @b30_sputter_bp.route("/")
 def page():
     return render_template("b30_sputter.html", config=B30_SPUTTER_CONFIG)
 
-
 @b30_sputter_bp.route("/api/state", methods=["GET"])
 def get_state():
     return jsonify(_get_state())
+
+@b30_sputter_bp.route("/api/lookup-rate", methods=["POST"])
+def lookup_rate():
+    data = request.get_json(silent=True) or {}
+
+    required = ["target_material", "gas1", "gas1_pc", "power_w", "pressure_mtorr", "power_source"]
+    missing = [k for k in required if data.get(k) in (None, "")]
+    if missing:
+        return jsonify({"found": False, "error": f"Missing required fields: {', '.join(missing)}"}), 400
+
+    try:
+        key = _build_rate_key(
+            data["target_material"],
+            data["gas1"],
+            data["gas1_pc"],
+            data["power_w"],
+            data["pressure_mtorr"],
+            data["power_source"],
+        )
+    except Exception:
+        return jsonify({"found": False, "error": "Invalid lookup values"}), 400
+
+    entry = load_b30_rate_csv().get(key)
+    if entry is None:
+        return jsonify({"found": False}), 200
+
+    return jsonify({
+        "found": True,
+        "rate_A_s": entry["rate"],
+        "updated_on": entry["updated_on"],
+    }), 200
 
 
 # ---------- Sample lookup (barcode scan) ----------
