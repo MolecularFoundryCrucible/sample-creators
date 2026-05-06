@@ -11,19 +11,6 @@ from crucible import CrucibleClient
 cruc_client = CrucibleClient(api_url = 'https://crucible.lbl.gov/api/v1',
                              api_key=os.environ.get('CRUCIBLE_API_KEY', ''))
 
-from beamline_data_toolkit.sample_tracker import SampleTrackerClient
-from config import ALS_SAMPLE_TRACKER_URL, ALS_SAMPLE_TRACKER_USER
-
-als_pw = os.environ.get('ALS_SAMPLE_TRACKER_PASSWORD', 'alsadmin')
-
-als_sc_client = SampleTrackerClient(
-    base_url=ALS_SAMPLE_TRACKER_URL,
-    username=ALS_SAMPLE_TRACKER_USER,
-    password=als_pw,
-    timeout_seconds=100000,
-    logger=logger,
-)
-
 
 shared_bp = Blueprint("shared", __name__)
 

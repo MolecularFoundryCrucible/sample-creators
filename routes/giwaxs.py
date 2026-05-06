@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify, session, render_template
 from config import GIWAXS_CONFIG
-from routes.shared import cruc_client, als_sc_client, get_next_serial_sample
+from routes.shared import cruc_client, get_next_serial_sample
+from routes.als_shared import als_sc_client
 from crucible.utils import get_tz_isoformat
 from beamline_data_toolkit.sample_tracker import SampleSetCreateDto, SampleCreateDto, SampleSetParameterValuesByNameDto
 
