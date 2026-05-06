@@ -136,7 +136,6 @@ def register_als():
 
     try:
         esaf = als_sc_client.esaf_get_by_name(state["esaf"])[-1]
-        print(esaf.slug)
         new_set_dto = SampleSetCreateDto(
             name=state["bar_name"],
             slug_esaf=esaf.slug,
