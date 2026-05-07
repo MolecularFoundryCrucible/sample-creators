@@ -426,14 +426,22 @@ async function uploadDataset() {
 }
 
 function buildUploadPreview(sampleName, payload) {
+    const HIDE_IN_PREVIEW = new Set(['run_elapsed_seconds']);
+
     let html = `<p><strong>Sample:</strong> ${sampleName}</p>`;
     html += '<table class="preview-table"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
+
+    let shown = 0;
     for (const [k, v] of Object.entries(payload)) {
+        if (HIDE_IN_PREVIEW.has(k)) continue;
         html += `<tr><td>${k}</td><td>${v}</td></tr>`;
+        shown++;
     }
-    if (Object.keys(payload).length === 0) {
+
+    if (shown === 0) {
         html += '<tr><td colspan="2">No fields filled in</td></tr>';
     }
+
     html += '</tbody></table>';
     return html;
 }
