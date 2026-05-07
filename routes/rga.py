@@ -4,7 +4,8 @@ import os
 from flask import Blueprint, request, jsonify, session, render_template, Response
 import pandas as pd
 from config import RGA_CONFIG, RGA_POSITIONS, COORDS_FILE
-from routes.shared import cruc_client, als_sc_client, get_next_serial_sample
+from routes.shared import cruc_client, get_next_serial_sample
+from routes.als_shared import als_sc_client
 from crucible.utils import get_tz_isoformat
 from beamline_data_toolkit.sample_tracker import SampleSetCreateDto, SampleCreateDto, SampleSetParameterValuesByNameDto
 

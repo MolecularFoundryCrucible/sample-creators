@@ -249,7 +249,7 @@ def upload_dataset():
         new_dataset = cruc_client.datasets.create(ds, scientific_metadata=scientific_metadata)
 
         cruc_client.datasets.add_sample(
-            dataset_id=new_dataset["unique_id"],
+            dataset_id=new_dataset["dsid"],
             sample_id=state["sample_unique_id"],
         )
     except Exception as e:
@@ -257,6 +257,6 @@ def upload_dataset():
 
     return jsonify({
         "dataset_name": dataset_name,
-        "dataset_id": new_dataset["unique_id"],
+        "dataset_id": new_dataset["dsid"],
         "sample_name": state["sample_name"],
     })

@@ -92,7 +92,7 @@ class SampleTrackerClient:
         username: Optional[str] = None,
         password: Optional[str] = None,
         timeout_seconds: Optional[int] = None,
-        auto_login=False,
+        auto_login=True,
         logger: logging.Logger = logger,
     ):
         """Initialize a new instance.
