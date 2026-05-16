@@ -11,6 +11,33 @@ giwaxs_bp = Blueprint("giwaxs", __name__)
 _pending_uploads: dict[str, list] = {}
 
 
+# Valid parameter names for the 7-3-3-giwaxs_for_10k scan type only.
+# Any crucible metadata keys not in this set will be ignored on upload.
+GIWAXS_ALS_ALLOWED_PARAMS = {
+    "sample_center_position",
+    "incident_angles",
+    "measurement_spots",
+    "exposure_time",
+    "exposure_max",
+    "image_type",
+    "mfid",
+}
+
+# Maps crucible/internal snake_case keys to the ALS parameter display names
+# as defined in the 7-3-3-giwaxs_for_10k scan type
+GIWAXS_ALS_PARAM_NAME_MAP = {
+    "sample_center_position": "Sample Center Position",
+    "incident_angles":        "Incident Angles",
+    "measurement_spots":      "Measurement Spots",
+    "exposure_time":          "Exposure Time",
+    "exposure_max":           "Exposure Max",
+    "image_type":             "Image Type",
+    # mfid is not in 7-3-3-giwaxs_for_10k, so omit it here
+}
+
+GIWAXS_ALS_ALLOWED_PARAMS = set(GIWAXS_ALS_PARAM_NAME_MAP.keys())
+
+
 def _get_giwaxs_state():
     """Get or initialize GIWAXS state in session."""
     if "giwaxs" not in session:
@@ -248,8 +275,15 @@ def collect_preview():
         scan_params["sample_center_position"] = mm
         scan_params["incident_angles"] = state["incidence_angle"]
 
-        # Merged for upload
-        all_params = {**scan_params, **sample_syn_md}
+        # # Merged for upload
+        # all_params = {**scan_params, **sample_syn_md}
+        
+        # Filter merged params to only what 7-3-3-giwaxs_for_10k accepts
+        all_params = {
+            k: v
+            for k, v in {**scan_params, **sample_syn_md}.items()
+            if k in GIWAXS_ALS_ALLOWED_PARAMS
+        }
 
         samples.append({
             "bar_position": i,
@@ -312,13 +346,29 @@ def upload():
             new_als_samp = als_sc_client.sample_create(new_sample_dto)
 
             # Set parameter values
-            filtered_params = {k: v for k, v in tf["sample_parameters"].items() if v is not None}
+            # filtered_params = {k: v for k, v in tf["sample_parameters"].items() if v is not None}
+            # values_dto = SampleSetParameterValuesByNameDto(
+            #     create_parameters_if_missing=True,
+            #     add_parameters_to_scan_type_if_missing=True,
+            #     remove_other_values=True,
+            #     values=filtered_params,
+            # )
+            
+            # Remap snake_case keys to ALS display names before upload
+            raw_params = {k: v for k, v in tf["sample_parameters"].items() if v is not None}
+            filtered_params = {
+                GIWAXS_ALS_PARAM_NAME_MAP[k]: v
+                for k, v in raw_params.items()
+                if k in GIWAXS_ALS_PARAM_NAME_MAP
+            }
+
             values_dto = SampleSetParameterValuesByNameDto(
-                create_parameters_if_missing=True,
-                add_parameters_to_scan_type_if_missing=True,
+                create_parameters_if_missing=False,
+                add_parameters_to_scan_type_if_missing=False,
                 remove_other_values=True,
                 values=filtered_params,
             )
+            
             als_sc_client.sample_set_parameter_values_by_name(new_als_samp.slug, values_dto)
 
             updated_desc = f"{tf.get('tf_descrip', '')} || als_giwaxs_id: {new_als_samp.slug}".strip()

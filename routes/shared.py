@@ -8,8 +8,8 @@ logger = logging.getLogger(__name__)
 from flask import Blueprint, request, jsonify, session
 
 from crucible import CrucibleClient
-cruc_client = CrucibleClient()
-
+cruc_client = CrucibleClient(api_url = 'https://crucible.lbl.gov/api/v1',
+                             api_key=os.environ.get('CRUCIBLE_API_KEY', ''))
 
 shared_bp = Blueprint("shared", __name__)
 
@@ -28,7 +28,7 @@ def get_next_serial_sample(sample_prefix, sample_type, project):
 @shared_bp.route("/api/user/login", methods=["POST"])
 def login():
     data = request.get_json()
-    email = data.get("email", "").strip()
+    email = data.get("email", "").strip().lower()
     if not email:
         return jsonify({"error": "Email required"}), 400
 
@@ -38,7 +38,7 @@ def login():
         return jsonify({"error": "User not found"}), 404
 
     user_name = f"{user_info['first_name']}_{user_info['last_name']}"
-    orcid = user_info["unique_id"]
+    orcid = user_info["orcid"]
 
     projects = cruc_client.projects.list(orcid=orcid)
     project_ids = sorted(x["project_id"] for x in projects)

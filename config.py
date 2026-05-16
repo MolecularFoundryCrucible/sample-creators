@@ -9,7 +9,7 @@ GIWAXS_CONFIG = {
     "proposal": "DD-00839",
     "default_esaf": "DD-00839-003",
     "scan_type": "GIWAXS",
-    "scan_type_slug": "7-3-3-giwaxs",
+    "scan_type_slug": "7-3-3-giwaxs_for_10k",  # was "7-3-3-giwaxs"
     "num_positions": 11,
     "default_offset_mm": 32.5,
     "default_wafer_width_mm": 15.0,
