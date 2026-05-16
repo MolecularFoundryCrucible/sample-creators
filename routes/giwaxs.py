@@ -25,7 +25,7 @@ def _get_giwaxs_state():
             "offset_mm": GIWAXS_CONFIG["default_offset_mm"],
             "wafer_width": GIWAXS_CONFIG["default_wafer_width_mm"],
             "incidence_angle": GIWAXS_CONFIG["default_incidence_angle"],
-            "positions": {str(i): "" for i in range(1, 15)},
+            "positions": {str(i): "" for i in range(1, 12)},
         }
     return session["giwaxs"]
 
@@ -202,7 +202,7 @@ def update_layout():
 @giwaxs_bp.route("/api/clear-layout", methods=["POST"])
 def clear_layout():
     state = _get_giwaxs_state()
-    state["positions"] = {str(i): "" for i in range(1, 15)}
+    state["positions"] = {str(i): "" for i in range(1, 12)}
     session.modified = True
     return jsonify({"ok": True})
 
@@ -217,7 +217,7 @@ def collect_preview():
     project = user["selected_project"]
     samples = []
 
-    for i in range(1, 15):
+    for i in range(1, 12):
         tf_name = state["positions"].get(str(i), "")
         if not tf_name:
             continue
