@@ -1,9 +1,9 @@
 // GIWAXS Bar Creator - Page Logic
 
 document.addEventListener('DOMContentLoaded', async () => {
+    recalcPositions();
     await loadUserState();
     await loadGiwaxsState();
-    recalcPositions();
 });
 
 // ========== State ==========
@@ -31,9 +31,10 @@ async function loadGiwaxsState() {
         document.getElementById('offset_mm').value = state.offset_mm;
         document.getElementById('wafer_width').value = state.wafer_width;
         document.getElementById('incidence_angle').value = state.incidence_angle;
+        recalcPositions();
 
         // Restore layout
-        for (let i = 1; i <= 14; i++) {
+        for (let i = 1; i <= 11; i++) {
             const tf = state.positions[String(i)] || '';
             document.getElementById(`pos_${i}_tf`).value = tf;
         }
@@ -164,7 +165,7 @@ async function scanTray() {
 function recalcPositions() {
     const offset = parseFloat(document.getElementById('offset_mm').value) || 0;
     const width = parseFloat(document.getElementById('wafer_width').value) || 0;
-    for (let i = 1; i <= 14; i++) {
+    for (let i = 1; i <= 11; i++) {
         const mm = ((i - 1) * width) + offset;
         document.getElementById(`pos_${i}_mm`).textContent = mm.toFixed(1);
     }
@@ -172,7 +173,7 @@ function recalcPositions() {
 
 function getLayoutPositions() {
     const positions = {};
-    for (let i = 1; i <= 14; i++) {
+    for (let i = 1; i <= 11; i++) {
         positions[String(i)] = document.getElementById(`pos_${i}_tf`).value;
     }
     return positions;
@@ -208,7 +209,7 @@ async function addAllToBar() {
     const select = document.getElementById('select_thinfilm');
     const tfList = Array.from(select.options).map(o => o.value);
     let tfIdx = 0;
-    for (let i = 1; i <= 14; i++) {
+    for (let i = 1; i <= 11; i++) {
         if (tfIdx >= tfList.length) break;
         const input = document.getElementById(`pos_${i}_tf`);
         if (!input.value) {
@@ -221,7 +222,7 @@ async function addAllToBar() {
 }
 
 async function clearLayout() {
-    for (let i = 1; i <= 14; i++) {
+    for (let i = 1; i <= 11; i++) {
         document.getElementById(`pos_${i}_tf`).value = '';
     }
     try {

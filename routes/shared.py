@@ -11,13 +11,12 @@ from crucible import CrucibleClient
 cruc_client = CrucibleClient(api_url = 'https://crucible.lbl.gov/api/v1',
                              api_key=os.environ.get('CRUCIBLE_API_KEY', ''))
 
-
 shared_bp = Blueprint("shared", __name__)
 
 
 def get_next_serial_sample(sample_prefix, sample_type, project):
     project_samples = cruc_client.samples.list(
-        project_id=project, sample_type=sample_type, limit=5000
+        project_id=project, sample_type=sample_type, limit=int(1e8)
     )
     filtered = [x["sample_name"] for x in project_samples if x["sample_name"].startswith(sample_prefix)]
     nums = sorted(int(x.replace(sample_prefix, "")) for x in filtered)
@@ -29,12 +28,13 @@ def get_next_serial_sample(sample_prefix, sample_type, project):
 @shared_bp.route("/api/user/login", methods=["POST"])
 def login():
     data = request.get_json()
-    email = data.get("email", "").strip()
+    email = data.get("email", "").strip().lower()
     if not email:
         return jsonify({"error": "Email required"}), 400
 
-    user_info = cruc_client.users.get(email=email)
-    if user_info is None:
+    try:
+        user_info = cruc_client.users.get(email=email)
+    except ValueError:
         return jsonify({"error": "User not found"}), 404
 
     user_name = f"{user_info['first_name']}_{user_info['last_name']}"

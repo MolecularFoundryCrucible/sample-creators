@@ -24,7 +24,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "flask", specifier = ">=3.1.3" },
-    { name = "nano-crucible", git = "https://github.com/MolecularFoundryCrucible/nano-crucible.git?rev=dev" },
+    { name = "nano-crucible" },
     { name = "pandas", specifier = ">=3.0.2" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
 ]
@@ -375,7 +375,7 @@ wheels = [
 [[package]]
 name = "nano-crucible"
 version = "2.1.0"
-source = { git = "https://github.com/MolecularFoundryCrucible/nano-crucible.git?rev=dev#03cc0a3b3cde0263024252d685b177416a61bf6e" }
+source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "argcomplete" },
     { name = "ipywidgets" },
@@ -386,6 +386,10 @@ dependencies = [
     { name = "python-dotenv" },
     { name = "pytz" },
     { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/47/96/2d50d3f5ab7a042135c6a39ff35d87e08d348cd9969aefdfe411beea93d3/nano_crucible-2.1.0.tar.gz", hash = "sha256:186d791dd8ac98aec21ff20f2f329ff79b7f4ab149c6b3520868bb7abd0eab93", size = 82826, upload-time = "2026-03-28T00:13:10.962Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d2/c8/d0090378a73bb26f5083f25df8e04a5484308d681b395ea7549cf7c256b2/nano_crucible-2.1.0-py3-none-any.whl", hash = "sha256:c310434397be2508eeabe8d562102a0c92a30cfee3525a86f6230b32b5d2e391", size = 100559, upload-time = "2026-03-28T00:13:09.511Z" },
 ]
 
 [[package]]
