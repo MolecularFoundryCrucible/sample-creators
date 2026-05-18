@@ -275,15 +275,15 @@ def collect_preview():
         scan_params["sample_center_position"] = mm
         scan_params["incident_angles"] = state["incidence_angle"]
 
-        # # Merged for upload
-        # all_params = {**scan_params, **sample_syn_md}
+        # Merged for upload
+        all_params = {**scan_params, **sample_syn_md}
         
         # Filter merged params to only what 7-3-3-giwaxs_for_10k accepts
-        all_params = {
-            k: v
-            for k, v in {**scan_params, **sample_syn_md}.items()
-            if k in GIWAXS_ALS_ALLOWED_PARAMS
-        }
+        # all_params = {
+        #     k: v
+        #     for k, v in {**scan_params, **sample_syn_md}.items()
+        #     if k in GIWAXS_ALS_ALLOWED_PARAMS
+        # }
 
         samples.append({
             "bar_position": i,
