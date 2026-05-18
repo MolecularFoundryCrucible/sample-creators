@@ -38,7 +38,9 @@ def login():
         return jsonify({"error": "User not found"}), 404
 
     user_name = f"{user_info['first_name']}_{user_info['last_name']}"
-    orcid = user_info["orcid"]
+    orcid = user_info.get('unique_id', None)
+    if orcid is None:
+        orcid = user_info["orcid"]
 
     projects = cruc_client.projects.list(orcid=orcid)
     project_ids = sorted(x["project_id"] for x in projects)
