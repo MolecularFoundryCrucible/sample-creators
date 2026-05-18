@@ -10,3 +10,7 @@ dependencies = [
     "pandas>=3.0.2",
     "python-dotenv>=1.2.2",
 ]
+
+
+[tool.uv.sources]
+nano-crucible = { git = "https://github.com/MolecularFoundryCrucible/nano-crucible.git", rev = "dev" }
