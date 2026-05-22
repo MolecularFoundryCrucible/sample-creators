@@ -152,10 +152,10 @@ function printSampleBarcode() {
 // ========== Look up deposition rates ==========
 
 function initDepositionRateAutofill() {
-    // Keys used to lookup rate from CSV-backed API
+    // Keys used to lookup rate from reference datasets
     const triggerKeys = ['target_material', 'gas1', 'gas1_pc', 'power_w', 'pressure_mtorr', 'power_source'];
 
-    // Change this if your deposition-rate field key is different
+    // Deposition rate field key
     const rateKey = 'rate_A_s';
 
     const keyToEl = {};
@@ -169,20 +169,24 @@ function initDepositionRateAutofill() {
         return;
     }
 
+    const clearRate = () => {
+        rateEl.value = '';
+        rateEl.dispatchEvent(new Event('input', { bubbles: true }));
+        rateEl.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
     const lookup = debounce(async () => {
         const payload = {};
 
         for (const key of triggerKeys) {
             const el = keyToEl[key];
             if (!el) {
-                rateEl.value = 0;
-                rateEl.dispatchEvent(new Event('input', { bubbles: true }));
+                clearRate();
                 return;
             }
             const val = String(el.value ?? '').trim();
             if (!val) {
-                rateEl.value = 0;   // <-- important
-                rateEl.dispatchEvent(new Event('input', { bubbles: true }));
+                clearRate();
                 return;
             }
             payload[key] = val;
@@ -191,21 +195,20 @@ function initDepositionRateAutofill() {
         try {
             const res = await api('/b30-sputter/api/lookup-rate', 'POST', payload);
             if (res && res.found) {
-                rateEl.value = res.rate_A_s;
+                rateEl.value = res.rate_A_s ?? '';
                 rateEl.dispatchEvent(new Event('input', { bubbles: true }));
+                rateEl.dispatchEvent(new Event('change', { bubbles: true }));
 
-                const updatedDt = parseUpdatedOnDate(res.updated_on);
-                if (updatedDt && isOlderThanThreeMonths(updatedDt)) {
-                    showAlert('error', `Warning: Deposition rate was calibrated more than 3 months ago (on ${res.updated_on}).`);
+                const ts = parseCalibrationTimestamp(res.timestamp);
+                if (ts && isOlderThanThreeMonths(ts)) {
+                    showAlert('error', `Warning: Deposition rate was calibrated more than 3 months ago (timestamp: ${res.timestamp}).`);
                 }
             } else {
-                rateEl.value = 0;
-                rateEl.dispatchEvent(new Event('input', { bubbles: true }));
+                clearRate();
             }
         } catch (e) {
             console.error('Rate lookup failed:', e);
-            rateEl.value = 0;
-            rateEl.dispatchEvent(new Event('input', { bubbles: true }));
+            clearRate();
         }
     }, 250);
 
@@ -230,13 +233,9 @@ function debounce(fn, ms) {
 
 // ========== Warn if rate is outdated ==========
 
-function parseUpdatedOnDate(s) {
-    // expected: YYYY_MM_DD
+function parseCalibrationTimestamp(s) {
     if (!s) return null;
-    const m = String(s).match(/^(\d{4})_(\d{2})_(\d{2})$/);
-    if (!m) return null;
-    const y = Number(m[1]), mo = Number(m[2]) - 1, d = Number(m[3]);
-    const dt = new Date(y, mo, d);
+    const dt = new Date(s); // handles ISO with timezone offset
     return Number.isNaN(dt.getTime()) ? null : dt;
 }
 

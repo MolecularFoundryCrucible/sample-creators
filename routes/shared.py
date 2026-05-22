@@ -8,9 +8,7 @@ logger = logging.getLogger(__name__)
 from flask import Blueprint, request, jsonify, session
 
 from crucible import CrucibleClient
-cruc_client = CrucibleClient(api_url = 'https://crucible.lbl.gov/api/v1',
-                             api_key=os.environ.get('CRUCIBLE_API_KEY', ''))
-
+cruc_client = CrucibleClient()
 
 shared_bp = Blueprint("shared", __name__)
 
