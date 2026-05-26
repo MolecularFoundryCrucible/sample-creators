@@ -201,7 +201,8 @@ function initDepositionRateAutofill() {
 
                 const ts = parseCalibrationTimestamp(res.timestamp);
                 if (ts && isOlderThanThreeMonths(ts)) {
-                    showAlert('error', `Warning: Deposition rate was calibrated more than 3 months ago (timestamp: ${res.timestamp}).`);
+                    const calDate = formatDateMMDDYYYY(res.timestamp);
+                    showAlert('error', `Warning: Deposition rate was calibrated more than 3 months ago (on: ${calDate || 'unknown'}).`);
                 }
             } else {
                 clearRate();
@@ -473,4 +474,14 @@ function setSampleStatus(state, name) {
     } else {
         el.textContent = '';
     }
+}
+
+function formatDateMMDDYYYY(isoTs) {
+    if (!isoTs) return '';
+    const dt = new Date(isoTs);
+    if (Number.isNaN(dt.getTime())) return '';
+    const mm = String(dt.getMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getDate()).padStart(2, '0');
+    const yyyy = dt.getFullYear();
+    return `${mm}/${dd}/${yyyy}`;
 }
