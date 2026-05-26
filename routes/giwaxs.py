@@ -10,6 +10,18 @@ giwaxs_bp = Blueprint("giwaxs", __name__)
 # Server-side storage for collected sample info (too large for cookie)
 _pending_uploads: dict[str, list] = {}
 
+# Maps crucible/internal snake_case keys to the ALS parameter display names
+# as defined in the 7-3-3-giwaxs_for_10k scan type
+GIWAXS_ALS_PARAM_NAME_MAP = {
+    "sample_center_position": "Sample Center Position",
+    "incident_angles":        "Incident Angles",
+    "measurement_spots":      "Measurement Spots",
+    "exposure_time":          "Exposure Time",
+    "exposure_max":           "Exposure Max",
+    "image_type":             "Image Type",
+    # mfid is not in 7-3-3-giwaxs_for_10k, so omit it here
+}
+
 
 def _get_giwaxs_state():
     """Get or initialize GIWAXS state in session."""
@@ -25,7 +37,7 @@ def _get_giwaxs_state():
             "offset_mm": GIWAXS_CONFIG["default_offset_mm"],
             "wafer_width": GIWAXS_CONFIG["default_wafer_width_mm"],
             "incidence_angle": GIWAXS_CONFIG["default_incidence_angle"],
-            "positions": {str(i): "" for i in range(1, 15)},
+            "positions": {str(i): "" for i in range(1, 12)},
         }
     return session["giwaxs"]
 
@@ -202,7 +214,7 @@ def update_layout():
 @giwaxs_bp.route("/api/clear-layout", methods=["POST"])
 def clear_layout():
     state = _get_giwaxs_state()
-    state["positions"] = {str(i): "" for i in range(1, 15)}
+    state["positions"] = {str(i): "" for i in range(1, 12)}
     session.modified = True
     return jsonify({"ok": True})
 
@@ -217,7 +229,7 @@ def collect_preview():
     project = user["selected_project"]
     samples = []
 
-    for i in range(1, 15):
+    for i in range(1, 12):
         tf_name = state["positions"].get(str(i), "")
         if not tf_name:
             continue
@@ -310,15 +322,20 @@ def upload():
                 slug_scan_type=GIWAXS_CONFIG["scan_type_slug"]
             )
             new_als_samp = als_sc_client.sample_create(new_sample_dto)
+            
+            # Remap snake_case keys to ALS display names before upload
+            raw_params = {k: v for k, v in tf["sample_parameters"].items() if v is not None}
+            renamed_params = {
+                GIWAXS_ALS_PARAM_NAME_MAP.get(k, k): v
+                for k, v in raw_params.items()}
 
-            # Set parameter values
-            filtered_params = {k: v for k, v in tf["sample_parameters"].items() if v is not None}
             values_dto = SampleSetParameterValuesByNameDto(
-                create_parameters_if_missing=True,
-                add_parameters_to_scan_type_if_missing=True,
+                create_parameters_if_missing=False,
+                add_parameters_to_scan_type_if_missing=False,
                 remove_other_values=True,
-                values=filtered_params,
+                values=renamed_params,
             )
+            
             als_sc_client.sample_set_parameter_values_by_name(new_als_samp.slug, values_dto)
 
             updated_desc = f"{tf.get('tf_descrip', '')} || als_giwaxs_id: {new_als_samp.slug}".strip()
