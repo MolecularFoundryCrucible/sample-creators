@@ -3,13 +3,11 @@ from routes.shared import cruc_client
 from crucible import Dataset
 from crucible.utils import get_tz_isoformat
 from config import B30_SPUTTER_CONFIG
-import csv
-from pathlib import Path
+from datetime import datetime, timezone
 
 b30_sputter_bp = Blueprint("b30_sputter", __name__)
 
-#CSV lookup for deposition rates. Keyed by tuples of (target_material, gas1, gas1_pc, power_w, pressure_mtorr).
-_B30_RATE_MAP = None
+REF_SAMPLE = "0tgfny1b35rwd000x35nr7a9d8"  # sample with all the calibrated deposition rates as datasets in Crucible
 
 def _norm_text(v):
     return str(v).strip().lower()
@@ -34,51 +32,8 @@ def _build_rate_key(target_material, gas1, gas1_pc, power_w, pressure_mtorr, pow
         _norm_num(gas1_pc),
         _norm_num(power_w),
         _norm_num(pressure_mtorr),
-        _norm_power_source(power_source),  # <-- changed
+        _norm_power_source(power_source),  
     )
-
-def load_b30_rate_csv(force=False):
-    global _B30_RATE_MAP
-    if _B30_RATE_MAP is not None and not force:
-        return _B30_RATE_MAP
-
-    # CSV is in same folder as app.py
-    csv_path = current_app.config.get(
-        "B30_RATE_CSV_PATH",
-        str(Path(current_app.root_path) / "b30_aja_sputter_rates.csv")
-    )
-
-    rate_map = {}
-    p = Path(csv_path)
-    if not p.exists():
-        current_app.logger.warning(f"B30 rate CSV not found: {csv_path}")
-        _B30_RATE_MAP = {}
-        return _B30_RATE_MAP
-
-    with p.open("r", newline="", encoding="utf-8-sig") as f:
-        reader = csv.DictReader(f)
-        for i, row in enumerate(reader, start=2):
-            try:
-                # Expected header:
-                # Updated on,target_material,gas1,gas1_pc,power_w,pressure_mtorr,power_source,rate_A_s
-                key = _build_rate_key(
-                    row["target_material"],
-                    row["gas1"],
-                    row["gas1_pc"],
-                    row["power_w"],
-                    row["pressure_mtorr"],
-                    row["power_source"],
-                )
-                rate_map[key] = {
-                    "rate": float(row["rate_A_s"]),
-                    "updated_on": str(row.get("Updated on", "")).strip(),  # e.g. 2026_05_04
-                }
-            except Exception as e:
-                current_app.logger.warning(f"Skipping bad CSV row {i}: {e}; row={row}")
-
-    _B30_RATE_MAP = rate_map
-    current_app.logger.info(f"Loaded {len(_B30_RATE_MAP)} B30 rates from {csv_path}")
-    return _B30_RATE_MAP
 
 def _get_state():
     if "b30_sputter" not in session:
@@ -89,6 +44,72 @@ def _get_state():
             "sample_description": "",
         }
     return session["b30_sputter"]
+
+def _parse_ts(ts):
+    # Always return timezone-aware datetime
+    if not ts:
+        return datetime.min.replace(tzinfo=timezone.utc)
+
+    try:
+        dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        return dt
+    except Exception:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    
+def lookup_rate_from_reference_sample(ref_sample_id, query_key):
+    try:
+        sample = cruc_client.samples.get(ref_sample_id)
+    except Exception as e:
+        current_app.logger.error(f"Failed to load reference sample {ref_sample_id}: {e}")
+        return {"found": False, "error": "Reference sample not found"}
+
+    datasets = sample.get("datasets", []) or []
+    newest = None  # (timestamp_dt, response_payload)
+
+    for link in datasets:
+        ds_id = link.get("unique_id") or link.get("id")
+        if not ds_id:
+            continue
+
+        try:
+            md = cruc_client.datasets.get_scientific_metadata(ds_id) or {}
+            sci = md.get("scientific_metadata", {})
+
+            key = _build_rate_key(
+                sci.get("target_material", ""),
+                sci.get("gas1", ""),
+                sci.get("gas1_pc", ""),
+                sci.get("power_w", ""),
+                sci.get("pressure_mtorr", ""),
+                sci.get("power_source", ""),
+            )
+            if key != query_key:
+                continue
+
+            ds = cruc_client.datasets.get(ds_id) or {}
+            ts = ds.get("timestamp", "")
+            ts_dt = _parse_ts(ts)
+
+            rate = sci.get("rate_A_s")
+            if rate in ("", None):
+                continue
+
+            payload = {
+                "found": True,
+                "rate_A_s": float(rate),
+                "timestamp": ts,
+                "dataset_id": ds_id,
+            }
+
+            if newest is None or ts_dt > newest[0]:
+                newest = (ts_dt, payload)
+
+        except Exception as e:
+            current_app.logger.warning(f"Skipping dataset {ds_id}: {e}")
+
+    return newest[1] if newest else {"found": False}
 
 # ---------- Routes ----------
 
@@ -110,7 +131,7 @@ def lookup_rate():
         return jsonify({"found": False, "error": f"Missing required fields: {', '.join(missing)}"}), 400
 
     try:
-        key = _build_rate_key(
+        query_key = _build_rate_key(
             data["target_material"],
             data["gas1"],
             data["gas1_pc"],
@@ -121,15 +142,8 @@ def lookup_rate():
     except Exception:
         return jsonify({"found": False, "error": "Invalid lookup values"}), 400
 
-    entry = load_b30_rate_csv().get(key)
-    if entry is None:
-        return jsonify({"found": False}), 200
-
-    return jsonify({
-        "found": True,
-        "rate_A_s": entry["rate"],
-        "updated_on": entry["updated_on"],
-    }), 200
+    result = lookup_rate_from_reference_sample(REF_SAMPLE, query_key)
+    return jsonify(result), 200
 
 
 # ---------- Sample lookup (barcode scan) ----------

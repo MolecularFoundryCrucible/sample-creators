@@ -8,8 +8,9 @@ logger = logging.getLogger(__name__)
 from flask import Blueprint, request, jsonify, session
 
 from crucible import CrucibleClient
-cruc_client = CrucibleClient(api_url = 'https://crucible.lbl.gov/api/v1',
+cruc_client = CrucibleClient(api_url = 'https://crucible.lbl.gov/api/v2',
                              api_key=os.environ.get('CRUCIBLE_API_KEY', ''))
+
 
 shared_bp = Blueprint("shared", __name__)
 
@@ -42,7 +43,7 @@ def login():
     if orcid is None:
         orcid = user_info["orcid"]
 
-    projects = cruc_client.projects.list(orcid=orcid)
+    projects = cruc_client.projects.list(orcid=orcid, limit = int(1e5))
     project_ids = sorted(x["project_id"] for x in projects)
 
     session["user"] = {
