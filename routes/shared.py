@@ -43,7 +43,7 @@ def login():
     if orcid is None:
         orcid = user_info["orcid"]
 
-    projects = cruc_client.projects.list(orcid=orcid)
+    projects = cruc_client.projects.list(orcid=orcid, limit = int(1e5))
     project_ids = sorted(x["project_id"] for x in projects)
 
     session["user"] = {
