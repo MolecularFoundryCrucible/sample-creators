@@ -340,7 +340,8 @@ function startRunTimer() {
             runRemainingSeconds = 0;
             updateTimerUI(runRemainingSeconds);
             stopRunTimer();
-            showAlert('success', 'Countdown complete.');
+            showTimerFinishedOverlay();
+            playTimerFinishedBeep();
             return;
         }
 
@@ -374,6 +375,57 @@ function formatElapsed(totalSeconds) {
     const m = Math.floor((totalSeconds % 3600) / 60);
     const s = totalSeconds % 60;
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function showTimerFinishedOverlay() {
+    const el = document.getElementById('timer-finished-overlay');
+    if (el) el.classList.remove('hidden');
+}
+
+function dismissTimerFinishedOverlay() {
+    const el = document.getElementById('timer-finished-overlay');
+    if (el) el.classList.add('hidden');
+}
+
+function playTimerFinishedBeep() {
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+
+        // 8 urgent pulses, alternating frequencies
+        const pulses = 8;
+        const step = 0.16;      // time between pulse starts
+        const dur = 0.13;       // pulse duration
+
+        for (let i = 0; i < pulses; i++) {
+            const t = now + i * step;
+            const freq = (i % 2 === 0) ? 780 : 520; // alternating high/low
+
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.type = 'square'; // harsher, more alarming than sine
+            osc.frequency.setValueAtTime(freq, t);
+
+            // Fast attack, strong level, sharp decay
+            gain.gain.setValueAtTime(0.0001, t);
+            gain.gain.exponentialRampToValueAtTime(0.45, t + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start(t);
+            osc.stop(t + dur + 0.01);
+        }
+
+        setTimeout(() => ctx.close(), Math.ceil((pulses * step + 0.4) * 1000));
+    } catch (e) {
+        console.warn('Beep failed:', e);
+    }
 }
 
 // ========== Column Flexibility ==========
