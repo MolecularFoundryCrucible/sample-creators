@@ -95,6 +95,8 @@
                         <option value="{{ opt }}">{{ opt }}</option>
                         {% endfor %}
                     </select>
+                    {% elif field.type == 'checkbox' %}
+                        <input type="checkbox" id="field_{{ loop.index0 }}" data-key="{{ field.key }}">
                     {% else %}
                     <input type="{{ field.type }}" id="field_{{ loop.index0 }}"
                         data-key="{{ field.key }}"
@@ -123,6 +125,15 @@
             <input type="hidden" id="run_elapsed_seconds" data-key="run_elapsed_seconds" value="0">
         </section>
 
+    </div>
+</div>
+
+<div id="timer-finished-overlay" class="hidden"
+     style="position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:5000; display:flex; align-items:center; justify-content:center;">
+    <div style="background:white; padding:28px 36px; border-radius:10px; text-align:center; max-width:560px; width:90%;">
+        <div style="font-size:40px; font-weight:800; color:#c53030; margin-bottom:10px;">TIME IS UP</div>
+        <div style="font-size:18px; color:#2d3748; margin-bottom:18px;">Deposition countdown has finished.</div>
+        <button class="btn btn-primary" type="button" onclick="dismissTimerFinishedOverlay()">OK</button>
     </div>
 </div>
 {% endblock %}

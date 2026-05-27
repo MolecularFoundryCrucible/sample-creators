@@ -10,19 +10,6 @@ giwaxs_bp = Blueprint("giwaxs", __name__)
 # Server-side storage for collected sample info (too large for cookie)
 _pending_uploads: dict[str, list] = {}
 
-
-# Valid parameter names for the 7-3-3-giwaxs_for_10k scan type only.
-# Any crucible metadata keys not in this set will be ignored on upload.
-GIWAXS_ALS_ALLOWED_PARAMS = {
-    "sample_center_position",
-    "incident_angles",
-    "measurement_spots",
-    "exposure_time",
-    "exposure_max",
-    "image_type",
-    "mfid",
-}
-
 # Maps crucible/internal snake_case keys to the ALS parameter display names
 # as defined in the 7-3-3-giwaxs_for_10k scan type
 GIWAXS_ALS_PARAM_NAME_MAP = {
@@ -34,8 +21,6 @@ GIWAXS_ALS_PARAM_NAME_MAP = {
     "image_type":             "Image Type",
     # mfid is not in 7-3-3-giwaxs_for_10k, so omit it here
 }
-
-GIWAXS_ALS_ALLOWED_PARAMS = set(GIWAXS_ALS_PARAM_NAME_MAP.keys())
 
 
 def _get_giwaxs_state():
@@ -277,13 +262,6 @@ def collect_preview():
 
         # Merged for upload
         all_params = {**scan_params, **sample_syn_md}
-        
-        # Filter merged params to only what 7-3-3-giwaxs_for_10k accepts
-        # all_params = {
-        #     k: v
-        #     for k, v in {**scan_params, **sample_syn_md}.items()
-        #     if k in GIWAXS_ALS_ALLOWED_PARAMS
-        # }
 
         samples.append({
             "bar_position": i,
@@ -344,30 +322,19 @@ def upload():
                 slug_scan_type=GIWAXS_CONFIG["scan_type_slug"]
             )
             new_als_samp = als_sc_client.sample_create(new_sample_dto)
-
-            # Set parameter values
-            # filtered_params = {k: v for k, v in tf["sample_parameters"].items() if v is not None}
-            # values_dto = SampleSetParameterValuesByNameDto(
-            #     create_parameters_if_missing=True,
-            #     add_parameters_to_scan_type_if_missing=True,
-            #     remove_other_values=True,
-            #     values=filtered_params,
-            # )
             
             # Remap snake_case keys to ALS display names before upload
             raw_params = {k: v for k, v in tf["sample_parameters"].items() if v is not None}
-            filtered_params = {
-                GIWAXS_ALS_PARAM_NAME_MAP[k]: v
-                for k, v in raw_params.items()
-                if k in GIWAXS_ALS_PARAM_NAME_MAP
-            }
+            renamed_params = {
+                GIWAXS_ALS_PARAM_NAME_MAP.get(k, k): v
+                for k, v in raw_params.items()}
 
             values_dto = SampleSetParameterValuesByNameDto(
                 create_parameters_if_missing=False,
                 allow_parameters_not_in_scan_type=True,
                 add_parameters_to_scan_type_if_missing=False,
                 remove_other_values=True,
-                values=filtered_params,
+                values=renamed_params,
             )
             
             als_sc_client.sample_set_parameter_values_by_name(new_als_samp.slug, values_dto)
