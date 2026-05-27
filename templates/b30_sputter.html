@@ -95,6 +95,8 @@
                         <option value="{{ opt }}">{{ opt }}</option>
                         {% endfor %}
                     </select>
+                    {% elif field.type == 'checkbox' %}
+                        <input type="checkbox" id="field_{{ loop.index0 }}" data-key="{{ field.key }}">
                     {% else %}
                     <input type="{{ field.type }}" id="field_{{ loop.index0 }}"
                         data-key="{{ field.key }}"
