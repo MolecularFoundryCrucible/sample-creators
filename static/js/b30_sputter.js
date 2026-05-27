@@ -12,6 +12,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     initDatasetGridResponsive();
     initRunTimer();
+    initCoDepositionToggle();
+    initGas2Toggle();
     initDepositionRateAutofill();
     initDepositionTimeAutocalc();
 
@@ -149,13 +151,50 @@ function printSampleBarcode() {
     printBarcode(barcode, name);
 }
 
+// ========== Hide second gas fields unless used ==========
+
+function initGas2Toggle() {
+    const keyToEl = {};
+    document.querySelectorAll('[data-key]').forEach(el => keyToEl[el.dataset.key] = el);
+
+    const enabledEl = keyToEl['second_gas_enabled'];
+    const gas2Keys = ['gas2', 'gas2_pc'];
+
+    if (!enabledEl) return;
+
+    function setVisible(show) {
+        gas2Keys.forEach(k => {
+            const el = keyToEl[k];
+            if (!el) return;
+            const grp = el.closest('.form-group');
+            if (grp) grp.classList.toggle('hidden', !show);
+            if (!show && el.type !== 'checkbox') el.value = '';
+        });
+    }
+
+    setVisible(enabledEl.checked);
+    enabledEl.addEventListener('change', () => {
+        setVisible(enabledEl.checked);
+
+        // fire change/input so dependent logic reacts (if any)
+        gas2Keys.forEach(k => {
+            const el = keyToEl[k];
+            if (!el) return;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            el.dispatchEvent(new Event('change', { bubbles: true }));
+        });
+    });
+}
+
 // ========== Look up deposition rates ==========
 
 function initDepositionRateAutofill() {
-    // Keys used to lookup rate from reference datasets
-    const triggerKeys = ['target_material', 'gas1', 'gas1_pc', 'power_w', 'pressure_mtorr', 'power_source'];
+    // CHANGED: split keys into base/primary/secondary instead of one trigger list
+    const requiredBaseKeys = ['gas1', 'gas1_pc', 'pressure_mtorr'];
+    const primaryKeys = ['target_material', 'power_w', 'power_source'];
+    const secondaryKeys = ['target_material_2', 'power_w_2', 'power_source_2'];
 
-    // Deposition rate field key
+    // unchanged total deposition rate key
     const rateKey = 'rate_A_s';
 
     const keyToEl = {};
@@ -169,48 +208,138 @@ function initDepositionRateAutofill() {
         return;
     }
 
+    // CHANGED: co-dep toggle + optional per-target display fields
+    const coDepEl = keyToEl['co_deposition_enabled'];
+    const rate1El = keyToEl['rate_A_s_1']; // optional
+    const rate2El = keyToEl['rate_A_s_2']; // optional
+
+    const isCoDepEnabled = () => !!(coDepEl && coDepEl.checked);
+
+    // CHANGED: clear total + optional per-target fields
     const clearRate = () => {
+        if (rate1El) rate1El.value = '';
+        if (rate2El) rate2El.value = '';
         rateEl.value = '';
         rateEl.dispatchEvent(new Event('input', { bubbles: true }));
         rateEl.dispatchEvent(new Event('change', { bubbles: true }));
     };
 
-    const lookup = debounce(async () => {
-        const payload = {};
-
-        for (const key of triggerKeys) {
-            const el = keyToEl[key];
-            if (!el) {
-                clearRate();
-                return;
-            }
-            const val = String(el.value ?? '').trim();
-            if (!val) {
-                clearRate();
-                return;
-            }
-            payload[key] = val;
+    // CHANGED: helper to set summed total
+    const setRates = (r1, r2, useSecond) => {
+        // If co-dep is OFF, never keep per-target fields populated
+        if (!useSecond) {
+            if (rate1El) rate1El.value = '';
+            if (rate2El) rate2El.value = '';
+        } else {
+            if (rate1El) rate1El.value = (r1 != null ? String(r1) : '');
+            if (rate2El) rate2El.value = (r2 != null ? String(r2) : '');
         }
 
-        try {
-            const res = await api('/b30-sputter/api/lookup-rate', 'POST', payload);
-            if (res && res.found) {
-                rateEl.value = res.rate_A_s ?? '';
-                rateEl.dispatchEvent(new Event('input', { bubbles: true }));
-                rateEl.dispatchEvent(new Event('change', { bubbles: true }));
+        const has1 = r1 != null;
+        const has2 = useSecond ? (r2 != null) : false;
 
-                const ts = parseCalibrationTimestamp(res.timestamp);
-                if (ts && isOlderThanThreeMonths(ts)) {
-                    showAlert('error', `Warning: Deposition rate was calibrated more than 3 months ago (timestamp: ${res.timestamp}).`);
+        if (!has1 && !has2) {
+            rateEl.value = '';
+        } else {
+            const total = (has1 ? r1 : 0) + (has2 ? r2 : 0);
+            rateEl.value = String(total);
+        }
+
+        // notify listeners
+        if (rate1El) {
+            rate1El.dispatchEvent(new Event('input', { bubbles: true }));
+            rate1El.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        if (rate2El) {
+            rate2El.dispatchEvent(new Event('input', { bubbles: true }));
+            rate2El.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+        rateEl.dispatchEvent(new Event('input', { bubbles: true }));
+        rateEl.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+
+    // CHANGED: build payload by key set (primary or secondary)
+    const buildPayload = (materialKey, powerKey, sourceKey) => {
+        const gas1 = String(keyToEl['gas1']?.value ?? '').trim();
+        const gas1_pc = String(keyToEl['gas1_pc']?.value ?? '').trim();
+        const pressure_mtorr = String(keyToEl['pressure_mtorr']?.value ?? '').trim();
+
+        const target_material = String(keyToEl[materialKey]?.value ?? '').trim();
+        const power_w = String(keyToEl[powerKey]?.value ?? '').trim();
+        const power_source = String(keyToEl[sourceKey]?.value ?? '').trim();
+
+        if (!gas1 || !gas1_pc || !pressure_mtorr || !target_material || !power_w || !power_source) {
+            return null;
+        }
+
+        // NOTE: keep payload keys expected by backend route
+        return { target_material, gas1, gas1_pc, power_w, pressure_mtorr, power_source };
+    };
+
+    // CHANGED: one lookup call helper
+    const lookupOne = async (payload) => {
+        const res = await api('/b30-sputter/api/lookup-rate', 'POST', payload);
+        if (res && res.found) {
+            const n = Number(res.rate_A_s);
+            return { rate: Number.isFinite(n) ? n : null, res };
+        }
+        return { rate: null, res: null };
+    };
+
+    const lookup = debounce(async () => {
+        const primaryPayload = buildPayload('target_material', 'power_w', 'power_source');
+        if (!primaryPayload) {
+            clearRate();
+            return;
+        }
+
+        const useSecond = isCoDepEnabled();
+        const secondaryPayload = useSecond
+            ? buildPayload('target_material_2', 'power_w_2', 'power_source_2')
+            : null;
+
+        try {
+            // 1) Always look up primary first and update UI immediately
+            const r1Obj = await lookupOne(primaryPayload);
+            setRates(r1Obj.rate, null, false); // total = primary (or blank if not found)
+
+            const ts1 = parseCalibrationTimestamp(r1Obj.res?.timestamp);
+            if (ts1 && isOlderThanThreeMonths(ts1)) {
+                const calDate = formatDateMMDDYYYY(r1Obj.res.timestamp);
+                showAlert('error', `Warning: Primary deposition rate was calibrated more than 3 months ago (on: ${calDate || 'unknown'}).`);
+            }
+
+            // 2) If co-dep is enabled and secondary fields are complete, add secondary
+            if (useSecond && secondaryPayload) {
+                const r2Obj = await lookupOne(secondaryPayload);
+
+                // total now becomes primary + secondary (secondary contributes only if found)
+                setRates(r1Obj.rate, r2Obj.rate, true);
+
+                const ts2 = parseCalibrationTimestamp(r2Obj.res?.timestamp);
+                if (ts2 && isOlderThanThreeMonths(ts2)) {
+                    const calDate = formatDateMMDDYYYY(r2Obj.res.timestamp);
+                    showAlert('error', `Warning: Secondary deposition rate was calibrated more than 3 months ago (on: ${calDate || 'unknown'}).`);
                 }
-            } else {
-                clearRate();
+            } else if (useSecond && !secondaryPayload) {
+                // co-dep enabled but secondary incomplete:
+                // keep showing primary-only total; clear optional secondary rate field if present
+                if (rate2El) rate2El.value = '';
+                // no clearRate() here on purpose
             }
         } catch (e) {
             console.error('Rate lookup failed:', e);
             clearRate();
         }
     }, 250);
+
+    // CHANGED: expanded trigger list includes secondary + co-dep toggle
+    const triggerKeys = [
+        ...requiredBaseKeys,
+        ...primaryKeys,
+        ...secondaryKeys,
+        'co_deposition_enabled'
+    ];
 
     // Trigger lookup whenever source fields change
     triggerKeys.forEach(key => {
@@ -229,6 +358,12 @@ function debounce(fn, ms) {
         clearTimeout(t);
         t = setTimeout(() => fn(...args), ms);
     };
+}
+
+async function lookupSingleRate(payload) {
+    const res = await api('/b30-sputter/api/lookup-rate', 'POST', payload);
+    if (res && res.found) return Number(res.rate_A_s || 0);
+    return null;
 }
 
 // ========== Warn if rate is outdated ==========
@@ -339,7 +474,8 @@ function startRunTimer() {
             runRemainingSeconds = 0;
             updateTimerUI(runRemainingSeconds);
             stopRunTimer();
-            showAlert('success', 'Countdown complete.');
+            showTimerFinishedOverlay();
+            playTimerFinishedBeep();
             return;
         }
 
@@ -375,6 +511,57 @@ function formatElapsed(totalSeconds) {
     return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
+function showTimerFinishedOverlay() {
+    const el = document.getElementById('timer-finished-overlay');
+    if (el) el.classList.remove('hidden');
+}
+
+function dismissTimerFinishedOverlay() {
+    const el = document.getElementById('timer-finished-overlay');
+    if (el) el.classList.add('hidden');
+}
+
+function playTimerFinishedBeep() {
+    try {
+        const AudioCtx = window.AudioContext || window.webkitAudioContext;
+        if (!AudioCtx) return;
+
+        const ctx = new AudioCtx();
+        const now = ctx.currentTime;
+
+        // 8 urgent pulses, alternating frequencies
+        const pulses = 8;
+        const step = 0.16;      // time between pulse starts
+        const dur = 0.13;       // pulse duration
+
+        for (let i = 0; i < pulses; i++) {
+            const t = now + i * step;
+            const freq = (i % 2 === 0) ? 780 : 520; // alternating high/low
+
+            const osc = ctx.createOscillator();
+            const gain = ctx.createGain();
+
+            osc.type = 'square'; // harsher, more alarming than sine
+            osc.frequency.setValueAtTime(freq, t);
+
+            // Fast attack, strong level, sharp decay
+            gain.gain.setValueAtTime(0.0001, t);
+            gain.gain.exponentialRampToValueAtTime(0.45, t + 0.01);
+            gain.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+            osc.connect(gain);
+            gain.connect(ctx.destination);
+
+            osc.start(t);
+            osc.stop(t + dur + 0.01);
+        }
+
+        setTimeout(() => ctx.close(), Math.ceil((pulses * step + 0.4) * 1000));
+    } catch (e) {
+        console.warn('Beep failed:', e);
+    }
+}
+
 // ========== Column Flexibility ==========
 
 function initDatasetGridResponsive() {
@@ -390,6 +577,47 @@ function initDatasetGridResponsive() {
     window.addEventListener('resize', updateDatasetGridColumns);
 }
 
+// ========== Enable co-deposition ==========
+
+function initCoDepositionToggle() {
+    const keyToEl = {};
+    document.querySelectorAll('[data-key]').forEach(el => keyToEl[el.dataset.key] = el);
+
+    const enabledEl = keyToEl['co_deposition_enabled'];
+    const secondKeys = ['rate_A_s_1', 'target_material_2', 'power_source_2', 'power_w_2', 'DC_voltage_V_2', 'rate_A_s_2'];
+
+    if (!enabledEl) return;
+
+    function setVisible(show) {
+        secondKeys.forEach(k => {
+            const el = keyToEl[k];
+            if (!el) return;
+            const grp = el.closest('.form-group');
+            if (grp) grp.classList.toggle('hidden', !show);
+
+            if (!show && el.type !== 'checkbox') {
+                // co-dep OFF: clear per-target secondary/aux fields
+                // (this includes rate_A_s_1 and rate_A_s_2)
+                el.value = '';
+
+                // notify listeners
+                el.dispatchEvent(new Event('input', { bubbles: true }));
+                el.dispatchEvent(new Event('change', { bubbles: true }));
+            }
+        });
+
+        // IMPORTANT: do NOT clear total rate_A_s here
+        // It should remain populated for single-target mode.
+    }
+
+    setVisible(enabledEl.checked);
+    enabledEl.addEventListener('change', () => {
+        setVisible(enabledEl.checked);
+        recalcTotalRate();
+        recalcDepositionTimeIfPresent();
+    });
+}
+
 // ========== Dataset Upload ==========
 
 async function uploadDataset() {
@@ -402,8 +630,15 @@ async function uploadDataset() {
     // Collect dataset field values by their Crucible metadata key
     const payload = {};
     document.querySelectorAll('[data-key]').forEach(el => {
-        const key = el.getAttribute('data-key');
-        const val = el.value.trim();
+        const key = el.dataset.key;
+        let val = '';
+
+        if (el.type === 'checkbox') {
+            val = el.checked ? 'true' : '';
+        } else {
+            val = (el.value ?? '').toString().trim();
+        }
+
         if (val) payload[key] = val;
     });
     payload.run_elapsed_seconds = String(runRemainingSeconds);
@@ -473,4 +708,14 @@ function setSampleStatus(state, name) {
     } else {
         el.textContent = '';
     }
+}
+
+function formatDateMMDDYYYY(isoTs) {
+    if (!isoTs) return '';
+    const dt = new Date(isoTs);
+    if (Number.isNaN(dt.getTime())) return '';
+    const mm = String(dt.getMonth() + 1).padStart(2, '0');
+    const dd = String(dt.getDate()).padStart(2, '0');
+    const yyyy = dt.getFullYear();
+    return `${mm}/${dd}/${yyyy}`;
 }

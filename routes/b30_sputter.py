@@ -4,10 +4,19 @@ from crucible import Dataset
 from crucible.utils import get_tz_isoformat
 from config import B30_SPUTTER_CONFIG
 from datetime import datetime, timezone
+from threading import Lock
 
 b30_sputter_bp = Blueprint("b30_sputter", __name__)
 
 REF_SAMPLE = "0tgfny1b35rwd000x35nr7a9d8"  # sample with all the calibrated deposition rates as datasets in Crucible
+
+# Cache settings
+RATE_INDEX_TTL_SECONDS = 300  # 5 minutes
+
+# In-memory cache
+_RATE_INDEX = None
+_RATE_INDEX_BUILT_AT = None
+_RATE_INDEX_LOCK = Lock()
 
 def _norm_text(v):
     return str(v).strip().lower()
@@ -58,15 +67,27 @@ def _parse_ts(ts):
     except Exception:
         return datetime.min.replace(tzinfo=timezone.utc)
     
-def lookup_rate_from_reference_sample(ref_sample_id, query_key):
-    try:
-        sample = cruc_client.samples.get(ref_sample_id)
-    except Exception as e:
-        current_app.logger.error(f"Failed to load reference sample {ref_sample_id}: {e}")
-        return {"found": False, "error": "Reference sample not found"}
+def _index_is_stale():
+    if _RATE_INDEX is None or _RATE_INDEX_BUILT_AT is None:
+        return True
+    age = (datetime.now(timezone.utc) - _RATE_INDEX_BUILT_AT).total_seconds()
+    return age > RATE_INDEX_TTL_SECONDS
 
+def _build_rate_index_from_reference_sample():
+    """
+    Builds:
+      key -> {
+        "rate_A_s": float,
+        "timestamp": str,
+        "dataset_id": str,
+        "ts_dt": datetime (internal)
+      }
+    Keeping only the newest timestamp per key.
+    """
+    index = {}
+
+    sample = cruc_client.samples.get(REF_SAMPLE)
     datasets = sample.get("datasets", []) or []
-    newest = None  # (timestamp_dt, response_payload)
 
     for link in datasets:
         ds_id = link.get("unique_id") or link.get("id")
@@ -75,7 +96,7 @@ def lookup_rate_from_reference_sample(ref_sample_id, query_key):
 
         try:
             md = cruc_client.datasets.get_scientific_metadata(ds_id) or {}
-            sci = md.get("scientific_metadata", {})
+            sci = md.get("scientific_metadata", {}) or {}
 
             key = _build_rate_key(
                 sci.get("target_material", ""),
@@ -85,31 +106,61 @@ def lookup_rate_from_reference_sample(ref_sample_id, query_key):
                 sci.get("pressure_mtorr", ""),
                 sci.get("power_source", ""),
             )
-            if key != query_key:
+
+            rate_val = sci.get("rate_A_s")
+            if rate_val in ("", None):
                 continue
 
-            ds = cruc_client.datasets.get(ds_id) or {}
-            ts = ds.get("timestamp", "")
+            ds_obj = cruc_client.datasets.get(ds_id) or {}
+            ts = ds_obj.get("timestamp", "")
             ts_dt = _parse_ts(ts)
 
-            rate = sci.get("rate_A_s")
-            if rate in ("", None):
-                continue
-
-            payload = {
-                "found": True,
-                "rate_A_s": float(rate),
-                "timestamp": ts,
-                "dataset_id": ds_id,
-            }
-
-            if newest is None or ts_dt > newest[0]:
-                newest = (ts_dt, payload)
+            prev = index.get(key)
+            if prev is None or ts_dt > prev["ts_dt"]:
+                index[key] = {
+                    "rate_A_s": float(rate_val),
+                    "timestamp": ts,
+                    "dataset_id": ds_id,
+                    "ts_dt": ts_dt,  # internal
+                }
 
         except Exception as e:
-            current_app.logger.warning(f"Skipping dataset {ds_id}: {e}")
+            current_app.logger.warning(f"[b30] Skipping dataset {ds_id}: {e}")
+            continue
 
-    return newest[1] if newest else {"found": False}
+    return index
+
+def get_rate_index(force=False):
+    """
+    TTL-cached index getter.
+    Rebuilds at most once per TTL window unless force=True.
+    """
+    global _RATE_INDEX, _RATE_INDEX_BUILT_AT
+
+    if not force and not _index_is_stale():
+        return _RATE_INDEX
+
+    with _RATE_INDEX_LOCK:
+        # Re-check after acquiring lock (avoid duplicate rebuilds)
+        if not force and not _index_is_stale():
+            return _RATE_INDEX
+
+        try:
+            new_index = _build_rate_index_from_reference_sample()
+            _RATE_INDEX = new_index
+            _RATE_INDEX_BUILT_AT = datetime.now(timezone.utc)
+            current_app.logger.info(
+                f"[b30] Rate index rebuilt: {len(_RATE_INDEX)} keys "
+                f"(ttl={RATE_INDEX_TTL_SECONDS}s, ref_sample={REF_SAMPLE})"
+            )
+        except Exception as e:
+            current_app.logger.error(f"[b30] Failed to rebuild rate index: {e}")
+            # Keep old cache if present
+            if _RATE_INDEX is None:
+                _RATE_INDEX = {}
+                _RATE_INDEX_BUILT_AT = datetime.now(timezone.utc)
+
+    return _RATE_INDEX
 
 # ---------- Routes ----------
 
@@ -142,8 +193,29 @@ def lookup_rate():
     except Exception:
         return jsonify({"found": False, "error": "Invalid lookup values"}), 400
 
-    result = lookup_rate_from_reference_sample(REF_SAMPLE, query_key)
-    return jsonify(result), 200
+    idx = get_rate_index(force=False)
+    entry = idx.get(query_key)
+
+    if not entry:
+        return jsonify({"found": False}), 200
+
+    return jsonify({
+        "found": True,
+        "rate_A_s": entry["rate_A_s"],
+        "timestamp": entry["timestamp"],
+        "dataset_id": entry["dataset_id"],
+    }), 200
+
+@b30_sputter_bp.route("/api/reload-rate-index", methods=["POST"])
+def reload_rate_index():
+    idx = get_rate_index(force=True)
+    return jsonify({
+        "ok": True,
+        "count": len(idx or {}),
+        "ref_sample": REF_SAMPLE,
+        "ttl_seconds": RATE_INDEX_TTL_SECONDS,
+        "rebuilt_at": _RATE_INDEX_BUILT_AT.isoformat() if _RATE_INDEX_BUILT_AT else None,
+    }), 200
 
 
 # ---------- Sample lookup (barcode scan) ----------
