@@ -331,6 +331,7 @@ def upload():
 
             values_dto = SampleSetParameterValuesByNameDto(
                 create_parameters_if_missing=False,
+                allow_parameters_not_in_scan_type=True,
                 add_parameters_to_scan_type_if_missing=False,
                 remove_other_values=True,
                 values=renamed_params,
