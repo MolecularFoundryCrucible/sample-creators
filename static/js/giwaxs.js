@@ -205,6 +205,49 @@ async function addOneToBar() {
     await persistLayout();
 }
 
+async function fillUpBar() {
+    let maxNum = null;
+    let prefix = '';
+    let padLen = 6;
+
+    for (let i = 1; i <= 11; i++) {
+        const val = document.getElementById(`pos_${i}_tf`).value.trim();
+        if (!val) continue;
+        const match = val.match(/^([A-Za-z]+)(\d+)$/);
+        if (!match) continue;
+        const num = parseInt(match[2], 10);
+        if (maxNum === null || num > maxNum) {
+            maxNum = num;
+            prefix = match[1];
+            padLen = match[2].length;
+        }
+    }
+
+    if (maxNum === null) {
+        showAlert('error', 'No thin films on the bar yet — add at least one first');
+        return;
+    }
+
+    let nextNum = maxNum + 1;
+    let filled = 0;
+    for (let i = 1; i <= 11; i++) {
+        if (!document.getElementById(`pos_${i}_tf`).value.trim()) {
+            document.getElementById(`pos_${i}_tf`).value = prefix + String(nextNum).padStart(padLen, '0');
+            nextNum++;
+            filled++;
+        }
+    }
+
+    if (filled === 0) {
+        showAlert('info', 'Bar is already full');
+        return;
+    }
+
+    await persistLayout();
+    const startName = prefix + String(maxNum + 1).padStart(padLen, '0');
+    showAlert('success', `Filled ${filled} position${filled !== 1 ? 's' : ''} starting from ${startName}`);
+}
+
 async function addAllToBar() {
     const select = document.getElementById('select_thinfilm');
     const tfList = Array.from(select.options).map(o => o.value);
