@@ -157,8 +157,8 @@ function initGas2Toggle() {
     const keyToEl = {};
     document.querySelectorAll('[data-key]').forEach(el => keyToEl[el.dataset.key] = el);
 
-    const enabledEl = keyToEl['second_gas_enabled'];
-    const gas2Keys = ['gas2', 'gas2_pc'];
+    const enabledEl = keyToEl['02_second_gas_enabled'];
+    const gas2Keys = ['05_gas2', '06_gas2_pc'];
 
     if (!enabledEl) return;
 
@@ -190,12 +190,12 @@ function initGas2Toggle() {
 
 function initDepositionRateAutofill() {
     // CHANGED: split keys into base/primary/secondary instead of one trigger list
-    const requiredBaseKeys = ['gas1', 'gas1_pc', 'pressure_mtorr'];
-    const primaryKeys = ['target_material', 'power_w', 'power_source'];
-    const secondaryKeys = ['target_material_2', 'power_w_2', 'power_source_2'];
+    const requiredBaseKeys = ['03_gas1', '04_gas1_pc', '07_pressure_mTorr'];
+    const primaryKeys = ['09_target_material', '11_power_W', '10_power_source'];
+    const secondaryKeys = ['13_target_material_2', '15_power_W_2', '14_power_source_2'];
 
     // unchanged total deposition rate key
-    const rateKey = 'rate_A_s';
+    const rateKey = '19_rate_A_s';
 
     const keyToEl = {};
     document.querySelectorAll('[data-key]').forEach(el => {
@@ -209,9 +209,9 @@ function initDepositionRateAutofill() {
     }
 
     // CHANGED: co-dep toggle + optional per-target display fields
-    const coDepEl = keyToEl['co_deposition_enabled'];
-    const rate1El = keyToEl['rate_A_s_1']; // optional
-    const rate2El = keyToEl['rate_A_s_2']; // optional
+    const coDepEl = keyToEl['01_co_deposition_enabled'];
+    const rate1El = keyToEl['17_rate_A_s_1']; // optional
+    const rate2El = keyToEl['18_rate_A_s_2']; // optional
 
     const isCoDepEnabled = () => !!(coDepEl && coDepEl.checked);
 
@@ -260,9 +260,9 @@ function initDepositionRateAutofill() {
 
     // CHANGED: build payload by key set (primary or secondary)
     const buildPayload = (materialKey, powerKey, sourceKey) => {
-        const gas1 = String(keyToEl['gas1']?.value ?? '').trim();
-        const gas1_pc = String(keyToEl['gas1_pc']?.value ?? '').trim();
-        const pressure_mtorr = String(keyToEl['pressure_mtorr']?.value ?? '').trim();
+        const gas1 = String(keyToEl['03_gas1']?.value ?? '').trim();
+        const gas1_pc = String(keyToEl['04_gas1_pc']?.value ?? '').trim();
+        const pressure_mtorr = String(keyToEl['07_pressure_mTorr']?.value ?? '').trim();
 
         const target_material = String(keyToEl[materialKey]?.value ?? '').trim();
         const power_w = String(keyToEl[powerKey]?.value ?? '').trim();
@@ -287,7 +287,7 @@ function initDepositionRateAutofill() {
     };
 
     const lookup = debounce(async () => {
-        const primaryPayload = buildPayload('target_material', 'power_w', 'power_source');
+        const primaryPayload = buildPayload('09_target_material', '11_power_W', '10_power_source');
         if (!primaryPayload) {
             clearRate();
             return;
@@ -295,7 +295,7 @@ function initDepositionRateAutofill() {
 
         const useSecond = isCoDepEnabled();
         const secondaryPayload = useSecond
-            ? buildPayload('target_material_2', 'power_w_2', 'power_source_2')
+            ? buildPayload('13_target_material_2', '15_power_W_2', '14_power_source_2')
             : null;
 
         try {
@@ -338,7 +338,7 @@ function initDepositionRateAutofill() {
         ...requiredBaseKeys,
         ...primaryKeys,
         ...secondaryKeys,
-        'co_deposition_enabled'
+        '01_co_deposition_enabled'
     ];
 
     // Trigger lookup whenever source fields change
@@ -389,9 +389,9 @@ function initDepositionTimeAutocalc() {
         keyToEl[el.getAttribute('data-key')] = el;
     });
 
-    const rateEl = keyToEl['rate_A_s'];
-    const thicknessEl = keyToEl['layer_thickness_nm'];
-    const timeEl = keyToEl['deposition_time_s'];
+    const rateEl = keyToEl['19_rate_A_s'];
+    const thicknessEl = keyToEl['20_layer_thickness_nm'];
+    const timeEl = keyToEl['21_deposition_time_s'];
 
     if (!rateEl || !thicknessEl || !timeEl) return;
 
@@ -443,7 +443,7 @@ function getFieldByDataKey(key) {
 }
 
 function getDepositionTimeSeconds() {
-    const depTimeEl = getFieldByDataKey('deposition_time_s');
+    const depTimeEl = getFieldByDataKey('21_deposition_time_s');
     if (!depTimeEl) return 0;
     const v = parseInt(String(depTimeEl.value || '').trim(), 10);
     return Number.isFinite(v) && v > 0 ? v : 0;
@@ -583,8 +583,8 @@ function initCoDepositionToggle() {
     const keyToEl = {};
     document.querySelectorAll('[data-key]').forEach(el => keyToEl[el.dataset.key] = el);
 
-    const enabledEl = keyToEl['co_deposition_enabled'];
-    const secondKeys = ['rate_A_s_1', 'target_material_2', 'power_source_2', 'power_w_2', 'DC_voltage_V_2', 'rate_A_s_2'];
+    const enabledEl = keyToEl['01_co_deposition_enabled'];
+    const secondKeys = ['17_rate_A_s_1', '13_target_material_2', '14_power_source_2', '15_power_W_2', '16_DC_voltage_V_2', '18_rate_A_s_2'];
 
     if (!enabledEl) return;
 

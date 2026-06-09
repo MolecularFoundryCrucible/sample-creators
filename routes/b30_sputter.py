@@ -34,13 +34,13 @@ def _norm_power_source(v):
         return ""
     return s.split()[0]  # keep only first token
 
-def _build_rate_key(target_material, gas1, gas1_pc, power_w, pressure_mtorr, power_source):
+def _build_rate_key(target_material, gas1, gas1_pc, power_W, pressure_mTorr, power_source):
     return (
         _norm_text(target_material),
         _norm_text(gas1),
         _norm_num(gas1_pc),
-        _norm_num(power_w),
-        _norm_num(pressure_mtorr),
+        _norm_num(power_W),
+        _norm_num(pressure_mTorr),
         _norm_power_source(power_source),  
     )
 
@@ -77,7 +77,7 @@ def _build_rate_index_from_reference_sample():
     """
     Builds:
       key -> {
-        "rate_A_s": float,
+        "19_rate_A_s": float,
         "timestamp": str,
         "dataset_id": str,
         "ts_dt": datetime (internal)
@@ -99,15 +99,15 @@ def _build_rate_index_from_reference_sample():
             sci = md.get("scientific_metadata", {}) or {}
 
             key = _build_rate_key(
-                sci.get("target_material", ""),
-                sci.get("gas1", ""),
-                sci.get("gas1_pc", ""),
-                sci.get("power_w", ""),
-                sci.get("pressure_mtorr", ""),
-                sci.get("power_source", ""),
+                sci.get("09_target_material", ""),
+                sci.get("03_gas1", ""),
+                sci.get("04_gas1_pc", ""),
+                sci.get("11_power_W", ""),
+                sci.get("07_pressure_mTorr", ""),
+                sci.get("10_power_source", ""),
             )
 
-            rate_val = sci.get("rate_A_s")
+            rate_val = sci.get("19_rate_A_s")
             if rate_val in ("", None):
                 continue
 
@@ -118,7 +118,7 @@ def _build_rate_index_from_reference_sample():
             prev = index.get(key)
             if prev is None or ts_dt > prev["ts_dt"]:
                 index[key] = {
-                    "rate_A_s": float(rate_val),
+                    "19_rate_A_s": float(rate_val),
                     "timestamp": ts,
                     "dataset_id": ds_id,
                     "ts_dt": ts_dt,  # internal
@@ -176,19 +176,19 @@ def get_state():
 def lookup_rate():
     data = request.get_json(silent=True) or {}
 
-    required = ["target_material", "gas1", "gas1_pc", "power_w", "pressure_mtorr", "power_source"]
+    required = ["09_target_material", "03_gas1", "04_gas1_pc", "11_power_W", "07_pressure_mTorr", "10_power_source"]
     missing = [k for k in required if data.get(k) in (None, "")]
     if missing:
         return jsonify({"found": False, "error": f"Missing required fields: {', '.join(missing)}"}), 400
 
     try:
         query_key = _build_rate_key(
-            data["target_material"],
-            data["gas1"],
-            data["gas1_pc"],
-            data["power_w"],
-            data["pressure_mtorr"],
-            data["power_source"],
+            data["09_target_material"],
+            data["03_gas1"],
+            data["04_gas1_pc"],
+            data["11_power_W"],
+            data["07_pressure_mTorr"],
+            data["10_power_source"],
         )
     except Exception:
         return jsonify({"found": False, "error": "Invalid lookup values"}), 400
@@ -201,7 +201,7 @@ def lookup_rate():
 
     return jsonify({
         "found": True,
-        "rate_A_s": entry["rate_A_s"],
+        "19_rate_A_s": entry["19_rate_A_s"],
         "timestamp": entry["timestamp"],
         "dataset_id": entry["dataset_id"],
     }), 200
@@ -308,6 +308,22 @@ def upload_dataset():
     state = _get_state()
     if not state.get("sample_unique_id"):
         return jsonify({"error": "No sample selected. Scan a barcode first."}), 400
+    
+    def build_dataset_name(state):
+        date_str = datetime.now().strftime("%Y%m%d")
+        co_dep = bool(state.get("01_co_deposition_enabled"))
+
+        t1 = (state.get("09_target_material") or "").strip()
+        t2 = (state.get("13_target_material_2") or "").strip()
+        sample = (state.get("sample_name") or "").strip()
+
+        if co_dep and t1 and t2:
+            target_part = f"{t1}+{t2}"
+        else:
+            target_part = t1 or "unknown-target"
+
+        sample = sample or "unknown-sample"
+        return f"{date_str}_{target_part}_Sputtering_on_{sample}"
 
     data = request.get_json()
 
@@ -320,7 +336,7 @@ def upload_dataset():
         if value != "" and value is not None:
             scientific_metadata[key] = value
 
-    dataset_name = f"{B30_SPUTTER_CONFIG['dataset_name_prefix']} {state['sample_name']}"
+    dataset_name = build_dataset_name(state)
 
     try:
         ds = Dataset(
