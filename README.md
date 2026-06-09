@@ -11,7 +11,7 @@ uv sync
 uv run flask run
 ```
 
-Open http://localhost:5000.
+Open https://crucible.lbl.gov/sample-creators/.
 
 ## Making changes
 
