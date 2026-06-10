@@ -309,12 +309,12 @@ def upload_dataset():
     if not state.get("sample_unique_id"):
         return jsonify({"error": "No sample selected. Scan a barcode first."}), 400
     
-    def build_dataset_name(state):
+    def build_dataset_name(state, data):
         date_str = datetime.now().strftime("%Y%m%d")
-        co_dep = bool(state.get("01_co_deposition_enabled"))
+        co_dep = bool(data.get("01_co_deposition_enabled"))
 
-        t1 = (state.get("09_target_material") or "").strip()
-        t2 = (state.get("13_target_material_2") or "").strip()
+        t1 = (data.get("09_target_material") or "").strip()
+        t2 = (data.get("13_target_material_2") or "").strip()
         sample = (state.get("sample_name") or "").strip()
 
         if co_dep and t1 and t2:
@@ -336,7 +336,7 @@ def upload_dataset():
         if value != "" and value is not None:
             scientific_metadata[key] = value
 
-    dataset_name = build_dataset_name(state)
+    dataset_name = build_dataset_name(state, data or {})
 
     try:
         ds = Dataset(
