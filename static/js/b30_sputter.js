@@ -273,14 +273,21 @@ function initDepositionRateAutofill() {
         }
 
         // NOTE: keep payload keys expected by backend route
-        return { target_material, gas1, gas1_pc, power_w, pressure_mtorr, power_source };
+        return {
+            "09_target_material": target_material,
+            "03_gas1": gas1,
+            "04_gas1_pc": gas1_pc,
+            "11_power_W": power_w,
+            "07_pressure_mTorr": pressure_mtorr,
+            "10_power_source": power_source
+        };
     };
 
     // CHANGED: one lookup call helper
     const lookupOne = async (payload) => {
         const res = await api('/b30-sputter/api/lookup-rate', 'POST', payload);
         if (res && res.found) {
-            const n = Number(res.rate_A_s);
+            const n = Number(res["19_rate_A_s"]);
             return { rate: Number.isFinite(n) ? n : null, res };
         }
         return { rate: null, res: null };
@@ -362,7 +369,7 @@ function debounce(fn, ms) {
 
 async function lookupSingleRate(payload) {
     const res = await api('/b30-sputter/api/lookup-rate', 'POST', payload);
-    if (res && res.found) return Number(res.rate_A_s || 0);
+    if (res && res.found) return Number(res["19_rate_A_s"] || 0);
     return null;
 }
 
