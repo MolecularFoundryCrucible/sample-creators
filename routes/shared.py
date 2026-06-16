@@ -30,6 +30,7 @@ def get_next_serial_sample(sample_prefix, sample_type, project):
 def login():
     data = request.get_json()
     email = data.get("email", "").strip().lower()
+    logger.info(f'{email=}')
     if not email:
         return jsonify({"error": "Email required"}), 400
 
