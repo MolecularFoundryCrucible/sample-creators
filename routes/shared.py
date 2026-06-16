@@ -35,7 +35,8 @@ def login():
 
     try:
         user_info = cruc_client.users.get(email=email)
-    except ValueError:
+    except Exception as e:
+        logger.error(f"Error occurred while fetching user info for email {email}: {e}")
         return jsonify({"error": "User not found"}), 404
 
     user_name = f"{user_info['first_name']}_{user_info['last_name']}"
