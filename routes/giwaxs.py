@@ -252,7 +252,7 @@ def collect_preview():
             )
             sample_synds = [ds for ds in sample_ds if ds["measurement"] == "spin_run"]
             if sample_synds:
-                sample_syn_md = sample_synds[0]["scientific_metadata"]["scientific_metadata"]
+                sample_syn_md = sample_synds[0]["scientific_metadata"]
 
         mm = ((i - 1) * state["wafer_width"]) + state["offset_mm"]
         scan_params = dict(GIWAXS_CONFIG["default_sample_parameters"])
