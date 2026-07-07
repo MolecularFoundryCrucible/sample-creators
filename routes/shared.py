@@ -29,14 +29,15 @@ def get_next_serial_sample(sample_prefix, sample_type, project):
 @shared_bp.route("/api/user/login", methods=["POST"])
 def login():
     data = request.get_json()
-    email = data.get("email", "").strip().lower()
+    email = data.get("email", "").strip()
+    logger.info(f'{email=}')
     if not email:
         return jsonify({"error": "Email required"}), 400
 
     try:
         user_info = cruc_client.users.get(email=email)
     except Exception as e:
-        logger.error(f"User with email {email} not found in Crucible: error {e}")
+        logger.error(f"Error occurred while fetching user info for email {email}: {e}")
         return jsonify({"error": "User not found"}), 404
 
     user_name = f"{user_info['first_name']}_{user_info['last_name']}"
