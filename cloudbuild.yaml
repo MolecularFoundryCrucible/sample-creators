@@ -26,7 +26,8 @@ steps:
       - '--set-secrets'
       - >-
         CRUCIBLE_API_KEY=crucible_admin_apikey:latest,
-        ALS_SAMPLE_TRACKER_PASSWORD=als-sample-tracker-apikey-prod:latest
+        ALS_SAMPLE_TRACKER_PASSWORD=als-sample-tracker-apikey-prod:latest,
+        MQTT_PASSWORD=mqtt-crucible-printers-passwd:latest,
       - '--service-account'
       - 'sample-creators-cloudrun@mf-crucible.iam.gserviceaccount.com'
       - '--allow-unauthenticated'

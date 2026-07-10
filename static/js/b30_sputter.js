@@ -145,10 +145,24 @@ function clearSample() {
     setSampleStatus('', '');
 }
 
-function printSampleBarcode() {
+async function printSampleBarcode() {
     const barcode = document.getElementById('sample_barcode').value.trim();
     const name = document.getElementById('sample_name').value.trim();
-    printBarcode(barcode, name);
+
+    console.log('printSampleBarcode', { barcode, name });    
+    if (!barcode) {
+        showAlert('error', 'No sample selected — scan or create a sample first');
+        return;
+    }
+    try {
+        await api('/b30-sputter/api/print-barcode', 'POST', {
+            sample_id: barcode,
+            sample_name: name,
+        });
+        showAlert('success', `Sent barcode to printer: ${name || barcode}`);
+    } catch (e) {
+        showAlert('error', e.message);
+    }
 }
 
 // ========== Hide second gas fields unless used ==========
