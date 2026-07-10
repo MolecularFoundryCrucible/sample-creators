@@ -443,6 +443,7 @@ function initRunTimer() {
     // Initialize from deposition_time_s field
     syncTimerFromDepositionTime();
     updateTimerUI(runRemainingSeconds);
+    setTimerStatus(false);
 }
 
 function getFieldByDataKey(key) {
@@ -474,6 +475,8 @@ function startRunTimer() {
         return;
     }
 
+    setTimerStatus(true);
+
     runTimerInterval = setInterval(() => {
         runRemainingSeconds -= 1;
 
@@ -494,12 +497,14 @@ function stopRunTimer() {
     if (!runTimerInterval) return;
     clearInterval(runTimerInterval);
     runTimerInterval = null;
+    setTimerStatus(false);
 }
 
 function resetRunTimer() {
     stopRunTimer();
     syncTimerFromDepositionTime();
     updateTimerUI(runRemainingSeconds);
+    setTimerStatus(false);
 }
 
 function updateTimerUI(totalSeconds) {
@@ -687,6 +692,96 @@ function buildUploadPreview(sampleName, payload) {
     return html;
 }
 
+// ========== Get datasets ==========
+
+function setRecentLoading(isLoading) {
+  const el = document.getElementById('recent-loading');
+  const fetchBtn = document.getElementById('recent-fetch-btn');
+  const exportBtn = document.getElementById('recent-export-btn');
+  if (el) el.classList.toggle('hidden', !isLoading);
+  if (fetchBtn) fetchBtn.disabled = isLoading;
+  if (exportBtn) exportBtn.disabled = isLoading;
+}
+
+function updateTargetOptionsFromRows(rows, preserveSelection = true) {
+  const sel = document.getElementById('recent-target');
+  if (!sel) return;
+
+  const prev = preserveSelection ? (sel.value || 'All') : 'All';
+  const mats = new Set();
+
+  (rows || []).forEach(r => {
+    const t = String(r["Target"] || "").trim();
+    if (!t) return;
+    // handles "Au + Cu"
+    t.split("+").map(x => x.trim()).filter(Boolean).forEach(x => mats.add(x));
+  });
+
+  const options = ["All", ...Array.from(mats).sort((a, b) => a.localeCompare(b))];
+  sel.innerHTML = "";
+  options.forEach(opt => {
+    const o = document.createElement("option");
+    o.value = opt;
+    o.textContent = opt;
+    sel.appendChild(o);
+  });
+
+  sel.value = options.includes(prev) ? prev : "All";
+}
+
+async function fetchRecentDatasets() {
+  const view = document.getElementById('recent-view')?.value || 'Deposition only';
+  const target = document.getElementById('recent-target')?.value || 'All';
+
+  setRecentLoading(true);
+  try {
+    const limit = document.getElementById('recent-limit')?.value || '100';
+    const res = await api(
+    `/b30-sputter/api/recent-datasets?view=${encodeURIComponent(view)}&target=${encodeURIComponent(target)}&limit=${encodeURIComponent(limit)}`
+    );
+    renderRecentDatasets(res.rows || []);
+    const currentTarget = document.getElementById('recent-target')?.value || 'All';
+    if (currentTarget === 'All') {
+    updateTargetOptionsFromRows(res.rows || [], true);
+    }
+  } catch (e) {
+    showAlert('error', `Failed to load recent datasets: ${e.message}`);
+  } finally {
+    setRecentLoading(false); // stop spinner immediately after table call
+  }
+}
+
+function renderRecentDatasets(rows) {
+  const tbody = document.getElementById('recent-table-body');
+  if (!tbody) return;
+  tbody.innerHTML = '';
+
+  const cols = [
+    "Date", "User", "Gas", "Press. (mTorr)", "Temp. (°C)", "Target", "Source",
+    "Power (W)", "DCV (V)", "Indiv. rates (Å/s)", "Tot. rate (Å/s)", "Time (s)", "Thickness (nm)", "Comment"
+  ];
+
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="14">No datasets found.</td></tr>';
+    return;
+  }
+
+  rows.forEach((r, i) => {
+    const tr = document.createElement('tr');
+    tr.style.background = (i % 2 === 0) ? '#ffffff' : '#f2f2f2'; // alternating colors inline
+    tr.innerHTML = cols.map(c => `<td>${(r[c] ?? '')}</td>`).join('');
+    tbody.appendChild(tr);
+  });
+}
+
+function exportRecentDatasets() {
+  const view = document.getElementById('recent-view')?.value || 'Deposition only';
+  const target = document.getElementById('recent-target')?.value || 'All';
+  const limit = document.getElementById('recent-limit')?.value || '100';
+  const url = `/b30-sputter/api/recent-datasets/export.csv?view=${encodeURIComponent(view)}&target=${encodeURIComponent(target)}&limit=${encodeURIComponent(limit)}`;
+  window.location.href = url;
+}
+
 // ========== Helpers ==========
 
 function populateSampleFields(data) {
@@ -726,3 +821,41 @@ function formatDateMMDDYYYY(isoTs) {
     const yyyy = dt.getFullYear();
     return `${mm}/${dd}/${yyyy}`;
 }
+
+function setTimerStatus(running) {
+    const badge = document.getElementById('timer-status-badge');
+    if (!badge) return;
+    if (running) {
+        badge.textContent = 'RUNNING';
+        badge.style.background = '#c6f6d5';
+        badge.style.color = '#2d3748';
+    } else {
+        badge.textContent = 'IDLE';
+        badge.style.background = '#e2e8f0';
+        badge.style.color = '#2d3748';
+    }
+}
+
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-panel').forEach(el => el.classList.add('hidden'));
+  document.getElementById(tabId)?.classList.remove('hidden');
+
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelector(`.tab-btn[data-tab="${tabId}"]`)?.classList.add('active');
+}
+
+(function patchLogoutUserForB30() {
+  if (typeof window.logoutUser !== 'function') return;
+
+  const originalLogoutUser = window.logoutUser;
+
+  window.logoutUser = async function (...args) {
+    try {
+      // run existing shared logout behavior
+      await originalLogoutUser.apply(this, args);
+    } finally {
+      // always clear local sample UI/state on this page
+      if (typeof clearSample === 'function') clearSample();
+    }
+  };
+})();

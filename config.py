@@ -58,6 +58,7 @@ B30_SPUTTER_CONFIG = {
     "dataset_type": "Sputtering Parameters",
     "instrument_name": "b30 - aja sputter tool",
     "measurement": "Sputtering",
+    "calibration_sample_id": "0tgfny1b35rwd000x35nr7a9d8",
     # Fields shown on the upload form. To add/remove fields, edit this list.
     # Each entry: {"key": used in Crucible metadata, "label": shown to user, "type": html input type}
     "dataset_fields": [
