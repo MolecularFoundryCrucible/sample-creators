@@ -522,7 +522,7 @@ def create_sample():
         return jsonify({"error": "sample_name and sample_type are required"}), 400
 
     try:
-        new_sample = cruc_client.samples.create(
+        returned_sample = cruc_client.samples.create(
             sample_name=sample_name,
             timestamp=get_tz_isoformat(),
             owner_orcid=user["orcid"],
@@ -531,18 +531,23 @@ def create_sample():
             description=description or None,
         )
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
-
+        # actually they don't want the existing sample returned
+        return jsonify({"error": str(e)}), 500 
+        # existing_samples = cruc_client.samples.list(sample_name = sample_name, project_id= user['selected_project'])
+        # if len(existing_samples) == 0:
+        #     return jsonify({"error": str(e)}), 500
+        # else:
+        #     returned_sample = existing_samples[-1]
     state = _get_state()
-    state["sample_unique_id"] = new_sample["unique_id"]
-    state["sample_name"] = new_sample["sample_name"]
+    state["sample_unique_id"] = returned_sample["unique_id"]
+    state["sample_name"] = returned_sample["sample_name"]
     state["sample_type"] = sample_type
     state["sample_description"] = description
     session.modified = True
 
     return jsonify({
-        "unique_id": new_sample["unique_id"],
-        "sample_name": new_sample["sample_name"],
+        "unique_id": returned_sample["unique_id"],
+        "sample_name": returned_sample["sample_name"],
         "sample_type": sample_type,
         "description": description,
     })
