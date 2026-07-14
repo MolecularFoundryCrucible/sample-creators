@@ -104,19 +104,23 @@ def register_crucible():
         return jsonify({"error": "No RGA name set"}), 400
 
     try:
-        new_rga = cruc_client.samples.create(
+        returned_rga = cruc_client.samples.create(
             sample_name=rga_name,
             timestamp=get_tz_isoformat(),
             owner_orcid=user["orcid"],
             project_id=user["selected_project"],
             sample_type="rga carrier",
         )
-        mfid = new_rga["unique_id"]
-        state["rga_mf_uuid"] = mfid
-        session.modified = True
-        return jsonify({"mf_uuid": mfid, "rga_name": rga_name})
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        existing_rga = cruc_client.samples.list(sample_name = rga_name, project_id = user['selected_project'])
+        if len(existing_rga) == 0:
+            return jsonify({"error": str(e)}), 500
+        returned_rga = existing_rga[-1]
+
+    mfid = returned_rga["unique_id"]
+    state["rga_mf_uuid"] = mfid
+    session.modified = True
+    return jsonify({"mf_uuid": mfid, "rga_name": rga_name})
 
 
 @rga_bp.route("/api/register-als", methods=["POST"])
