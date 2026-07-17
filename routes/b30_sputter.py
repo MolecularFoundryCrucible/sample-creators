@@ -569,7 +569,7 @@ def print_barcode():
     MQTT_USERNAME = os.environ.get("MQTT_USERNAME", "crucible-printers")
     MQTT_PASSWORD = os.environ.get("MQTT_PASSWORD")
     MQTT_CA_CERTS = os.environ.get("MQTT_CA_CERTS")  # optional path to CA bundle
-    PRINTER_NAME = "crucible-printer/printer1"
+    PRINTER_NAME = "crucible-printer/b30-113"
     CMD_TOPIC = PRINTER_NAME + "/print"
 
     payload = {
