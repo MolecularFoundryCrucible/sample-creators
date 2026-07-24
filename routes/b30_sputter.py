@@ -17,6 +17,7 @@ import uuid
 b30_sputter_bp = Blueprint("b30_sputter", __name__)
 
 REF_SAMPLE = B30_SPUTTER_CONFIG.get("calibration_sample_id", "")  # sample with all the calibrated deposition rates as datasets in Crucible
+PRINTER_NAME = B30_SPUTTER_CONFIG.get("printer_name", "crucible-printer/b30-113")
 LA_TZ = ZoneInfo("America/Los_Angeles")
 
 # Cache settings
@@ -569,7 +570,6 @@ def print_barcode():
     MQTT_USERNAME = os.environ.get("MQTT_USERNAME", "crucible-printers")
     MQTT_PASSWORD = os.environ.get("MQTT_PASSWORD")
     MQTT_CA_CERTS = os.environ.get("MQTT_CA_CERTS")  # optional path to CA bundle
-    PRINTER_NAME = "crucible-printer/b30-113"
     CMD_TOPIC = PRINTER_NAME + "/print"
 
     payload = {
@@ -734,7 +734,7 @@ def recent_target_options():
         return jsonify({"error": str(e)}), 500
 
 
-@b30_sputter_bp.route("/api/recent-datasets/export.csv", methods=["GET"])
+@b30_sputter_bp.route("/api/recent-datasets/b30_aja_recent_datasets.csv", methods=["GET"])
 def export_recent_datasets_csv():
     user = session.get("user")
     if not user:

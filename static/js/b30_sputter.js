@@ -788,12 +788,45 @@ function renderRecentDatasets(rows) {
   });
 }
 
-function exportRecentDatasets() {
+async function exportRecentDatasets() {
   const view = document.getElementById('recent-view')?.value || 'Deposition only';
   const target = document.getElementById('recent-target')?.value || 'All';
   const limit = document.getElementById('recent-limit')?.value || '100';
-  const url = `/b30-sputter/api/recent-datasets/export.csv?view=${encodeURIComponent(view)}&target=${encodeURIComponent(target)}&limit=${encodeURIComponent(limit)}`;
-  window.location.href = url;
+
+  try {
+    const base = (typeof BASE_URL !== 'undefined' ? BASE_URL : '');
+    const url = `${base}/b30-sputter/api/recent-datasets/b30_aja_recent_datasets.csv`
+      + `?view=${encodeURIComponent(view)}`
+      + `&target=${encodeURIComponent(target)}`
+      + `&limit=${encodeURIComponent(limit)}`;
+
+    const res = await fetch(url, { method: 'GET' });
+    if (!res.ok) {
+      let msg = 'Export failed';
+      try {
+        const err = await res.json();
+        msg = err.error || msg;
+      } catch {}
+      throw new Error(msg);
+    }
+
+    const blob = await res.blob();
+    const dlUrl = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = dlUrl;
+
+    const disposition = res.headers.get('Content-Disposition');
+    const match = disposition && disposition.match(/filename="?([^"]+)"?/);
+    a.download = match ? match[1] : 'b30_aja_recent_datasets.csv';
+
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(dlUrl);
+    showAlert('success', 'CSV downloaded');
+  } catch (e) {
+    showAlert('error', e.message);
+  }
 }
 
 // ========== Helpers ==========

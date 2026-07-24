@@ -50,6 +50,9 @@
                         <button class="btn btn-secondary" onclick="clearSample()">Clear</button>
                     </div>
                 </div>
+                <div class="button-row" style="margin-top: 6px;">
+                    <button class="btn" onclick="printSampleBarcode()">Print Barcode</button>
+                </div>
                 <div id="sample-status" class="info-text"></div>
 
                 <!-- Detail panel: shown after lookup, hidden by default -->
@@ -76,9 +79,6 @@
                     <!-- Create button row: only visible in create mode -->
                     <div class="button-row hidden" id="create-btn-row">
                         <button class="btn btn-primary" id="btn-create-sample" onclick="createSample()">Create Sample</button>
-                    </div>
-                    <div class="button-row" style="margin-top: 6px;">
-                        <button class="btn" onclick="printSampleBarcode()">Print Barcode</button>
                     </div>
                 </div>
             </section>
