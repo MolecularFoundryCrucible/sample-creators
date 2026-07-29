@@ -40,7 +40,7 @@ RGA_POSITIONS = [f"{row}{col}" for row in "ABCDEF" for col in range(1, 7)]
 
 COORDS_FILE = "coords_36sample.txt"
 
-# B30 AJA SPUTTER CONFIG
+# B30 SPUTTER CONFIG (AJA + Lesker)
 TARGET_MATERIAL_OPTIONS = [
     "", "Ag", "Al", "Al2O3", "Au", "Bi2O3", "BVO", "C", "Co", "Co3O4", "Cu",
     "CuAlO2", "Fe", "Ga2O3", "Gd", "Ge", "In", "Ir", "ITO", "Mn", "Nb", "Ni",
@@ -53,6 +53,7 @@ POWER_SOURCE_OPTIONS = [
     "DC 1", "DC 2", "DC 3", "DC 4", "Pulsed DC", "Other"
 ]
 
+# B30 AJA SPUTTER CONFIG
 B30_SPUTTER_CONFIG = {
     "dataset_name_prefix": "Sputtering Parameters for",
     "dataset_type": "Sputtering Parameters",
@@ -84,6 +85,26 @@ B30_SPUTTER_CONFIG = {
         {"key": "19_rate_A_s", "label": "Deposition rate (Å/s)",      "type": "number"},
         {"key": "20_layer_thickness_nm", "label": "Layer Thickness (nm)",      "type": "number"},
         {"key": "21_deposition_time_s",        "label": "Deposition time (s)",             "type": "number"},
+        {"key": "22_comment",          "label": "Comment",               "type": "text"},
+    ],
+}
+
+# B30 SEM CONFIG
+B30_SEM_CONFIG = {
+    "dataset_name_prefix": "SEM Images for",
+    "dataset_type": "SEM Images",
+    "instrument_name": "b30 - FEI SEM",
+    "measurement": "Scanning electron microscope",
+    "printer_name": "crucible-printer/b30-122",
+    # Fields shown on the upload form. To add/remove fields, edit this list.
+    # Each entry: {"key": used in Crucible metadata, "label": shown to user, "type": html input type}
+    "dataset_fields": [
+        #SEM parameters -> are they saved in the file(s)?
+        {"key": "spot_size", "label": "Enable Co-Deposition", "type": "checkbox"},
+        {"key": "pressure", "label": "Enable Second Gas", "type": "checkbox"},
+        {"key": "edx_used",       "label": "Gas 1",          "type": "checkbox",  "options": ["Ar", "N2", "O2", "Other"]},
+        #EDX parameters -> are they saved in the file(s)?
+        
         {"key": "22_comment",          "label": "Comment",               "type": "text"},
     ],
 }
