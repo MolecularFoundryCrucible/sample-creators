@@ -1,10 +1,9 @@
 {% extends "base.html" %}
-{% block title %}B30 Sputter Data Entry{% endblock %}
+{% block title %}B30 SEM Data Entry{% endblock %}
 
 {% block content %}
-<h1>B30 - AJA Sputter Tool Data Entry and Logbook</h1>
+<h1>B30 - FEI SEM Data Entry and Logbook</h1>
 
-<!-- Top-level tabs -->
 <div class="tab-bar" style="display:flex; gap:8px; margin-bottom:12px;">
   <button class="btn tab-btn active" type="button" data-tab="tab-entry" onclick="switchTab('tab-entry')">Entry</button>
   <button class="btn tab-btn" type="button" data-tab="tab-recent" onclick="switchTab('tab-recent')">Logbook</button>
@@ -39,8 +38,6 @@
             <!-- Sample Lookup / Creation -->
             <section class="section" id="section-sample">
                 <h2>Sample</h2>
-
-                <!-- Search subsection -->
                 <div class="subsection-header">Search</div>
                 <div class="form-group">
                     <label>Barcode (Crucible ID)</label>
@@ -55,11 +52,9 @@
                 </div>
                 <div id="sample-status" class="info-text"></div>
 
-                <!-- Detail panel: shown after lookup, hidden by default -->
                 <div id="sample-detail-panel" class="hidden">
                     <div class="subsection-divider"></div>
                     <div id="sample-panel-header" class="subsection-header">Sample Details</div>
-
                     <div class="form-group">
                         <label>Sample Name</label>
                         <input type="text" id="sample_name" placeholder="e.g. name_purpose">
@@ -75,8 +70,6 @@
                         <input type="text" id="sample_description" placeholder="Optional description">
                         <span id="sample_description_text" class="field-text hidden"></span>
                     </div>
-
-                    <!-- Create button row: only visible in create mode -->
                     <div class="button-row hidden" id="create-btn-row">
                         <button class="btn btn-primary" id="btn-create-sample" onclick="createSample()">Create Sample</button>
                     </div>
@@ -85,89 +78,163 @@
 
         </div>
 
-        <div class="right-panel">     
+        <div class="right-panel">
 
-            <!-- Dataset Fields -->
-            <section class="section" id="section-dataset">
-                <h2>Sputtering Parameters</h2>
-                <p class="help-text">Fill in the deposition parameters, then click Upload.</p>
+            <!-- SEM Image Upload -->
+            <section class="section" id="section-images">
+                <h2>SEM Images</h2>
 
-                <div id="dataset-grid" style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px 12px;">
-                    {% for field in config.dataset_fields %}
-                    <div class="form-group" style="margin-bottom:0;">
-                        <label>{{ field.label }}</label>
-
-                        {% if field.type == 'select' %}
-                        <select id="field_{{ loop.index0 }}" data-key="{{ field.key }}">
-                            {% for opt in field.options %}
-                            <option value="{{ opt }}">{{ opt }}</option>
-                            {% endfor %}
-                        </select>
-                        {% elif field.type == 'checkbox' %}
-                            <input type="checkbox" id="field_{{ loop.index0 }}" data-key="{{ field.key }}">
-                        {% else %}
-                        <input type="{{ field.type }}" id="field_{{ loop.index0 }}"
-                            data-key="{{ field.key }}"
-                            placeholder="{{ field.label }}"
-                            value="{{ field.default if field.default is defined else '' }}"
-                            {% if field.type == 'number' %}step="any"{% endif %}>
-                        {% endif %}
+                <div class="form-group">
+                    <label><strong>Were images saved?</strong></label>
+                    <div style="display:flex; gap:16px; align-items:center; margin-top:4px;">
+                        <label style="font-weight:normal; display:flex; align-items:center; gap:6px;">
+                            <input type="radio" name="images_saved" id="images-yes" value="yes" onchange="onImagesSavedChange()"> Yes
+                        </label>
+                        <label style="font-weight:normal; display:flex; align-items:center; gap:6px;">
+                            <input type="radio" name="images_saved" id="images-no" value="no" onchange="onImagesSavedChange()"> No
+                        </label>
                     </div>
-                    {% endfor %}
                 </div>
 
-                <div class="button-row" style="margin-top: 16px;">
+                <!-- File upload sub-section (shown when images_saved = yes) -->
+                <div id="section-image-upload" class="hidden">
+                    <div class="form-group">
+                        <label>Select image file(s)</label>
+                        <input type="file" id="sem-image-files" accept=".tif,.tiff,.png,.jpg,.jpeg,.bmp" multiple
+                               onchange="onSemFilesSelected()">
+                    </div>
+                    <div id="tiff-extract-row" class="button-row hidden" style="margin-top:6px;">
+                        <button class="btn btn-primary" type="button" onclick="extractTiffMetadata()">Extract Metadata from TIFF</button>
+                        <span id="tiff-extract-status" class="info-text" style="margin-left:8px;"></span>
+                    </div>
+                    <p class="help-text" id="tiff-hint" style="display:none;">
+                        TIFF detected — click "Extract Metadata" to auto-fill SEM parameters.
+                    </p>
+                    <p class="help-text" id="non-tiff-hint" style="display:none;">
+                        Non-TIFF file — please fill in the SEM parameters manually below.
+                    </p>
+                </div>
+            </section>
+
+            <!-- SEM Parameters -->
+            <section class="section" id="section-sem-params">
+                <h2>SEM Parameters</h2>
+                <p class="help-text">Fill in the SEM parameters, or use "Extract Metadata" above for TIFF files.</p>
+
+                <div id="sem-param-grid" style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px 12px;">
+
+                    <!-- vacuum_level -->
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Vacuum Level</label>
+                        <select id="field_vacuum_level" data-key="vacuum_level">
+                            <option value="">--</option>
+                            <option value="High">High</option>
+                            <option value="Low">Low</option>
+                            <option value="ESEM">ESEM</option>
+                        </select>
+                    </div>
+
+                    <!-- spot_size -->
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Spot Size</label>
+                        <input type="number" step="any" id="field_spot_size" data-key="spot_size" placeholder="Spot Size">
+                    </div>
+
+                    <!-- high_voltage_V -->
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>High Voltage (V)</label>
+                        <input type="number" step="any" id="field_high_voltage_V" data-key="high_voltage_V" placeholder="e.g. 5000">
+                    </div>
+
+                    <!-- emission_current_A -->
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Emission Current (A)</label>
+                        <input type="number" step="any" id="field_emission_current_A" data-key="emission_current_A" placeholder="e.g. 1e-4">
+                    </div>
+
+                    <!-- chamber_pressure_Torr -->
+                    <div class="form-group" style="margin-bottom:0;">
+                        <label>Chamber Pressure (Torr)</label>
+                        <input type="number" step="any" id="field_chamber_pressure_Torr" data-key="chamber_pressure_Torr" placeholder="e.g. 1e-5">
+                    </div>
+
+                </div>
+            </section>
+
+            <!-- EDX Section -->
+            <section class="section" id="section-edx">
+                <h2>EDX</h2>
+
+                <div class="form-group">
+                    <label style="display:flex; align-items:center; gap:8px;">
+                        <input type="checkbox" id="field_edx_used" data-key="edx_used" onchange="onEdxToggle()">
+                        EDX was performed
+                    </label>
+                </div>
+
+                <div id="edx-details" class="hidden">
+                    <div class="subsection-divider"></div>
+
+                    <!-- EDX elemental map images -->
+                    <div class="form-group">
+                        <label>EDX elemental map images</label>
+                        <input type="file" id="edx-image-files" accept=".tif,.tiff,.png,.jpg,.jpeg,.bmp" multiple>
+                        <p class="help-text">Select one or more elemental map images.</p>
+                    </div>
+
+                    <!-- EDX spectrum XLSX -->
+                    <div class="form-group">
+                        <label>EDX spectrum file (XLSX)</label>
+                        <div class="input-row">
+                            <input type="file" id="edx-spectrum-file" accept=".xlsx,.xls" onchange="onEdxSpectrumSelected()">
+                            <button class="btn btn-primary" type="button" id="btn-parse-spectrum" onclick="parseEdxSpectrum()" disabled>Parse Spectrum</button>
+                        </div>
+                        <span id="edx-spectrum-status" class="info-text" style="margin-top:4px; display:block;"></span>
+                    </div>
+
+                    <!-- Primary energy (auto-filled from XLSX or manual) -->
+                    <div class="form-group">
+                        <label>Primary Energy (keV)</label>
+                        <input type="number" step="any" id="field_primary_energy_keV" data-key="primary_energy_keV" placeholder="e.g. 15">
+                    </div>
+                </div>
+            </section>
+
+            <!-- Comment -->
+            <section class="section" id="section-comment">
+                <div class="form-group">
+                    <label>Comment</label>
+                    <input type="text" id="field_comment" data-key="comment" placeholder="Optional comment">
+                </div>
+            </section>
+
+            <!-- Upload -->
+            <section class="section" id="section-upload">
+                <div class="button-row">
                     <button class="btn btn-primary" onclick="uploadDataset()">Upload</button>
                 </div>
+                <div id="upload-status" class="info-text" style="margin-top:8px;"></div>
             </section>
 
-            <!-- Timer -->
-            <section class="section" id="section-timer">
-                <h2>Run Timer</h2>
-                <div class="button-row" style="margin-top: 8px; align-items: center; gap: 8px; flex-wrap: wrap;">
-                    <button class="btn btn-primary" type="button" id="go-btn">Go</button>
-                    <button class="btn btn-secondary" type="button" id="stop-btn">Stop</button>
-                    <button class="btn" type="button" id="reset-timer-btn">Reset</button>
-                    <span id="timer-status-badge" class="info-text" style="padding:4px 8px; border-radius:999px; background:#e2e8f0; color:#2d3748;">
-                        IDLE
-                    </span>
-                    <span class="info-text"><strong>Remaining:</strong> <span id="run-timer-display">00:00:00</span></span>
-                </div>
-                <input type="hidden" id="run_elapsed_seconds" data-key="run_elapsed_seconds" value="0">
-            </section>
         </div>
     </div>
 </div>
 
-<!-- TAB 2: datasets only -->
+<!-- TAB 2: Logbook -->
 <div id="tab-recent" class="tab-panel hidden">
   <section class="section">
-    <h2>Logbook of 100 Most Recent Datasets</h2>
+    <h2>Logbook of Recent SEM Datasets</h2>
     <div class="button-row" style="margin-top:8px; display:flex; align-items:center; gap:8px; flex-wrap:nowrap;">
-        <label for="recent-view"><strong>View:</strong></label>
-        <select id="recent-view" onchange="loadRecentMaterials()">
-            <option>Deposition only</option>
-            <option>Calibration only</option>
-            <option>All</option>
-        </select>
-
-        <label for="recent-target"><strong>Target:</strong></label>
-        <select id="recent-target">
-            <option>All</option>
-        </select>
-
         <label for="recent-limit" style="white-space: nowrap;"><strong>Max. entries:</strong></label>
         <select id="recent-limit">
-        <option value="50">50</option>
-        <option value="100" selected>100</option>
-        <option value="250">250</option>
-        <option value="500">500</option>
-        <option value="1000">1000</option>
+            <option value="50">50</option>
+            <option value="100" selected>100</option>
+            <option value="250">250</option>
+            <option value="500">500</option>
+            <option value="1000">1000</option>
         </select>
-
         <button class="btn btn-primary" type="button" id="recent-fetch-btn" onclick="fetchRecentDatasets()">Refresh</button>
         <button class="btn" type="button" id="recent-export-btn" onclick="exportRecentDatasets()">Export</button>
-
         <span id="recent-loading" class="info-text hidden">Loading…</span>
     </div>
 
@@ -175,33 +242,28 @@
       <table id="recent-table" class="preview-table" style="table-layout: fixed; width: 100%;">
         <thead>
           <tr>
-            <th style="resize: horizontal; overflow: auto;">Date</th><th style="resize: horizontal; overflow: auto;">User</th>
-            <th style="resize: horizontal; overflow: auto;">Gas</th><th style="resize: horizontal; overflow: auto;">Press. (mTorr)</th>
-            <th style="resize: horizontal; overflow: auto;">Temp. (°C)</th><th style="resize: horizontal; overflow: auto;">Target</th>
-            <th style="resize: horizontal; overflow: auto;">Source</th><th style="resize: horizontal; overflow: auto;">Power (W)</th>
-            <th style="resize: horizontal; overflow: auto;">DCV (V)</th><th style="resize: horizontal; overflow: auto;">Indiv. rates (Å/s)</th>
-            <th style="resize: horizontal; overflow: auto;">Tot. rate (Å/s)</th><th style="resize: horizontal; overflow: auto;">Time (s)</th>
-            <th style="resize: horizontal; overflow: auto;">Thickness (nm)</th><th style="resize: horizontal; overflow: auto;">Comment</th>
+            <th style="resize: horizontal; overflow: auto;">Date</th>
+            <th style="resize: horizontal; overflow: auto;">User</th>
+            <th style="resize: horizontal; overflow: auto;">Vacuum</th>
+            <th style="resize: horizontal; overflow: auto;">Spot</th>
+            <th style="resize: horizontal; overflow: auto;">HV (V)</th>
+            <th style="resize: horizontal; overflow: auto;">Current (A)</th>
+            <th style="resize: horizontal; overflow: auto;">Pressure (Torr)</th>
+            <th style="resize: horizontal; overflow: auto;">EDX</th>
+            <th style="resize: horizontal; overflow: auto;">Energy (keV)</th>
+            <th style="resize: horizontal; overflow: auto;">Comment</th>
           </tr>
         </thead>
         <tbody id="recent-table-body">
-          <tr><td colspan="14">Click Refresh to load datasets.</td></tr>
+          <tr><td colspan="10">Click Refresh to load datasets.</td></tr>
         </tbody>
       </table>
     </div>
   </section>
 </div>
 
-<div id="timer-finished-overlay" class="hidden"
-     style="position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:5000; display:flex; align-items:center; justify-content:center;">
-    <div style="background:white; padding:28px 36px; border-radius:10px; text-align:center; max-width:560px; width:90%;">
-        <div style="font-size:40px; font-weight:800; color:#c53030; margin-bottom:10px;">TIME IS UP</div>
-        <div style="font-size:18px; color:#2d3748; margin-bottom:18px;">Deposition countdown has finished.</div>
-        <button class="btn btn-primary" type="button" onclick="dismissTimerFinishedOverlay()">OK</button>
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
-<script src="{{ url_for('static', filename='js/b30_sputter.js') }}"></script>
+<script src="{{ url_for('static', filename='js/b30_sem.js') }}"></script>
 {% endblock %}

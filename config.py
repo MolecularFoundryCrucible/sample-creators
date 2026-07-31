@@ -100,11 +100,15 @@ B30_SEM_CONFIG = {
     # Each entry: {"key": used in Crucible metadata, "label": shown to user, "type": html input type}
     "dataset_fields": [
         #SEM parameters -> are they saved in the file(s)?
-        {"key": "spot_size", "label": "Enable Co-Deposition", "type": "checkbox"},
-        {"key": "pressure", "label": "Enable Second Gas", "type": "checkbox"},
-        {"key": "edx_used",       "label": "Gas 1",          "type": "checkbox",  "options": ["Ar", "N2", "O2", "Other"]},
+        {"key": "images_saved",       "label": "Images Saved?",          "type": "checkbox"},
+        {"key": "vacuum_level",       "label": "Vacuum Level",          "type": "select",  "options": ["High", "Low", "ESEM"]},
+        {"key": "spot_size", "label": "Spot Size", "type": "number"},
+        {"key": "high_voltage_V", "label": "High Voltage (V)", "type": "number"},
+        {"key": "emission_current_A", "label": "Emission Current (A)", "type": "number"},
+        {"key": "chamber_pressure_Torr", "label": "Chamber Pressure (Torr)", "type": "number"},
+        {"key": "edx_used",       "label": "Edx Used?",          "type": "checkbox"},
         #EDX parameters -> are they saved in the file(s)?
-        
-        {"key": "22_comment",          "label": "Comment",               "type": "text"},
+        {"key": "primary_energy_keV", "label": "Primary Energy (keV)", "type": "number"},
+        {"key": "comment",          "label": "Comment",               "type": "text"},
     ],
 }
