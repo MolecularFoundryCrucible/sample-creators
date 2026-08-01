@@ -390,6 +390,18 @@ input[readonly] {
     border: 1px solid #feb2b2;
 }
 
+.alert-warning {
+    background: #feebc8;
+    color: #7b341e;
+    border: 1px solid #fbd38d;
+}
+
+.alert-info {
+    background: #bee3f8;
+    color: #2a4365;
+    border: 1px solid #90cdf4;
+}
+
 @keyframes slideIn {
     from { transform: translateX(100%); opacity: 0; }
     to { transform: translateX(0); opacity: 1; }
@@ -493,6 +505,21 @@ input[readonly] {
 
 .meta-val {
     color: #4a5568;
+}
+
+.preview-skipped {
+    background: #feebc8;
+    color: #7b341e;
+    border: 1px solid #fbd38d;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 10px 0;
+    font-size: 14px;
+}
+
+.preview-skipped ul {
+    margin: 6px 0 0;
+    padding-left: 20px;
 }
 
 .param-divider {

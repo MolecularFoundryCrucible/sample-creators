@@ -100,7 +100,11 @@ async function lookupBar() {
         document.getElementById('bar_mf_uuid').value = data.mf_uuid;
         document.getElementById('bar_als_uuid').value = data.als_uuid;
         updateBarButtons();
-        if (data.mf_uuid) {
+        if (data.matches > 1) {
+            showAlert('warning',
+                `${data.matches} bars named '${barName}' exist in this project. ` +
+                `Cannot tell which one you mean — rename or remove the duplicates.`);
+        } else if (data.mf_uuid) {
             showAlert('success', `Found bar '${barName}'`);
         } else {
             showAlert('info', `Bar '${barName}' not found in Crucible — ready to create`);
@@ -117,13 +121,30 @@ async function registerCrucible() {
         return;
     }
     try {
-        const data = await api('/giwaxs/api/register-crucible', 'POST', { bar_name: barName });
-        document.getElementById('bar_mf_uuid').value = data.mf_uuid;
-        updateBarButtons();
-        showAlert('success', `Bar '${data.bar_name}' created in Crucible. UUID: ${data.mf_uuid}`);
+        await postRegisterCrucible(barName, false);
     } catch (e) {
+        if (e.status === 409 && e.data && e.data.exists) {
+            showModal(
+                'Bar already exists',
+                `<p>${escapeHtml(e.message)}</p>
+                 <p>Use the existing bar, or cancel and pick a different name.</p>`,
+                () => postRegisterCrucible(barName, true).catch(err => showAlert('error', err.message)),
+                'Use existing'
+            );
+            return;
+        }
         showAlert('error', e.message);
     }
+}
+
+async function postRegisterCrucible(barName, useExisting) {
+    const data = await api('/giwaxs/api/register-crucible', 'POST',
+        { bar_name: barName, use_existing: useExisting });
+    document.getElementById('bar_mf_uuid').value = data.mf_uuid;
+    document.getElementById('bar_als_uuid').value = data.als_uuid || '';
+    updateBarButtons();
+    const verb = useExisting ? 'linked' : 'created';
+    showAlert('success', `Bar '${data.bar_name}' ${verb} in Crucible. UUID: ${data.mf_uuid}`);
 }
 
 async function registerALS() {
@@ -303,8 +324,16 @@ async function previewAndUpload() {
         showAlert('success', 'Collecting sample info from Crucible...');
         const preview = await api('/giwaxs/api/collect-preview', 'POST');
 
+        const skipped = preview.skipped || [];
+
         if (!preview.samples || preview.samples.length === 0) {
-            showAlert('error', 'No samples found in bar layout');
+            if (skipped.length) {
+                showAlert('error',
+                    `None of the ${skipped.length} thin films in the layout could be resolved. ` +
+                    `First problem: ${skipped[0].tf_name} — ${skipped[0].reason}.`);
+            } else {
+                showAlert('error', 'No samples found in bar layout');
+            }
             return;
         }
 
@@ -312,6 +341,7 @@ async function previewAndUpload() {
         html += `<p><strong>Crucible UUID:</strong> ${preview.bar_mf_uuid}</p>`;
         html += `<p><strong>ALS Set ID:</strong> ${preview.bar_als_uuid}</p>`;
         html += `<p><strong>Samples:</strong> ${preview.samples.length}</p>`;
+        html += renderSkippedWarning(skipped);
         html += '<table class="preview-table"><thead><tr><th>Pos</th><th>Thin Film</th><th>MFID</th><th>Parameters</th></tr></thead><tbody>';
         for (const s of preview.samples) {
             const scanLines = Object.entries(s.scan_params || {})
@@ -332,7 +362,7 @@ async function previewAndUpload() {
             } catch (e) {
                 showAlert('error', `Upload failed: ${e.message}`);
             }
-        });
+        }, skipped.length ? `Upload ${preview.samples.length} anyway` : 'Confirm');
     } catch (e) {
         showAlert('error', e.message);
     }

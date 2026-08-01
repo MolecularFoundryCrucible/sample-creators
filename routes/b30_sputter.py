@@ -522,23 +522,34 @@ def create_sample():
     if not sample_name or not sample_type:
         return jsonify({"error": "sample_name and sample_type are required"}), 400
 
+    project = user["selected_project"]
+
+    # A duplicate name is allowed here, but never silently — the user has to confirm.
+    if not data.get("allow_duplicate"):
+        existing = cruc_client.samples.list(
+            sample_name=sample_name, sample_type=sample_type, project_id=project
+        )
+        if existing:
+            return jsonify({
+                "exists": True,
+                "error": f"{len(existing)} sample(s) named {sample_name} "
+                         f"of type {sample_type} already exist in {project}.",
+                "sample_name": sample_name,
+                "existing_ids": [s["unique_id"] for s in existing],
+            }), 409
+
     try:
         returned_sample = cruc_client.samples.create(
             sample_name=sample_name,
             timestamp=get_tz_isoformat(),
             owner_orcid=user["orcid"],
-            project_id=user["selected_project"],
+            project_id=project,
             sample_type=sample_type,
             description=description or None,
         )
     except Exception as e:
-        # actually they don't want the existing sample returned
-        return jsonify({"error": str(e)}), 500 
-        # existing_samples = cruc_client.samples.list(sample_name = sample_name, project_id= user['selected_project'])
-        # if len(existing_samples) == 0:
-        #     return jsonify({"error": str(e)}), 500
-        # else:
-        #     returned_sample = existing_samples[-1]
+        return jsonify({"error": str(e)}), 500
+
     state = _get_state()
     state["sample_unique_id"] = returned_sample["unique_id"]
     state["sample_name"] = returned_sample["sample_name"]

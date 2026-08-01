@@ -23,6 +23,21 @@ GIWAXS_ALS_PARAM_NAME_MAP = {
 }
 
 
+def _set_bar_name(state, name):
+    """Set the bar name, clearing the ids derived from the previous name."""
+    name = (name or "").strip()
+    if name != state["bar_name"]:
+        state["bar_name"] = name
+        state["bar_mf_uuid"] = ""
+        state["bar_als_uuid"] = ""
+
+
+def _als_uuid_from_description(description):
+    if not description or "|| Set ID:" not in description:
+        return ""
+    return description.split("|| Set ID:")[-1].strip()
+
+
 def _get_giwaxs_state():
     """Get or initialize GIWAXS state in session."""
     if "giwaxs" not in session:
@@ -63,7 +78,7 @@ def next_bar_name():
     bar_name = f"GWBAR{num:06d}"
 
     state = _get_giwaxs_state()
-    state["bar_name"] = bar_name
+    _set_bar_name(state, bar_name)
     session.modified = True
 
     return jsonify({"bar_name": bar_name})
@@ -81,19 +96,24 @@ def lookup_bar():
     mf_bars = cruc_client.samples.list(sample_name=bar_name, sample_type="giwaxs bar", project_id=project)
     mfid = ""
     alsid = ""
+    # Only adopt a match when it is unambiguous; several bars can share a name.
     if len(mf_bars) == 1:
         mfid = mf_bars[0]["unique_id"]
-        descrip = mf_bars[0]["description"]
-        if descrip is not None:
-            alsid = descrip.split("|| Set ID:")[-1].strip()
+        alsid = _als_uuid_from_description(mf_bars[0]["description"])
 
     state = _get_giwaxs_state()
-    state["bar_name"] = bar_name
+    _set_bar_name(state, bar_name)
     state["bar_mf_uuid"] = mfid
     state["bar_als_uuid"] = alsid
     session.modified = True
 
-    return jsonify({"bar_name": bar_name, "mf_uuid": mfid, "als_uuid": alsid})
+    return jsonify({
+        "bar_name": bar_name,
+        "mf_uuid": mfid,
+        "als_uuid": alsid,
+        "matches": len(mf_bars),
+        "match_ids": [b["unique_id"] for b in mf_bars],
+    })
 
 
 @giwaxs_bp.route("/api/register-crucible", methods=["POST"])
@@ -107,33 +127,48 @@ def register_crucible():
 
     # Allow the client to send the current bar name (editable field)
     if data.get("bar_name"):
-        state["bar_name"] = data["bar_name"].strip()
+        _set_bar_name(state, data["bar_name"])
         session.modified = True
 
     bar_name = state["bar_name"]
     if not bar_name:
         return jsonify({"error": "No bar name set"}), 400
 
-    try:
-        returned_bar = cruc_client.samples.create(
-            sample_name=bar_name,
-            timestamp=get_tz_isoformat(),
-            owner_orcid=user["orcid"],
-            project_id=user["selected_project"],
-            sample_type="giwaxs bar",
-        )
+    project = user["selected_project"]
+    existing = cruc_client.samples.list(
+        sample_name=bar_name, sample_type="giwaxs bar", project_id=project
+    )
 
-    except Exception as e:
-        existing_bars = cruc_client.samples.list(sample_name = bar_name, project_id = user['selected_project'])
-        if len(existing_bars) == 0:
+    if existing and not data.get("use_existing"):
+        return jsonify({
+            "exists": True,
+            "error": f"A giwaxs bar named {bar_name} already exists in {project}.",
+            "bar_name": bar_name,
+            "mf_uuid": existing[-1]["unique_id"],
+        }), 409
+
+    if existing:
+        bar = existing[-1]
+        state["bar_als_uuid"] = _als_uuid_from_description(bar["description"])
+    else:
+        try:
+            bar = cruc_client.samples.create(
+                sample_name=bar_name,
+                timestamp=get_tz_isoformat(),
+                owner_orcid=user["orcid"],
+                project_id=project,
+                sample_type="giwaxs bar",
+            )
+        except Exception as e:
             return jsonify({"error": str(e)}), 500
-        
-        returned_bar = existing_bars[-1]
 
-    mfid = returned_bar["unique_id"]
-    state["bar_mf_uuid"] = mfid
+    state["bar_mf_uuid"] = bar["unique_id"]
     session.modified = True
-    return jsonify({"mf_uuid": mfid, "bar_name": bar_name})
+    return jsonify({
+        "mf_uuid": bar["unique_id"],
+        "als_uuid": state["bar_als_uuid"],
+        "bar_name": bar_name,
+    })
     
 
 @giwaxs_bp.route("/api/register-als", methods=["POST"])
@@ -146,7 +181,7 @@ def register_als():
     state = _get_giwaxs_state()
 
     if data.get("bar_name"):
-        state["bar_name"] = data["bar_name"].strip()
+        _set_bar_name(state, data["bar_name"])
         session.modified = True
 
     if not state["bar_mf_uuid"]:
@@ -234,6 +269,7 @@ def collect_preview():
     state = _get_giwaxs_state()
     project = user["selected_project"]
     samples = []
+    skipped = []
 
     for i in range(1, 12):
         tf_name = state["positions"].get(str(i), "")
@@ -244,6 +280,13 @@ def collect_preview():
             sample_name=tf_name, project_id=project, sample_type="thin film"
         )
         if len(tf_found) != 1:
+            skipped.append({
+                "position": i,
+                "tf_name": tf_name,
+                "matches": len(tf_found),
+                "reason": "no thin film with this name" if not tf_found
+                          else f"{len(tf_found)} thin films share this name",
+            })
             continue
 
         tf = tf_found[0]
@@ -295,6 +338,7 @@ def collect_preview():
         "bar_mf_uuid": state["bar_mf_uuid"],
         "bar_als_uuid": state["bar_als_uuid"],
         "samples": samples,
+        "skipped": skipped,
     })
 
 

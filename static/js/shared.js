@@ -10,7 +10,10 @@ async function api(url, method = 'GET', body = null) {
     const res = await fetch(fullUrl, opts);
     const data = await res.json();
     if (!res.ok) {
-        throw new Error(data.error || `Request failed (${res.status})`);
+        const err = new Error(data.error || `Request failed (${res.status})`);
+        err.status = res.status;
+        err.data = data;
+        throw err;
     }
     return data;
 }
@@ -28,7 +31,7 @@ function showAlert(type, message) {
 
 // ========== Modal ==========
 
-function showModal(title, bodyHTML, onConfirm) {
+function showModal(title, bodyHTML, onConfirm, confirmLabel = 'Confirm') {
     document.getElementById('modal-title').textContent = title;
     document.getElementById('modal-body').innerHTML = bodyHTML;
     document.getElementById('modal-overlay').classList.remove('hidden');
@@ -36,11 +39,31 @@ function showModal(title, bodyHTML, onConfirm) {
     const confirmBtn = document.getElementById('modal-confirm');
     // Remove old listeners by cloning
     const newBtn = confirmBtn.cloneNode(true);
+    newBtn.textContent = confirmLabel;
     confirmBtn.parentNode.replaceChild(newBtn, confirmBtn);
     newBtn.addEventListener('click', () => {
         closeModal();
         onConfirm();
     });
+}
+
+// Positions whose thin film name matched zero or several samples. These are
+// dropped from the upload, so the preview has to call them out explicitly.
+function renderSkippedWarning(skipped) {
+    if (!skipped || !skipped.length) return '';
+    const rows = skipped.map(s =>
+        `<li>Position ${escapeHtml(s.position)}: <strong>${escapeHtml(s.tf_name)}</strong> — ${escapeHtml(s.reason)}</li>`
+    ).join('');
+    return `<div class="preview-skipped">
+        <strong>${skipped.length} position(s) will NOT be uploaded:</strong>
+        <ul>${rows}</ul>
+    </div>`;
+}
+
+function escapeHtml(str) {
+    const div = document.createElement('div');
+    div.textContent = str == null ? '' : String(str);
+    return div.innerHTML;
 }
 
 function closeModal() {

@@ -123,19 +123,38 @@ async function createSample() {
         return;
     }
     try {
-        const data = await api('/b30-sputter/api/create-sample', 'POST', {
-            sample_name: sampleName,
-            sample_type: sampleType,
-            description,
-        });
-        document.getElementById('sample_barcode').value = data.unique_id;
-        populateSampleFields(data);
-        setSampleStatus('created', data.sample_name);
-        showSamplePanel('found');
-        showAlert('success', `Created sample: ${data.sample_name} (${data.unique_id})`);
+        await postCreateSample(sampleName, sampleType, description, false);
     } catch (e) {
+        if (e.status === 409 && e.data && e.data.exists) {
+            const ids = (e.data.existing_ids || []).map(escapeHtml).join('<br>');
+            showModal(
+                'Duplicate sample name',
+                `<p>${escapeHtml(e.message)}</p>
+                 <p>Existing:<br>${ids}</p>
+                 <p>Creating another will give you two samples with the same name
+                    and different barcodes.</p>`,
+                () => postCreateSample(sampleName, sampleType, description, true)
+                          .catch(err => showAlert('error', err.message)),
+                'Create anyway'
+            );
+            return;
+        }
         showAlert('error', e.message);
     }
+}
+
+async function postCreateSample(sampleName, sampleType, description, allowDuplicate) {
+    const data = await api('/b30-sputter/api/create-sample', 'POST', {
+        sample_name: sampleName,
+        sample_type: sampleType,
+        description,
+        allow_duplicate: allowDuplicate,
+    });
+    document.getElementById('sample_barcode').value = data.unique_id;
+    populateSampleFields(data);
+    setSampleStatus('created', data.sample_name);
+    showSamplePanel('found');
+    showAlert('success', `Created sample: ${data.sample_name} (${data.unique_id})`);
 }
 
 function clearSample() {

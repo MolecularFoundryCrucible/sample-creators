@@ -14,6 +14,21 @@ rga_bp = Blueprint("rga", __name__)
 _pending_uploads: dict[str, list] = {}
 
 
+def _set_rga_name(state, name):
+    """Set the carrier name, clearing the ids derived from the previous name."""
+    name = (name or "").strip()
+    if name != state["rga_name"]:
+        state["rga_name"] = name
+        state["rga_mf_uuid"] = ""
+        state["rga_als_uuid"] = ""
+
+
+def _als_uuid_from_description(description):
+    if not description or "|| Set ID:" not in description:
+        return ""
+    return description.split("|| Set ID:")[-1].strip()
+
+
 def _get_rga_state():
     """Get or initialize RGA state in session."""
     if "rga" not in session:
@@ -53,7 +68,7 @@ def next_carrier_name():
     rga_name = f"RGA{num:06d}"
 
     state = _get_rga_state()
-    state["rga_name"] = rga_name
+    _set_rga_name(state, rga_name)
     session.modified = True
 
     return jsonify({"rga_name": rga_name})
@@ -71,19 +86,24 @@ def lookup_carrier():
     mf_rgas = cruc_client.samples.list(sample_name=rga_name, sample_type="rga carrier", project_id=project)
     mfid = ""
     alsid = ""
+    # Only adopt a match when it is unambiguous; several carriers can share a name.
     if len(mf_rgas) == 1:
         mfid = mf_rgas[0]["unique_id"]
-        descrip = mf_rgas[0]["description"]
-        if descrip is not None:
-            alsid = descrip.split("|| Set ID:")[-1].strip()
+        alsid = _als_uuid_from_description(mf_rgas[0]["description"])
 
     state = _get_rga_state()
-    state["rga_name"] = rga_name
+    _set_rga_name(state, rga_name)
     state["rga_mf_uuid"] = mfid
     state["rga_als_uuid"] = alsid
     session.modified = True
 
-    return jsonify({"rga_name": rga_name, "mf_uuid": mfid, "als_uuid": alsid})
+    return jsonify({
+        "rga_name": rga_name,
+        "mf_uuid": mfid,
+        "als_uuid": alsid,
+        "matches": len(mf_rgas),
+        "match_ids": [r["unique_id"] for r in mf_rgas],
+    })
 
 
 @rga_bp.route("/api/register-crucible", methods=["POST"])
@@ -96,31 +116,48 @@ def register_crucible():
     state = _get_rga_state()
 
     if data.get("rga_name"):
-        state["rga_name"] = data["rga_name"].strip()
+        _set_rga_name(state, data["rga_name"])
         session.modified = True
 
     rga_name = state["rga_name"]
     if not rga_name:
         return jsonify({"error": "No RGA name set"}), 400
 
-    try:
-        returned_rga = cruc_client.samples.create(
-            sample_name=rga_name,
-            timestamp=get_tz_isoformat(),
-            owner_orcid=user["orcid"],
-            project_id=user["selected_project"],
-            sample_type="rga carrier",
-        )
-    except Exception as e:
-        existing_rga = cruc_client.samples.list(sample_name = rga_name, project_id = user['selected_project'])
-        if len(existing_rga) == 0:
-            return jsonify({"error": str(e)}), 500
-        returned_rga = existing_rga[-1]
+    project = user["selected_project"]
+    existing = cruc_client.samples.list(
+        sample_name=rga_name, sample_type="rga carrier", project_id=project
+    )
 
-    mfid = returned_rga["unique_id"]
-    state["rga_mf_uuid"] = mfid
+    if existing and not data.get("use_existing"):
+        return jsonify({
+            "exists": True,
+            "error": f"An rga carrier named {rga_name} already exists in {project}.",
+            "rga_name": rga_name,
+            "mf_uuid": existing[-1]["unique_id"],
+        }), 409
+
+    if existing:
+        carrier = existing[-1]
+        state["rga_als_uuid"] = _als_uuid_from_description(carrier["description"])
+    else:
+        try:
+            carrier = cruc_client.samples.create(
+                sample_name=rga_name,
+                timestamp=get_tz_isoformat(),
+                owner_orcid=user["orcid"],
+                project_id=project,
+                sample_type="rga carrier",
+            )
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    state["rga_mf_uuid"] = carrier["unique_id"]
     session.modified = True
-    return jsonify({"mf_uuid": mfid, "rga_name": rga_name})
+    return jsonify({
+        "mf_uuid": carrier["unique_id"],
+        "als_uuid": state["rga_als_uuid"],
+        "rga_name": rga_name,
+    })
 
 
 @rga_bp.route("/api/register-als", methods=["POST"])
@@ -133,7 +170,7 @@ def register_als():
     state = _get_rga_state()
 
     if data.get("rga_name"):
-        state["rga_name"] = data["rga_name"].strip()
+        _set_rga_name(state, data["rga_name"])
         session.modified = True
 
     if not state["rga_mf_uuid"]:
@@ -219,6 +256,7 @@ def collect_preview():
     state = _get_rga_state()
     project = user["selected_project"]
     samples = []
+    skipped = []
 
     for pos in RGA_POSITIONS:
         tf_name = state["positions"].get(pos, "")
@@ -229,6 +267,13 @@ def collect_preview():
             sample_name=tf_name, project_id=project, sample_type="thin film"
         )
         if len(tf_found) != 1:
+            skipped.append({
+                "position": pos,
+                "tf_name": tf_name,
+                "matches": len(tf_found),
+                "reason": "no thin film with this name" if not tf_found
+                          else f"{len(tf_found)} thin films share this name",
+            })
             continue
 
         tf = tf_found[0]
@@ -276,6 +321,7 @@ def collect_preview():
         "rga_mf_uuid": state["rga_mf_uuid"],
         "rga_als_uuid": state["rga_als_uuid"],
         "samples": samples,
+        "skipped": skipped,
     })
 
 
