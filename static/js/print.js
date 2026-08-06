@@ -179,9 +179,18 @@ function addParsed(text) {
     showAlert('success', `Added ${rows.length} row(s) to the print list${note}`);
 }
 
+function clearBulk() {
+    document.getElementById('bulk_text').value = '';
+    // Assigning '' is the only way to deselect a chosen file.
+    document.getElementById('bulk_file').value = '';
+}
+
 function addBulkRows() {
     const file = document.getElementById('bulk_file').files[0];
     if (file) {
+        if (document.getElementById('bulk_text').value.trim()) {
+            showAlert('info', `Using ${file.name} — clear the file to use the pasted rows instead`);
+        }
         const reader = new FileReader();
         reader.onload = () => addParsed(reader.result);
         reader.onerror = () => showAlert('error', `Could not read ${file.name}`);
