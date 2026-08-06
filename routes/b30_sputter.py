@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, session, render_template, current_app, send_file
-from routes.shared import cruc_client
+from routes.shared import cruc_client, publish_barcode
 from crucible import Dataset
 from crucible.utils import get_tz_isoformat
 from config import B30_SPUTTER_CONFIG
@@ -9,10 +9,6 @@ from threading import Lock
 import requests
 import io
 import csv
-import os
-import json
-import time
-import uuid
 
 b30_sputter_bp = Blueprint("b30_sputter", __name__)
 
@@ -569,38 +565,14 @@ def create_sample():
 @b30_sputter_bp.route("/api/print-barcode", methods=["POST"])
 def print_barcode():
     data = request.get_json() or {}
-    print("POSTing to print barcode", data)
     sample_name = data.get("sample_name", "").strip()
     sample_mfid = data.get("sample_id", "").strip()
 
     if not sample_mfid:
         return jsonify({"error": "sample_id is required"}), 400
 
-    BROKER = os.environ.get("MQTT_BROKER", "mqtt.mfdata.org")
-    PORT = int(os.environ.get("MQTT_PORT", "8883"))
-    MQTT_USERNAME = os.environ.get("MQTT_USERNAME", "crucible-printers")
-    MQTT_PASSWORD = os.environ.get("MQTT_PASSWORD")
-    MQTT_CA_CERTS = os.environ.get("MQTT_CA_CERTS")  # optional path to CA bundle
-    CMD_TOPIC = PRINTER_NAME + "/print"
-
-    payload = {
-        "job_id": str(uuid.uuid4()),
-        "mfid": sample_mfid,
-        "name": sample_name,
-        "ts": time.time(),
-    }
-    print("payload", payload)
-
-    import paho.mqtt.publish as publish
     try:
-        publish.single(
-            topic=CMD_TOPIC,
-            payload=json.dumps(payload),
-            hostname=BROKER,
-            port=PORT,
-            auth={'username': MQTT_USERNAME, 'password': MQTT_PASSWORD},
-            tls={"ca_certs": None},
-        )
+        publish_barcode(PRINTER_NAME, sample_mfid, sample_name)
     except Exception as e:
         current_app.logger.error(f"[b30] Barcode print failed: {e}")
         return jsonify({"error": str(e)}), 500

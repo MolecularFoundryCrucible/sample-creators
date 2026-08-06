@@ -142,6 +142,16 @@ async function setProject() {
     await api('/api/user/project', 'POST', { project });
 }
 
+// ========== Tabs ==========
+
+function switchTab(tabId) {
+    document.querySelectorAll('.tab-panel').forEach(el => el.classList.add('hidden'));
+    document.getElementById(tabId)?.classList.remove('hidden');
+
+    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+    document.querySelector(`.tab-btn[data-tab="${tabId}"]`)?.classList.add('active');
+}
+
 // ========== Barcode Printing ==========
 
 function printBarcode(barcode, label) {
