@@ -902,14 +902,6 @@ function setTimerStatus(running) {
     }
 }
 
-function switchTab(tabId) {
-  document.querySelectorAll('.tab-panel').forEach(el => el.classList.add('hidden'));
-  document.getElementById(tabId)?.classList.remove('hidden');
-
-  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-  document.querySelector(`.tab-btn[data-tab="${tabId}"]`)?.classList.add('active');
-}
-
 (function patchLogoutUserForB30() {
   if (typeof window.logoutUser !== 'function') return;
 
