@@ -162,64 +162,45 @@ function onImagesSavedChange() {
         uploadSection.classList.add('hidden');
         // Clear file selection and hints
         document.getElementById('sem-image-files').value = '';
-        document.getElementById('tiff-extract-row').classList.add('hidden');
-        document.getElementById('tiff-hint').style.display = 'none';
         document.getElementById('non-tiff-hint').style.display = 'none';
-        document.getElementById('tiff-extract-status').textContent = '';
+        const statusEl = document.getElementById('tiff-extract-status');
+        statusEl.style.display = 'none';
+        statusEl.textContent = '';
     }
 }
 
-function onSemFilesSelected() {
+async function onSemFilesSelected() {
     const input = document.getElementById('sem-image-files');
-    const extractRow = document.getElementById('tiff-extract-row');
-    const tiffHint = document.getElementById('tiff-hint');
     const nonTiffHint = document.getElementById('non-tiff-hint');
+    const statusEl = document.getElementById('tiff-extract-status');
+
+    statusEl.style.display = 'none';
+    statusEl.textContent = '';
 
     if (!input.files || input.files.length === 0) {
-        extractRow.classList.add('hidden');
-        tiffHint.style.display = 'none';
         nonTiffHint.style.display = 'none';
         return;
     }
 
-    // Check if any selected file is a TIFF
-    const hasTiff = Array.from(input.files).some(f =>
+    // Auto-extract from the first TIFF in the selection, if any
+    const tiffFile = Array.from(input.files).find(f =>
         f.name.toLowerCase().endsWith('.tif') || f.name.toLowerCase().endsWith('.tiff')
     );
 
-    if (hasTiff) {
-        extractRow.classList.remove('hidden');
-        tiffHint.style.display = '';
+    if (tiffFile) {
         nonTiffHint.style.display = 'none';
+        await extractTiffMetadata(tiffFile);
     } else {
-        extractRow.classList.add('hidden');
-        tiffHint.style.display = 'none';
         nonTiffHint.style.display = '';
     }
-    document.getElementById('tiff-extract-status').textContent = '';
 }
 
 // ========== TIFF metadata extraction ==========
 
-async function extractTiffMetadata() {
-    const input = document.getElementById('sem-image-files');
+async function extractTiffMetadata(tiffFile) {
     const statusEl = document.getElementById('tiff-extract-status');
-
-    if (!input.files || input.files.length === 0) {
-        showAlert('error', 'Please select a TIFF file first');
-        return;
-    }
-
-    // Use the first TIFF in the selection
-    const tiffFile = Array.from(input.files).find(f =>
-        f.name.toLowerCase().endsWith('.tif') || f.name.toLowerCase().endsWith('.tiff')
-    );
-    if (!tiffFile) {
-        showAlert('error', 'No TIFF file found in selection');
-        return;
-    }
-
-    statusEl.textContent = 'Extracting…';
+    statusEl.style.display = '';
+    statusEl.textContent = 'Extracting metadata…';
 
     const formData = new FormData();
     formData.append('file', tiffFile);

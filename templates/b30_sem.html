@@ -103,13 +103,7 @@
                         <input type="file" id="sem-image-files" accept=".tif,.tiff,.png,.jpg,.jpeg,.bmp" multiple
                                onchange="onSemFilesSelected()">
                     </div>
-                    <div id="tiff-extract-row" class="button-row hidden" style="margin-top:6px;">
-                        <button class="btn btn-primary" type="button" onclick="extractTiffMetadata()">Extract Metadata from TIFF</button>
-                        <span id="tiff-extract-status" class="info-text" style="margin-left:8px;"></span>
-                    </div>
-                    <p class="help-text" id="tiff-hint" style="display:none;">
-                        TIFF detected — click "Extract Metadata" to auto-fill SEM parameters.
-                    </p>
+                    <p class="help-text" id="tiff-extract-status" style="display:none; margin-top:6px;"></p>
                     <p class="help-text" id="non-tiff-hint" style="display:none;">
                         Non-TIFF file — please fill in the SEM parameters manually below.
                     </p>
@@ -119,7 +113,7 @@
             <!-- SEM Parameters -->
             <section class="section" id="section-sem-params">
                 <h2>SEM Parameters</h2>
-                <p class="help-text">Fill in the SEM parameters, or use "Extract Metadata" above for TIFF files.</p>
+                <p class="help-text">Fill in the SEM parameters, or select a TIFF file above to auto-fill them.</p>
 
                 <div id="sem-param-grid" style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px 12px;">
 

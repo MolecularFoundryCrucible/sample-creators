@@ -14,7 +14,7 @@ import json
 import time
 import uuid
 import tempfile
-import xml.etree.ElementTree as ET
+import tifffile
 
 b30_sem_bp = Blueprint("b30_sem", __name__)
 
@@ -182,91 +182,26 @@ def _incremental_refresh_rows(project_id, instrument_name):
 
 # ---------- TIFF metadata extraction ----------
 
-def _extract_fei_xml_from_tiff(file_bytes: bytes) -> str | None:
-    """
-    Reads TIFF IFD entries looking for FEI metadata tag 34682 (0x879A).
-    Returns the raw XML string, or None if not found.
-    Falls back to checking ImageDescription (tag 270) for XML content.
-    """
-    import struct
-
-    if len(file_bytes) < 8:
-        return None
-
-    byte_order = file_bytes[:2]
-    if byte_order == b'II':
-        endian = '<'
-    elif byte_order == b'MM':
-        endian = '>'
-    else:
-        return None
-
-    magic = struct.unpack_from(endian + 'H', file_bytes, 2)[0]
-    if magic != 42:
-        return None
-
-    ifd_offset = struct.unpack_from(endian + 'I', file_bytes, 4)[0]
-
-    def read_ifd(offset):
-        if offset + 2 > len(file_bytes):
-            return {}
-        num_entries = struct.unpack_from(endian + 'H', file_bytes, offset)[0]
-        tags = {}
-        for i in range(num_entries):
-            entry_offset = offset + 2 + i * 12
-            if entry_offset + 12 > len(file_bytes):
-                break
-            tag, dtype, count = struct.unpack_from(endian + 'HHI', file_bytes, entry_offset)
-            value_offset = entry_offset + 8
-            # dtype 2 = ASCII
-            if dtype == 2:
-                if count <= 4:
-                    raw = file_bytes[value_offset:value_offset + count]
-                else:
-                    data_offset = struct.unpack_from(endian + 'I', file_bytes, value_offset)[0]
-                    raw = file_bytes[data_offset:data_offset + count]
-                tags[tag] = raw.rstrip(b'\x00').decode('latin-1', errors='replace')
-        return tags
-
-    tags = read_ifd(ifd_offset)
-
-    # Tag 34682 = FEI metadata XML
-    if 34682 in tags:
-        return tags[34682]
-    # Tag 270 = ImageDescription — sometimes contains XML on FEI instruments
-    if 270 in tags:
-        desc = tags[270]
-        if desc.strip().startswith('<'):
-            return desc
+def _find_fei_value(metadata: dict, *pairs):
+    """Returns the first non-empty value found at any of the given (section, key) pairs."""
+    for section, key in pairs:
+        value = (metadata.get(section) or {}).get(key)
+        if value is not None and str(value).strip() != "":
+            return value
     return None
 
 
-def _parse_fei_metadata(xml_str: str) -> dict:
+def _parse_fei_metadata(metadata: dict) -> dict:
     """
-    Parses FEI SEM XML metadata and maps fields to our config keys.
-    Tries multiple known XML structures from different FEI software versions.
+    Maps an FEI SEM metadata dict (as returned by tifffile's `fei_metadata`
+    property, e.g. {"Vacuum": {"UserMode": ..., "ChPressure": ...}, "EBeam": {...}})
+    to our config keys.
     """
     result = {}
-    try:
-        root = ET.fromstring(xml_str)
-    except ET.ParseError:
-        return result
 
-    def find_text(*paths):
-        for path in paths:
-            el = root.find(path)
-            if el is not None and el.text and el.text.strip():
-                return el.text.strip()
-        return None
-
-    # Vacuum / UserMode
-    vacuum_raw = find_text(
-        "Vacuum/UserMode",
-        "HardwareSetting/Vacuum/UserMode",
-        ".//UserMode",
-    )
+    vacuum_raw = _find_fei_value(metadata, ("Vacuum", "UserMode"))
     if vacuum_raw:
-        v = vacuum_raw.lower()
+        v = str(vacuum_raw).lower()
         if "esem" in v or "wet" in v or "environ" in v:
             result["vacuum_level"] = "ESEM"
         elif "low" in v:
@@ -274,43 +209,22 @@ def _parse_fei_metadata(xml_str: str) -> dict:
         else:
             result["vacuum_level"] = "High"
 
-    # Spot size
-    spot = find_text(
-        "Beam/Spot",
-        "HardwareSetting/Beam/Spot",
-        "EBeam/Spot",
-        ".//Spot",
-    )
-    if spot:
-        result["spot_size"] = spot
+    spot = _find_fei_value(metadata, ("Beam", "Spot"), ("EBeam", "Spot"))
+    if spot is not None:
+        result["spot_size"] = str(spot)
 
     # High voltage — stored in V, may need conversion
-    hv = find_text(
-        "Beam/HV",
-        "HardwareSetting/Beam/HV",
-        "EBeam/HV",
-        ".//HV",
-    )
-    if hv:
-        result["high_voltage_V"] = hv
+    hv = _find_fei_value(metadata, ("Beam", "HV"), ("EBeam", "HV"))
+    if hv is not None:
+        result["high_voltage_V"] = str(hv)
 
-    # Emission current
-    current = find_text(
-        "EBeam/EmissionCurrent",
-        "HardwareSetting/EBeam/EmissionCurrent",
-        ".//EmissionCurrent",
-    )
-    if current:
-        result["emission_current_A"] = current
+    current = _find_fei_value(metadata, ("EBeam", "EmissionCurrent"))
+    if current is not None:
+        result["emission_current_A"] = str(current)
 
-    # Chamber pressure
-    pressure = find_text(
-        "Vacuum/ChPressure",
-        "HardwareSetting/Vacuum/ChPressure",
-        ".//ChPressure",
-    )
-    if pressure:
-        result["chamber_pressure_Torr"] = pressure
+    pressure = _find_fei_value(metadata, ("Vacuum", "ChPressure"))
+    if pressure is not None:
+        result["chamber_pressure_Torr"] = str(pressure)
 
     return result
 
@@ -340,38 +254,17 @@ def extract_tiff_metadata():
     if not filename.lower().endswith((".tif", ".tiff")):
         return jsonify({"error": "File must be a TIFF (.tif or .tiff)"}), 400
 
-    file_bytes = f.read()
-
-    # Try tifffile first (best support), fall back to built-in parser
-    xml_str = None
     try:
-        import tifffile
-        with tifffile.TiffFile(io.BytesIO(file_bytes)) as tif:
-            # FEI metadata is in tag 34682
-            for page in tif.pages:
-                tag = page.tags.get(34682)
-                if tag is not None:
-                    xml_str = tag.value
-                    break
-            # Fallback: ImageDescription
-            if xml_str is None:
-                for page in tif.pages:
-                    tag = page.tags.get(270)
-                    if tag is not None:
-                        desc = tag.value or ""
-                        if desc.strip().startswith('<'):
-                            xml_str = desc
-                            break
-    except ImportError:
-        xml_str = _extract_fei_xml_from_tiff(file_bytes)
+        with tifffile.TiffFile(io.BytesIO(f.read())) as tif:
+            metadata = tif.fei_metadata
     except Exception as e:
-        current_app.logger.warning(f"[b30_sem] tifffile parse error: {e}, trying fallback")
-        xml_str = _extract_fei_xml_from_tiff(file_bytes)
+        current_app.logger.warning(f"[b30_sem] tifffile parse error: {e}")
+        return jsonify({"found": False, "fields": {}, "message": "Could not read this TIFF file. Please enter values manually."}), 200
 
-    if not xml_str:
+    if not metadata:
         return jsonify({"found": False, "fields": {}, "message": "No FEI metadata found in this TIFF. Please enter values manually."}), 200
 
-    fields = _parse_fei_metadata(xml_str)
+    fields = _parse_fei_metadata(metadata)
     return jsonify({"found": bool(fields), "fields": fields}), 200
 
 
