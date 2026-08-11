@@ -52,7 +52,7 @@ PRINT_CONFIG = {
     "print_delay_s": 0.1,
 }
 
-# B30 AJA SPUTTER CONFIG
+# B30 SPUTTER CONFIG
 TARGET_MATERIAL_OPTIONS = [
     "", "Ag", "Al", "Al2O3", "Au", "Bi2O3", "BVO", "C", "Co", "Co3O4", "Cu",
     "CuAlO2", "Fe", "Ga2O3", "Gd", "Ge", "In", "Ir", "ITO", "Mn", "Nb", "Ni",
@@ -65,12 +65,25 @@ POWER_SOURCE_OPTIONS = [
     "DC 1", "DC 2", "DC 3", "DC 4", "Pulsed DC", "Other"
 ]
 
+# Each tool logs to its own Crucible instrument and keeps its own calibration sample,
+# so deposition rates measured on one tool are never applied to the other.
+SPUTTER_TOOLS = {
+    "AJA Sputter Tool": {
+        "instrument_name": "b30 - aja sputter tool",
+        "calibration_sample_id": "0tgfny1b35rwd000x35nr7a9d8",
+    },
+    "KJLesker Sputter Tool": {
+        "instrument_name": "b30 - kjlesker sputter tool",
+        "calibration_sample_id": "",  # TODO: Crucible ID of the KJLesker calibration sample
+    },
+}
+
 B30_SPUTTER_CONFIG = {
     "dataset_name_prefix": "Sputtering Parameters for",
     "dataset_type": "Sputtering Parameters",
-    "instrument_name": "b30 - aja sputter tool",
     "measurement": "Sputtering",
-    "calibration_sample_id": "0tgfny1b35rwd000x35nr7a9d8",
+    "tools": SPUTTER_TOOLS,
+    "default_tool": "AJA Sputter Tool",
     "printer_name": "crucible-printer/b30-113",
     # Fields shown on the upload form. To add/remove fields, edit this list.
     # Each entry: {"key": used in Crucible metadata, "label": shown to user, "type": html input type}

@@ -35,6 +35,12 @@ function refreshTimerFromDepositionTimeIfIdle() {
 async function loadB30State() {
     try {
         const state = await api('/b30-sputter/api/state');
+
+        const toolEl = document.getElementById('sputter_tool');
+        if (toolEl && state.tool) toolEl.value = state.tool;
+
+        renderRunSamples(state.run_samples || []);
+
         if (state.sample_unique_id) {
             document.getElementById('sample_barcode').value = state.sample_unique_id;
             populateSampleFields(state);
@@ -43,6 +49,27 @@ async function loadB30State() {
         }
     } catch {
         // No state yet, that's fine
+    }
+}
+
+// ========== Tool Selection ==========
+
+function getSelectedTool() {
+    return document.getElementById('sputter_tool')?.value || '';
+}
+
+async function setSputterTool() {
+    const tool = getSelectedTool();
+    try {
+        const res = await api('/b30-sputter/api/tool', 'POST', { tool });
+        showAlert('info', `Tool set to ${tool}`);
+        if (!res.has_calibration_sample) {
+            showAlert('warning', `No calibration sample is configured for ${tool} — enter the deposition rate manually.`);
+        }
+        // Rates are calibrated per tool, so re-run the lookup against the new one.
+        if (typeof triggerRateLookup === 'function') triggerRateLookup();
+    } catch (e) {
+        showAlert('error', e.message);
     }
 }
 
@@ -184,6 +211,83 @@ async function printSampleBarcode() {
     }
 }
 
+// ========== Samples linked to the run ==========
+
+async function addSampleToRun() {
+    const barcode = document.getElementById('sample_barcode').value.trim();
+    if (!barcode) {
+        showAlert('error', 'No sample loaded — look up or create a sample first');
+        return;
+    }
+    try {
+        const data = await api('/b30-sputter/api/run-samples', 'POST', { unique_id: barcode });
+        renderRunSamples(data.run_samples);
+        if (data.already_added) {
+            showAlert('info', 'That sample is already in this run');
+        } else {
+            showAlert('success', `Added to run: ${document.getElementById('sample_name').value || barcode}`);
+        }
+    } catch (e) {
+        showAlert('error', e.message);
+    }
+}
+
+async function removeRunSample(uniqueId) {
+    try {
+        const data = await api('/b30-sputter/api/run-samples/remove', 'POST', { unique_id: uniqueId });
+        renderRunSamples(data.run_samples);
+    } catch (e) {
+        showAlert('error', e.message);
+    }
+}
+
+async function clearRunSamples(silent = false) {
+    try {
+        const data = await api('/b30-sputter/api/run-samples/clear', 'POST');
+        renderRunSamples(data.run_samples);
+        if (!silent) showAlert('info', 'Cleared samples from this run');
+    } catch (e) {
+        if (!silent) showAlert('error', e.message);
+    }
+}
+
+function renderRunSamples(samples) {
+    const body = document.getElementById('run-sample-body');
+    const count = document.getElementById('run-sample-count');
+    if (!body) return;
+
+    const list = samples || [];
+    if (count) count.textContent = String(list.length);
+
+    body.innerHTML = '';
+    if (!list.length) {
+        body.innerHTML = '<tr><td>No samples added yet.</td></tr>';
+        return;
+    }
+
+    list.forEach(s => {
+        const tr = document.createElement('tr');
+
+        const nameTd = document.createElement('td');
+        nameTd.dataset.runSampleId = s.unique_id;
+        nameTd.textContent = s.sample_name || s.unique_id;
+        nameTd.title = s.unique_id;
+
+        const btnTd = document.createElement('td');
+        btnTd.style.width = '1%';
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.type = 'button';
+        btn.textContent = 'Remove';
+        btn.addEventListener('click', () => removeRunSample(s.unique_id));
+        btnTd.appendChild(btn);
+
+        tr.appendChild(nameTd);
+        tr.appendChild(btnTd);
+        body.appendChild(tr);
+    });
+}
+
 // ========== Hide second gas fields unless used ==========
 
 function initGas2Toggle() {
@@ -220,6 +324,8 @@ function initGas2Toggle() {
 }
 
 // ========== Look up deposition rates ==========
+
+let triggerRateLookup = null;
 
 function initDepositionRateAutofill() {
     // CHANGED: split keys into base/primary/secondary instead of one trigger list
@@ -307,6 +413,7 @@ function initDepositionRateAutofill() {
 
         // NOTE: keep payload keys expected by backend route
         return {
+            "tool": getSelectedTool(),
             "09_target_material": target_material,
             "03_gas1": gas1,
             "04_gas1_pc": gas1_pc,
@@ -372,6 +479,8 @@ function initDepositionRateAutofill() {
             clearRate();
         }
     }, 250);
+
+    triggerRateLookup = lookup;
 
     // CHANGED: expanded trigger list includes secondary + co-dep toggle
     const triggerKeys = [
@@ -666,9 +775,10 @@ function initCoDepositionToggle() {
 // ========== Dataset Upload ==========
 
 async function uploadDataset() {
-    const barcode = document.getElementById('sample_barcode').value.trim();
-    if (!barcode) {
-        showAlert('error', 'No sample selected. Scan a barcode first.');
+    const runSampleNames = Array.from(document.querySelectorAll('#run-sample-body [data-run-sample-id]'))
+                                .map(el => el.textContent);
+    if (!runSampleNames.length) {
+        showAlert('error', 'No samples in this run. Look up a sample and click Add to Run.');
         return;
     }
 
@@ -687,16 +797,19 @@ async function uploadDataset() {
         if (val) payload[key] = val;
     });
     payload.run_elapsed_seconds = String(runRemainingSeconds);
-
-    const sampleName = document.getElementById('sample_name').value || barcode;
+    payload.tool = getSelectedTool();
 
     showModal(
         'Confirm Upload',
-        buildUploadPreview(sampleName, payload),
+        buildUploadPreview(payload.tool, runSampleNames, payload),
         async () => {
             try {
                 const result = await api('/b30-sputter/api/upload-dataset', 'POST', payload);
                 showAlert('success', `Dataset uploaded: ${result.dataset_name} (${result.dataset_id})`);
+                if (result.failed_samples && result.failed_samples.length) {
+                    const names = result.failed_samples.map(s => s.sample_name || s.unique_id).join(', ');
+                    showAlert('error', `Dataset created but could not be linked to: ${names}`);
+                }
             } catch (e) {
                 showAlert('error', `Upload failed: ${e.message}`);
             }
@@ -704,10 +817,11 @@ async function uploadDataset() {
     );
 }
 
-function buildUploadPreview(sampleName, payload) {
-    const HIDE_IN_PREVIEW = new Set(['run_elapsed_seconds']);
+function buildUploadPreview(tool, sampleNames, payload) {
+    const HIDE_IN_PREVIEW = new Set(['run_elapsed_seconds', 'tool']);
 
-    let html = `<p><strong>Sample:</strong> ${sampleName}</p>`;
+    let html = `<p><strong>Tool:</strong> ${escapeHtml(tool)}</p>`;
+    html += `<p><strong>Samples (${sampleNames.length}):</strong> ${sampleNames.map(escapeHtml).join(', ')}</p>`;
     html += '<table class="preview-table"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
 
     let shown = 0;
@@ -765,12 +879,13 @@ function updateTargetOptionsFromRows(rows, preserveSelection = true) {
 async function fetchRecentDatasets() {
   const view = document.getElementById('recent-view')?.value || 'Deposition only';
   const target = document.getElementById('recent-target')?.value || 'All';
+  const tool = document.getElementById('recent-tool')?.value || 'All';
 
   setRecentLoading(true);
   try {
     const limit = document.getElementById('recent-limit')?.value || '100';
     const res = await api(
-    `/b30-sputter/api/recent-datasets?view=${encodeURIComponent(view)}&target=${encodeURIComponent(target)}&limit=${encodeURIComponent(limit)}`
+    `/b30-sputter/api/recent-datasets?tool=${encodeURIComponent(tool)}&view=${encodeURIComponent(view)}&target=${encodeURIComponent(target)}&limit=${encodeURIComponent(limit)}`
     );
     renderRecentDatasets(res.rows || []);
     const currentTarget = document.getElementById('recent-target')?.value || 'All';
@@ -790,12 +905,12 @@ function renderRecentDatasets(rows) {
   tbody.innerHTML = '';
 
   const cols = [
-    "Date", "User", "Gas", "Press. (mTorr)", "Temp. (°C)", "Target", "Source",
+    "Date", "Tool", "User", "Gas", "Press. (mTorr)", "Temp. (°C)", "Target", "Source",
     "Power (W)", "DCV (V)", "Indiv. rates (Å/s)", "Tot. rate (Å/s)", "Time (s)", "Thickness (nm)", "Comment"
   ];
 
   if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="14">No datasets found.</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="15">No datasets found.</td></tr>';
     return;
   }
 
@@ -810,12 +925,14 @@ function renderRecentDatasets(rows) {
 async function exportRecentDatasets() {
   const view = document.getElementById('recent-view')?.value || 'Deposition only';
   const target = document.getElementById('recent-target')?.value || 'All';
+  const tool = document.getElementById('recent-tool')?.value || 'All';
   const limit = document.getElementById('recent-limit')?.value || '100';
 
   try {
     const base = (typeof BASE_URL !== 'undefined' ? BASE_URL : '');
-    const url = `${base}/b30-sputter/api/recent-datasets/b30_aja_recent_datasets.csv`
-      + `?view=${encodeURIComponent(view)}`
+    const url = `${base}/b30-sputter/api/recent-datasets/b30_sputter_recent_datasets.csv`
+      + `?tool=${encodeURIComponent(tool)}`
+      + `&view=${encodeURIComponent(view)}`
       + `&target=${encodeURIComponent(target)}`
       + `&limit=${encodeURIComponent(limit)}`;
 
@@ -836,7 +953,7 @@ async function exportRecentDatasets() {
 
     const disposition = res.headers.get('Content-Disposition');
     const match = disposition && disposition.match(/filename="?([^"]+)"?/);
-    a.download = match ? match[1] : 'b30_aja_recent_datasets.csv';
+    a.download = match ? match[1] : 'b30_sputter_recent_datasets.csv';
 
     document.body.appendChild(a);
     a.click();
@@ -914,6 +1031,7 @@ function setTimerStatus(running) {
     } finally {
       // always clear local sample UI/state on this page
       if (typeof clearSample === 'function') clearSample();
+      if (typeof clearRunSamples === 'function') await clearRunSamples(true);
     }
   };
 })();

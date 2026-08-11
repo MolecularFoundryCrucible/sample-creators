@@ -2,7 +2,7 @@
 {% block title %}B30 Sputter Data Entry{% endblock %}
 
 {% block content %}
-<h1>B30 - AJA Sputter Tool Data Entry and Logbook</h1>
+<h1>B30 - Sputter Tool Data Entry and Logbook</h1>
 
 <!-- Top-level tabs -->
 <div class="tab-bar" style="display:flex; gap:8px; margin-bottom:12px;">
@@ -14,6 +14,20 @@
 <div id="tab-entry" class="tab-panel">
     <div class="two-column">
         <div class="left-panel">
+
+            <!-- Tool selection -->
+            <section class="section" id="section-tool">
+                <h2>Tool</h2>
+                <div class="form-group">
+                    <label>Sputter tool</label>
+                    <select id="sputter_tool" onchange="setSputterTool()">
+                        {% for label in config.tools %}
+                        <option value="{{ label }}" {% if label == config.default_tool %}selected{% endif %}>{{ label }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="help-text" id="tool-help">Datasets are logged to the selected tool, and deposition rates come from that tool's calibration sample.</div>
+            </section>
 
             <!-- User Login -->
             <section class="section" id="section-login">
@@ -51,6 +65,7 @@
                     </div>
                 </div>
                 <div class="button-row" style="margin-top: 6px;">
+                    <button class="btn btn-primary" onclick="addSampleToRun()">Add to Run</button>
                     <button class="btn" onclick="printSampleBarcode()">Print Barcode</button>
                 </div>
                 <div id="sample-status" class="info-text"></div>
@@ -80,6 +95,18 @@
                     <div class="button-row hidden" id="create-btn-row">
                         <button class="btn btn-primary" id="btn-create-sample" onclick="createSample()">Create Sample</button>
                     </div>
+                </div>
+
+                <!-- Samples the next uploaded dataset will be linked to -->
+                <div class="subsection-divider"></div>
+                <div class="subsection-header">Samples in this run (<span id="run-sample-count">0</span>)</div>
+                <table class="preview-table" style="margin-top:0;">
+                    <tbody id="run-sample-body">
+                        <tr><td>No samples added yet.</td></tr>
+                    </tbody>
+                </table>
+                <div class="button-row">
+                    <button class="btn btn-secondary" onclick="clearRunSamples()">Clear Run Samples</button>
                 </div>
             </section>
 
@@ -144,8 +171,16 @@
   <section class="section">
     <h2>Logbook of 100 Most Recent Datasets</h2>
     <div class="button-row" style="margin-top:8px; display:flex; align-items:center; gap:8px; flex-wrap:nowrap;">
+        <label for="recent-tool"><strong>Tool:</strong></label>
+        <select id="recent-tool">
+            <option value="All">All</option>
+            {% for label in config.tools %}
+            <option value="{{ label }}">{{ label }}</option>
+            {% endfor %}
+        </select>
+
         <label for="recent-view"><strong>View:</strong></label>
-        <select id="recent-view" onchange="loadRecentMaterials()">
+        <select id="recent-view">
             <option>Deposition only</option>
             <option>Calibration only</option>
             <option>All</option>
@@ -175,7 +210,8 @@
       <table id="recent-table" class="preview-table" style="table-layout: fixed; width: 100%;">
         <thead>
           <tr>
-            <th style="resize: horizontal; overflow: auto;">Date</th><th style="resize: horizontal; overflow: auto;">User</th>
+            <th style="resize: horizontal; overflow: auto;">Date</th><th style="resize: horizontal; overflow: auto;">Tool</th>
+            <th style="resize: horizontal; overflow: auto;">User</th>
             <th style="resize: horizontal; overflow: auto;">Gas</th><th style="resize: horizontal; overflow: auto;">Press. (mTorr)</th>
             <th style="resize: horizontal; overflow: auto;">Temp. (°C)</th><th style="resize: horizontal; overflow: auto;">Target</th>
             <th style="resize: horizontal; overflow: auto;">Source</th><th style="resize: horizontal; overflow: auto;">Power (W)</th>
@@ -185,7 +221,7 @@
           </tr>
         </thead>
         <tbody id="recent-table-body">
-          <tr><td colspan="14">Click Refresh to load datasets.</td></tr>
+          <tr><td colspan="15">Click Refresh to load datasets.</td></tr>
         </tbody>
       </table>
     </div>
