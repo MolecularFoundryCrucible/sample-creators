@@ -119,6 +119,26 @@ async function setProject() {
     await api('/api/user/project', 'POST', { project });
 }
 
+// ========== Generic Field Reset ==========
+
+// Resets each matched form element back to the state defined by its original
+// HTML (the browser's defaultValue/defaultChecked/option.defaultSelected),
+// undoing any values the user typed in. File inputs are cleared outright.
+function resetFieldsToDefault(selector, root = document) {
+    root.querySelectorAll(selector).forEach(el => {
+        if (el.tagName === 'SELECT') {
+            const defaultOption = Array.from(el.options).find(o => o.defaultSelected);
+            el.selectedIndex = defaultOption ? defaultOption.index : 0;
+        } else if (el.type === 'checkbox' || el.type === 'radio') {
+            el.checked = el.defaultChecked;
+        } else if (el.type === 'file') {
+            el.value = '';
+        } else {
+            el.value = el.defaultValue;
+        }
+    });
+}
+
 // ========== Barcode Printing ==========
 
 function printBarcode(barcode, label) {

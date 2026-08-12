@@ -891,6 +891,19 @@ function switchTab(tabId) {
   document.querySelector(`.tab-btn[data-tab="${tabId}"]`)?.classList.add('active');
 }
 
+// ========== Form Reset ==========
+
+function resetSputterForm() {
+  resetFieldsToDefault('#dataset-grid [data-key]');
+
+  // Re-run the show/hide + dependent-field logic tied to the toggle checkboxes
+  const keyToEl = {};
+  document.querySelectorAll('#dataset-grid [data-key]').forEach(el => keyToEl[el.dataset.key] = el);
+  ['01_co_deposition_enabled', '02_second_gas_enabled'].forEach(key => {
+    keyToEl[key]?.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
 (function patchLogoutUserForB30() {
   if (typeof window.logoutUser !== 'function') return;
 
@@ -903,6 +916,7 @@ function switchTab(tabId) {
     } finally {
       // always clear local sample UI/state on this page
       if (typeof clearSample === 'function') clearSample();
+      resetSputterForm();
     }
   };
 })();

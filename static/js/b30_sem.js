@@ -582,6 +582,36 @@ function switchTab(tabId) {
     document.querySelector(`.tab-btn[data-tab="${tabId}"]`)?.classList.add('active');
 }
 
+// ========== Form Reset ==========
+
+function resetSemForm() {
+    // Images section
+    document.getElementById('images-yes').checked = false;
+    document.getElementById('images-no').checked = false;
+    document.getElementById('section-image-upload').classList.add('hidden');
+    document.getElementById('sem-image-files').value = '';
+    const tiffStatus = document.getElementById('tiff-extract-status');
+    tiffStatus.style.display = 'none';
+    tiffStatus.textContent = '';
+    document.getElementById('non-tiff-hint').style.display = 'none';
+
+    // SEM parameters
+    resetFieldsToDefault('#sem-param-grid [data-key]');
+
+    // EDX
+    resetFieldsToDefault('#section-edx [data-key]');
+    document.getElementById('edx-details').classList.add('hidden');
+    document.getElementById('edx-image-files').value = '';
+    document.getElementById('edx-spectrum-file').value = '';
+    document.getElementById('btn-parse-spectrum').disabled = true;
+    document.getElementById('edx-spectrum-status').textContent = '';
+
+    // Comment
+    resetFieldsToDefault('#section-comment [data-key]');
+
+    document.getElementById('upload-status').textContent = '';
+}
+
 (function patchLogoutUserForSem() {
     if (typeof window.logoutUser !== 'function') return;
     const originalLogoutUser = window.logoutUser;
@@ -590,6 +620,7 @@ function switchTab(tabId) {
             await originalLogoutUser.apply(this, args);
         } finally {
             if (typeof clearSample === 'function') clearSample();
+            resetSemForm();
         }
     };
 })();
