@@ -6,6 +6,7 @@ from routes.shared import shared_bp
 from routes.giwaxs import giwaxs_bp
 from routes.rga import rga_bp
 from routes.b30_sputter import b30_sputter_bp
+from routes.b30_ebeam import b30_ebeam_bp
 from routes.print_only import print_bp
 
 class PrefixMiddleware:
@@ -32,6 +33,7 @@ def create_app():
     app.register_blueprint(giwaxs_bp, url_prefix="/giwaxs")
     app.register_blueprint(rga_bp, url_prefix="/rga")
     app.register_blueprint(b30_sputter_bp, url_prefix="/b30-sputter")
+    app.register_blueprint(b30_ebeam_bp, url_prefix="/b30-ebeam")
     app.register_blueprint(print_bp, url_prefix="/print")
     @app.route("/")
     def index():

@@ -52,7 +52,7 @@ PRINT_CONFIG = {
     "print_delay_s": 0.1,
 }
 
-# B30 AJA SPUTTER CONFIG
+# B30 SPUTTER CONFIG
 TARGET_MATERIAL_OPTIONS = [
     "", "Ag", "Al", "Al2O3", "Au", "Bi2O3", "BVO", "C", "Co", "Co3O4", "Cu",
     "CuAlO2", "Fe", "Ga2O3", "Gd", "Ge", "In", "Ir", "ITO", "Mn", "Nb", "Ni",
@@ -65,12 +65,25 @@ POWER_SOURCE_OPTIONS = [
     "DC 1", "DC 2", "DC 3", "DC 4", "Pulsed DC", "Other"
 ]
 
+# Each tool logs to its own Crucible instrument and keeps its own calibration sample,
+# so deposition rates measured on one tool are never applied to the other.
+SPUTTER_TOOLS = {
+    "AJA Sputter Tool": {
+        "instrument_name": "b30 - aja sputter tool",
+        "calibration_sample_id": "0tgfny1b35rwd000x35nr7a9d8",
+    },
+    "KJLesker Sputter Tool": {
+        "instrument_name": "b30 - kjlesker sputter tool",
+        "calibration_sample_id": "",  # TODO: Crucible ID of the KJLesker calibration sample
+    },
+}
+
 B30_SPUTTER_CONFIG = {
     "dataset_name_prefix": "Sputtering Parameters for",
     "dataset_type": "Sputtering Parameters",
-    "instrument_name": "b30 - aja sputter tool",
     "measurement": "Sputtering",
-    "calibration_sample_id": "0tgfny1b35rwd000x35nr7a9d8",
+    "tools": SPUTTER_TOOLS,
+    "default_tool": "AJA Sputter Tool",
     "printer_name": "crucible-printer/b30-113",
     # Fields shown on the upload form. To add/remove fields, edit this list.
     # Each entry: {"key": used in Crucible metadata, "label": shown to user, "type": html input type}
@@ -97,5 +110,30 @@ B30_SPUTTER_CONFIG = {
         {"key": "20_layer_thickness_nm", "label": "Layer Thickness (nm)",      "type": "number"},
         {"key": "21_deposition_time_s",        "label": "Deposition time (s)",             "type": "number"},
         {"key": "22_comment",          "label": "Comment",               "type": "text"},
+    ],
+}
+
+# B30 EBEAM CONFIG
+EBEAM_TARGET_MATERIAL_OPTIONS = [
+    "", "Ag", "Al", "Au", "Cr", "Cu", "Ge", "Ni", "Pd", "Pt", "Sn", "Ti", "TiO2"
+]
+
+# Unlike the sputter app there is a single e-beam tool, so this config names one instrument
+# directly instead of carrying a "tools" dict. There is no calibration sample either, so no
+# deposition-rate autofill — the rate is typed in from the crystal monitor.
+B30_EBEAM_CONFIG = {
+    "dataset_type": "E-beam Evaporation Parameters",
+    "measurement": "E-beam Evaporation",
+    "instrument_name": "b30 - ebeam evaporator",
+    "printer_name": "crucible-printer/b30-113",
+    # Fields shown on the upload form. To add/remove fields, edit this list.
+    # Each entry: {"key": used in Crucible metadata, "label": shown to user, "type": html input type}
+    "dataset_fields": [
+        {"key": "01_target_material",           "label": "Target material",            "type": "select", "options": EBEAM_TARGET_MATERIAL_OPTIONS},
+        {"key": "02_power_W",                   "label": "Power (W)",                  "type": "number"},
+        {"key": "03_rate_A_s",                  "label": "Deposition rate (Å/s)",      "type": "number"},
+        {"key": "04_base_pressure_mTorr",       "label": "Base pressure (mTorr)",      "type": "number"},
+        {"key": "05_deposition_pressure_mTorr", "label": "Deposition pressure (mTorr)", "type": "number"},
+        {"key": "06_comment",                   "label": "Comment",                    "type": "text"},
     ],
 }

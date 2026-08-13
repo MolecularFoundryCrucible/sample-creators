@@ -23,4 +23,7 @@ Open https://crucible.lbl.gov/sample-creators/.
 | Styles | `static/css/style.css` |
 | New page | add `routes/newpage.py`, `templates/newpage.html`, `static/js/newpage.js` |
 
-Pages: `giwaxs`, `rga`, `b30_sputter`. Shared utilities in `routes/shared.py` and `static/js/shared.js`.
+Pages: `giwaxs`, `rga`, `b30_sputter`, `print_only`. Shared utilities in `routes/shared.py` and `static/js/shared.js`.
+
+Barcode printing goes over MQTT via `publish_barcode()` in `routes/shared.py`. Printers are
+allowlisted in `PRINT_CONFIG["printers"]` in `config.py` — add new ones there.
