@@ -229,6 +229,32 @@ def _parse_fei_metadata(metadata: dict) -> dict:
     return result
 
 
+def _sanitize_metadata_value(value):
+    """Recursively coerce a value into something JSON-serializable."""
+    if isinstance(value, dict):
+        return {str(k): _sanitize_metadata_value(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_sanitize_metadata_value(v) for v in value]
+    if isinstance(value, (str, int, float, bool)) or value is None:
+        return value
+    return str(value)
+
+
+def _extract_full_tiff_metadata(fobj):
+    """Read the FEI metadata for a single uploaded TIFF FileStorage, leaving its
+    stream position reset to 0 so it can still be saved to disk afterwards."""
+    try:
+        file_bytes = fobj.read()
+        fobj.seek(0)
+        with tifffile.TiffFile(io.BytesIO(file_bytes)) as tif:
+            metadata = tif.fei_metadata
+    except Exception:
+        return None
+    if not metadata:
+        return None
+    return _sanitize_metadata_value(metadata)
+
+
 # ---------- Routes ----------
 
 @b30_sem_bp.route("/")
@@ -505,6 +531,20 @@ def upload_dataset():
             value = value.strip()
         if value != "" and value is not None:
             scientific_metadata[key] = value
+
+    # Capture the *full* FEI metadata embedded in any uploaded TIFFs, not just
+    # the handful of fields mapped onto the form.
+    tiff_metadata_by_file = {}
+    for fobj in sem_images:
+        if not fobj or not fobj.filename:
+            continue
+        if os.path.splitext(fobj.filename)[1].lower() not in (".tif", ".tiff"):
+            continue
+        full_meta = _extract_full_tiff_metadata(fobj)
+        if full_meta:
+            tiff_metadata_by_file[fobj.filename] = full_meta
+    if tiff_metadata_by_file:
+        scientific_metadata["tiff_metadata"] = tiff_metadata_by_file
 
     sample_name = (state.get("sample_name") or "").strip() or "unknown-sample"
     date_str = datetime.now(LA_TZ).strftime("%Y%m%d_%H%M%S")
