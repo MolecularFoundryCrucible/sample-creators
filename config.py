@@ -52,7 +52,7 @@ PRINT_CONFIG = {
     "print_delay_s": 0.1,
 }
 
-# B30 AJA SPUTTER CONFIG
+# B30 SPUTTER CONFIG
 TARGET_MATERIAL_OPTIONS = [
     "", "Ag", "Al", "Al2O3", "Au", "Bi2O3", "BVO", "C", "Co", "Co3O4", "Cu",
     "CuAlO2", "Fe", "Ga2O3", "Gd", "Ge", "In", "Ir", "ITO", "Mn", "Nb", "Ni",
@@ -65,16 +65,9 @@ POWER_SOURCE_OPTIONS = [
     "DC 1", "DC 2", "DC 3", "DC 4", "Pulsed DC", "Other"
 ]
 
-B30_SPUTTER_CONFIG = {
-    "dataset_name_prefix": "Sputtering Parameters for",
-    "dataset_type": "Sputtering Parameters",
-    "instrument_name": "b30 - aja sputter tool",
-    "measurement": "Sputtering",
-    "calibration_sample_id": "0tgfny1b35rwd000x35nr7a9d8",
-    "printer_name": "crucible-printer/b30-113",
-    # Fields shown on the upload form. To add/remove fields, edit this list.
-    # Each entry: {"key": used in Crucible metadata, "label": shown to user, "type": html input type}
-    "dataset_fields": [
+# Fields shown on the upload form. To add/remove fields, edit this list.
+# Each entry: {"key": used in Crucible metadata, "label": shown to user, "type": html input type}
+SPUTTER_DATASET_FIELDS = [
         {"key": "01_co_deposition_enabled", "label": "Enable Co-Deposition", "type": "checkbox"},
         {"key": "02_second_gas_enabled", "label": "Enable Second Gas", "type": "checkbox"},
         {"key": "03_gas1",       "label": "Gas 1",          "type": "select",  "options": ["Ar", "N2", "O2", "Other"]},
@@ -97,5 +90,37 @@ B30_SPUTTER_CONFIG = {
         {"key": "20_layer_thickness_nm", "label": "Layer Thickness (nm)",      "type": "number"},
         {"key": "21_deposition_time_s",        "label": "Deposition time (s)",             "type": "number"},
         {"key": "22_comment",          "label": "Comment",               "type": "text"},
-    ],
+]
+
+# One entry per sputter tool. Each tool gets its own page, session, rate-index cache and
+# Crucible instrument, but they all run the same code in routes/b30_sputter.py.
+#
+# The tools share SPUTTER_DATASET_FIELDS today. When one tool's form needs to diverge,
+# give that tool its own list here — nothing outside this file has to change.
+# Adding a third tool: add an entry here and one register_blueprint line in app.py.
+SPUTTER_TOOLS = {
+    "aja": {
+        "url_prefix": "/b30-aja-sputter",
+        "nav_label": "B30 AJA Sputter",
+        "page_title": "B30 - AJA Sputter Tool Data Entry and Logbook",
+        "card_description": "Look up or create samples by barcode and upload AJA sputtering deposition parameters to Crucible.",
+        "instrument_name": "b30 - aja sputter tool",
+        "calibration_sample_id": "0tgfny1b35rwd000x35nr7a9d8",
+        "printer_name": "crucible-printer/b30-113",
+        "dataset_type": "Sputtering Parameters",
+        "measurement": "Sputtering",
+        "dataset_fields": SPUTTER_DATASET_FIELDS,
+    },
+    "kjlesker": {
+        "url_prefix": "/b30-kjlesker-sputter",
+        "nav_label": "B30 KJLesker Sputter",
+        "page_title": "B30 - KJLesker Sputter Tool Data Entry and Logbook",
+        "card_description": "Look up or create samples by barcode and upload KJLesker sputtering deposition parameters to Crucible.",
+        "instrument_name": "b30 - kjlesker sputter tool",
+        "calibration_sample_id": "",  # TODO: Crucible ID of the KJLesker calibration sample
+        "printer_name": "crucible-printer/b30-113",
+        "dataset_type": "Sputtering Parameters",
+        "measurement": "Sputtering",
+        "dataset_fields": SPUTTER_DATASET_FIELDS,
+    },
 }

@@ -12,10 +12,12 @@
         <h2>RGA Carrier Creator</h2>
         <p>Create RGA carriers, assign thin films to 36 positions (6x6 grid), generate CSV, and upload to databases.</p>
     </a>
-    <a href="{{ url_for('b30_sputter.page') }}" class="card">
-        <h2>B30 Sputter Data Entry</h2>
-        <p>Look up or create samples by barcode and upload sputtering deposition parameters to Crucible.</p>
+    {% for tool_key, tool in sputter_tools.items() %}
+    <a href="{{ url_for(sputter_blueprint_name(tool_key) ~ '.page') }}" class="card">
+        <h2>{{ tool.nav_label }} Data Entry</h2>
+        <p>{{ tool.card_description }}</p>
     </a>
+    {% endfor %}
     <a href="{{ url_for('print.page') }}" class="card">
         <h2>Print Barcodes</h2>
         <p>Search Crucible for existing samples, or paste a list of names and MFIDs, and print barcode labels in bulk.</p>

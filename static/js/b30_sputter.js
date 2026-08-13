@@ -34,7 +34,8 @@ function refreshTimerFromDepositionTimeIfIdle() {
 
 async function loadB30State() {
     try {
-        const state = await api('/b30-sputter/api/state');
+        const state = await api(`${SPUTTER_PREFIX}/api/state`);
+        renderRunSamples(state.run_samples || []);
         if (state.sample_unique_id) {
             document.getElementById('sample_barcode').value = state.sample_unique_id;
             populateSampleFields(state);
@@ -93,12 +94,16 @@ async function lookupSample() {
         return;
     }
     try {
-        const data = await api('/b30-sputter/api/lookup-sample', 'POST', { unique_id: barcode });
+        const data = await api(`${SPUTTER_PREFIX}/api/lookup-sample`, 'POST', { unique_id: barcode });
         if (data.found) {
             populateSampleFields(data);
             setSampleStatus('found', data.sample_name);
             showSamplePanel('found');
-            showAlert('success', `Found sample: ${data.sample_name}`);
+            renderRunSamples(data.run_samples);
+            selectBarcodeForNextScan();
+            showAlert('success', data.already_in_run
+                ? `${data.sample_name} is already in this run`
+                : `Found sample: ${data.sample_name} — added to this run`);
         } else {
             document.getElementById('sample_barcode').value = '';
             clearSampleFields();
@@ -144,7 +149,7 @@ async function createSample() {
 }
 
 async function postCreateSample(sampleName, sampleType, description, allowDuplicate) {
-    const data = await api('/b30-sputter/api/create-sample', 'POST', {
+    const data = await api(`${SPUTTER_PREFIX}/api/create-sample`, 'POST', {
         sample_name: sampleName,
         sample_type: sampleType,
         description,
@@ -154,7 +159,17 @@ async function postCreateSample(sampleName, sampleType, description, allowDuplic
     populateSampleFields(data);
     setSampleStatus('created', data.sample_name);
     showSamplePanel('found');
-    showAlert('success', `Created sample: ${data.sample_name} (${data.unique_id})`);
+    renderRunSamples(data.run_samples);
+    selectBarcodeForNextScan();
+    showAlert('success', `Created sample: ${data.sample_name} (${data.unique_id}) — added to this run`);
+}
+
+// The barcode of the last sample stays in the box so it can still be printed, so select
+// it — a scanner types into the field and would otherwise append to the previous ID.
+function selectBarcodeForNextScan() {
+    const el = document.getElementById('sample_barcode');
+    el.focus();
+    el.select();
 }
 
 function clearSample() {
@@ -174,7 +189,7 @@ async function printSampleBarcode() {
         return;
     }
     try {
-        await api('/b30-sputter/api/print-barcode', 'POST', {
+        await api(`${SPUTTER_PREFIX}/api/print-barcode`, 'POST', {
             sample_id: barcode,
             sample_name: name,
         });
@@ -182,6 +197,69 @@ async function printSampleBarcode() {
     } catch (e) {
         showAlert('error', e.message);
     }
+}
+
+// ========== Samples linked to the run ==========
+
+async function removeRunSample(uniqueId) {
+    try {
+        const data = await api(`${SPUTTER_PREFIX}/api/run-samples/remove`, 'POST', { unique_id: uniqueId });
+        renderRunSamples(data.run_samples);
+    } catch (e) {
+        showAlert('error', e.message);
+    }
+}
+
+async function clearRunSamples(silent = false) {
+    try {
+        const data = await api(`${SPUTTER_PREFIX}/api/run-samples/clear`, 'POST');
+        renderRunSamples(data.run_samples);
+        if (!silent) showAlert('info', 'Cleared the samples in this run');
+    } catch (e) {
+        if (!silent) showAlert('error', e.message);
+    }
+}
+
+function getRunSampleNames() {
+    return Array.from(document.querySelectorAll('#run-sample-body [data-run-sample-id]'))
+                .map(el => el.textContent);
+}
+
+function renderRunSamples(samples) {
+    const body = document.getElementById('run-sample-body');
+    const count = document.getElementById('run-sample-count');
+    if (!body) return;
+
+    const list = samples || [];
+    if (count) count.textContent = String(list.length);
+
+    body.innerHTML = '';
+    if (!list.length) {
+        body.innerHTML = '<tr><td>No samples yet.</td></tr>';
+        return;
+    }
+
+    list.forEach(s => {
+        const tr = document.createElement('tr');
+
+        const nameTd = document.createElement('td');
+        nameTd.dataset.runSampleId = s.unique_id;
+        nameTd.textContent = s.sample_name || s.unique_id;
+        nameTd.title = s.unique_id;
+
+        const btnTd = document.createElement('td');
+        btnTd.style.width = '1%';
+        const btn = document.createElement('button');
+        btn.className = 'btn';
+        btn.type = 'button';
+        btn.textContent = 'Remove';
+        btn.addEventListener('click', () => removeRunSample(s.unique_id));
+        btnTd.appendChild(btn);
+
+        tr.appendChild(nameTd);
+        tr.appendChild(btnTd);
+        body.appendChild(tr);
+    });
 }
 
 // ========== Hide second gas fields unless used ==========
@@ -318,7 +396,7 @@ function initDepositionRateAutofill() {
 
     // CHANGED: one lookup call helper
     const lookupOne = async (payload) => {
-        const res = await api('/b30-sputter/api/lookup-rate', 'POST', payload);
+        const res = await api(`${SPUTTER_PREFIX}/api/lookup-rate`, 'POST', payload);
         if (res && res.found) {
             const n = Number(res["19_rate_A_s"]);
             return { rate: Number.isFinite(n) ? n : null, res };
@@ -401,7 +479,7 @@ function debounce(fn, ms) {
 }
 
 async function lookupSingleRate(payload) {
-    const res = await api('/b30-sputter/api/lookup-rate', 'POST', payload);
+    const res = await api(`${SPUTTER_PREFIX}/api/lookup-rate`, 'POST', payload);
     if (res && res.found) return Number(res["19_rate_A_s"] || 0);
     return null;
 }
@@ -666,9 +744,9 @@ function initCoDepositionToggle() {
 // ========== Dataset Upload ==========
 
 async function uploadDataset() {
-    const barcode = document.getElementById('sample_barcode').value.trim();
-    if (!barcode) {
-        showAlert('error', 'No sample selected. Scan a barcode first.');
+    const runSampleNames = getRunSampleNames();
+    if (!runSampleNames.length) {
+        showAlert('error', 'No samples in this run. Look up or create a sample first.');
         return;
     }
 
@@ -688,15 +766,17 @@ async function uploadDataset() {
     });
     payload.run_elapsed_seconds = String(runRemainingSeconds);
 
-    const sampleName = document.getElementById('sample_name').value || barcode;
-
     showModal(
         'Confirm Upload',
-        buildUploadPreview(sampleName, payload),
+        buildUploadPreview(runSampleNames, payload),
         async () => {
             try {
-                const result = await api('/b30-sputter/api/upload-dataset', 'POST', payload);
+                const result = await api(`${SPUTTER_PREFIX}/api/upload-dataset`, 'POST', payload);
                 showAlert('success', `Dataset uploaded: ${result.dataset_name} (${result.dataset_id})`);
+                if (result.failed_samples?.length) {
+                    const names = result.failed_samples.map(s => s.sample_name || s.unique_id).join(', ');
+                    showAlert('error', `Dataset created but could not be linked to: ${names}`);
+                }
             } catch (e) {
                 showAlert('error', `Upload failed: ${e.message}`);
             }
@@ -704,10 +784,10 @@ async function uploadDataset() {
     );
 }
 
-function buildUploadPreview(sampleName, payload) {
+function buildUploadPreview(sampleNames, payload) {
     const HIDE_IN_PREVIEW = new Set(['run_elapsed_seconds']);
 
-    let html = `<p><strong>Sample:</strong> ${sampleName}</p>`;
+    let html = `<p><strong>Samples (${sampleNames.length}):</strong> ${sampleNames.map(escapeHtml).join(', ')}</p>`;
     html += '<table class="preview-table"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
 
     let shown = 0;
@@ -770,7 +850,7 @@ async function fetchRecentDatasets() {
   try {
     const limit = document.getElementById('recent-limit')?.value || '100';
     const res = await api(
-    `/b30-sputter/api/recent-datasets?view=${encodeURIComponent(view)}&target=${encodeURIComponent(target)}&limit=${encodeURIComponent(limit)}`
+    `${SPUTTER_PREFIX}/api/recent-datasets?view=${encodeURIComponent(view)}&target=${encodeURIComponent(target)}&limit=${encodeURIComponent(limit)}`
     );
     renderRecentDatasets(res.rows || []);
     const currentTarget = document.getElementById('recent-target')?.value || 'All';
@@ -814,7 +894,7 @@ async function exportRecentDatasets() {
 
   try {
     const base = (typeof BASE_URL !== 'undefined' ? BASE_URL : '');
-    const url = `${base}/b30-sputter/api/recent-datasets/b30_aja_recent_datasets.csv`
+    const url = `${base}${SPUTTER_PREFIX}/api/recent-datasets.csv`
       + `?view=${encodeURIComponent(view)}`
       + `&target=${encodeURIComponent(target)}`
       + `&limit=${encodeURIComponent(limit)}`;
@@ -836,7 +916,7 @@ async function exportRecentDatasets() {
 
     const disposition = res.headers.get('Content-Disposition');
     const match = disposition && disposition.match(/filename="?([^"]+)"?/);
-    a.download = match ? match[1] : 'b30_aja_recent_datasets.csv';
+    a.download = match ? match[1] : 'sputter_recent_datasets.csv';
 
     document.body.appendChild(a);
     a.click();
@@ -914,6 +994,7 @@ function setTimerStatus(running) {
     } finally {
       // always clear local sample UI/state on this page
       if (typeof clearSample === 'function') clearSample();
+      if (typeof clearRunSamples === 'function') await clearRunSamples(true);
     }
   };
 })();

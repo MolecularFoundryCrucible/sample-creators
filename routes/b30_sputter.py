@@ -2,7 +2,7 @@ from flask import Blueprint, request, jsonify, session, render_template, current
 from routes.shared import cruc_client, publish_barcode
 from crucible import Dataset
 from crucible.utils import get_tz_isoformat
-from config import B30_SPUTTER_CONFIG
+from config import SPUTTER_TOOLS
 from datetime import datetime, timezone, timedelta
 from zoneinfo import ZoneInfo
 from threading import Lock
@@ -10,10 +10,11 @@ import requests
 import io
 import csv
 
+# This blueprint is registered once per sputter tool (see app.py), so every tool gets its
+# own page and URL prefix while sharing this code. Views call _tool() to find out which
+# tool they are serving; nothing here is hardcoded to a single instrument.
 b30_sputter_bp = Blueprint("b30_sputter", __name__)
 
-REF_SAMPLE = B30_SPUTTER_CONFIG.get("calibration_sample_id", "")  # sample with all the calibrated deposition rates as datasets in Crucible
-PRINTER_NAME = B30_SPUTTER_CONFIG.get("printer_name", "crucible-printer/b30-113")
 LA_TZ = ZoneInfo("America/Los_Angeles")
 
 # Cache settings
@@ -24,10 +25,26 @@ _ORCID_NAME_CACHE_LOCK = Lock()
 _INCREMENTAL_CACHE = {}
 _INCREMENTAL_CACHE_LOCK = Lock()
 
-# In-memory cache
-_RATE_INDEX = None
-_RATE_INDEX_BUILT_AT = None
+# In-memory cache: tool key -> {"index": {...}, "built_at": datetime}
+_RATE_INDEXES = {}
 _RATE_INDEX_LOCK = Lock()
+
+
+BLUEPRINT_NAME_PREFIX = "b30_sputter_"
+
+
+def blueprint_name(tool_key):
+    """Registered blueprint name for a tool, e.g. "aja" -> "b30_sputter_aja"."""
+    return f"{BLUEPRINT_NAME_PREFIX}{tool_key}"
+
+
+def _tool_key():
+    """The tool this request belongs to, read back from the registered blueprint name."""
+    return (request.blueprint or "").removeprefix(BLUEPRINT_NAME_PREFIX)
+
+
+def _tool():
+    return SPUTTER_TOOLS[_tool_key()]
 
 def _norm_text(v):
     return str(v).strip().lower()
@@ -56,14 +73,31 @@ def _build_rate_key(target_material, gas1, gas1_pc, power_W, pressure_mTorr, pow
     )
 
 def _get_state():
-    if "b30_sputter" not in session:
-        session["b30_sputter"] = {
-            "sample_unique_id": "",
-            "sample_name": "",
-            "sample_type": "",
-            "sample_description": "",
-        }
-    return session["b30_sputter"]
+    """Per-tool session state, so the two tools never share a sample list."""
+    state = session.setdefault(f"b30_sputter_{_tool_key()}", {})
+    state.setdefault("sample_unique_id", "")
+    state.setdefault("sample_name", "")
+    state.setdefault("sample_type", "")
+    state.setdefault("sample_description", "")
+    # Samples the next uploaded dataset will be linked to.
+    state.setdefault("run_samples", [])
+    return state
+
+
+def _add_run_sample(state, sample):
+    """Add a looked-up or newly created sample to the run, ignoring repeats."""
+    unique_id = sample["unique_id"]
+    if any(s["unique_id"] == unique_id for s in state["run_samples"]):
+        return False
+
+    state["run_samples"].append({
+        "unique_id": unique_id,
+        "sample_name": sample.get("sample_name", ""),
+        "sample_type": sample.get("sample_type", ""),
+        "description": sample.get("description", ""),
+    })
+    session.modified = True
+    return True
 
 def _parse_ts(ts):
     # Always return timezone-aware datetime
@@ -78,13 +112,14 @@ def _parse_ts(ts):
     except Exception:
         return datetime.min.replace(tzinfo=timezone.utc)
     
-def _index_is_stale():
-    if _RATE_INDEX is None or _RATE_INDEX_BUILT_AT is None:
+def _index_is_stale(tool_key):
+    entry = _RATE_INDEXES.get(tool_key)
+    if not entry:
         return True
-    age = (datetime.now(timezone.utc) - _RATE_INDEX_BUILT_AT).total_seconds()
+    age = (datetime.now(timezone.utc) - entry["built_at"]).total_seconds()
     return age > RATE_INDEX_TTL_SECONDS
 
-def _build_rate_index_from_reference_sample():
+def _build_rate_index_from_reference_sample(ref_sample):
     """
     Builds:
       key -> {
@@ -97,7 +132,7 @@ def _build_rate_index_from_reference_sample():
     """
     index = {}
 
-    sample = cruc_client.samples.get(REF_SAMPLE)
+    sample = cruc_client.samples.get(ref_sample)
     datasets = sample.get("datasets", []) or []
 
     for link in datasets:
@@ -143,35 +178,36 @@ def _build_rate_index_from_reference_sample():
 
 def get_rate_index(force=False):
     """
-    TTL-cached index getter.
+    TTL-cached index getter, one index per tool.
     Rebuilds at most once per TTL window unless force=True.
     """
-    global _RATE_INDEX, _RATE_INDEX_BUILT_AT
+    tool_key = _tool_key()
+    ref_sample = _tool().get("calibration_sample_id", "")
+    if not ref_sample:
+        return {}
 
-    if not force and not _index_is_stale():
-        return _RATE_INDEX
+    if not force and not _index_is_stale(tool_key):
+        return _RATE_INDEXES[tool_key]["index"]
 
     with _RATE_INDEX_LOCK:
         # Re-check after acquiring lock (avoid duplicate rebuilds)
-        if not force and not _index_is_stale():
-            return _RATE_INDEX
+        if not force and not _index_is_stale(tool_key):
+            return _RATE_INDEXES[tool_key]["index"]
 
         try:
-            new_index = _build_rate_index_from_reference_sample()
-            _RATE_INDEX = new_index
-            _RATE_INDEX_BUILT_AT = datetime.now(timezone.utc)
+            new_index = _build_rate_index_from_reference_sample(ref_sample)
+            _RATE_INDEXES[tool_key] = {"index": new_index, "built_at": datetime.now(timezone.utc)}
             current_app.logger.info(
-                f"[b30] Rate index rebuilt: {len(_RATE_INDEX)} keys "
-                f"(ttl={RATE_INDEX_TTL_SECONDS}s, ref_sample={REF_SAMPLE})"
+                f"[b30] Rate index rebuilt for {tool_key}: {len(new_index)} keys "
+                f"(ttl={RATE_INDEX_TTL_SECONDS}s, ref_sample={ref_sample})"
             )
         except Exception as e:
-            current_app.logger.error(f"[b30] Failed to rebuild rate index: {e}")
+            current_app.logger.error(f"[b30] Failed to rebuild rate index for {tool_key}: {e}")
             # Keep old cache if present
-            if _RATE_INDEX is None:
-                _RATE_INDEX = {}
-                _RATE_INDEX_BUILT_AT = datetime.now(timezone.utc)
+            if tool_key not in _RATE_INDEXES:
+                _RATE_INDEXES[tool_key] = {"index": {}, "built_at": datetime.now(timezone.utc)}
 
-    return _RATE_INDEX
+    return _RATE_INDEXES[tool_key]["index"]
 
 def _pick(d, *keys, default=""):
     for k in keys:
@@ -415,7 +451,7 @@ def _incremental_refresh_rows(project_id, instrument_name, calibration_sample, v
 
 @b30_sputter_bp.route("/")
 def page():
-    return render_template("b30_sputter.html", config=B30_SPUTTER_CONFIG)
+    return render_template("b30_sputter.html", config=_tool())
 
 @b30_sputter_bp.route("/api/state", methods=["GET"])
 def get_state():
@@ -424,6 +460,9 @@ def get_state():
 @b30_sputter_bp.route("/api/lookup-rate", methods=["POST"])
 def lookup_rate():
     data = request.get_json(silent=True) or {}
+
+    if not _tool().get("calibration_sample_id"):
+        return jsonify({"found": False, "reason": "no_calibration_sample"}), 200
 
     required = ["09_target_material", "03_gas1", "04_gas1_pc", "11_power_W", "07_pressure_mTorr", "10_power_source"]
     missing = [k for k in required if data.get(k) in (None, "")]
@@ -458,12 +497,13 @@ def lookup_rate():
 @b30_sputter_bp.route("/api/reload-rate-index", methods=["POST"])
 def reload_rate_index():
     idx = get_rate_index(force=True)
+    built_at = (_RATE_INDEXES.get(_tool_key()) or {}).get("built_at")
     return jsonify({
         "ok": True,
         "count": len(idx or {}),
-        "ref_sample": REF_SAMPLE,
+        "ref_sample": _tool().get("calibration_sample_id", ""),
         "ttl_seconds": RATE_INDEX_TTL_SECONDS,
-        "rebuilt_at": _RATE_INDEX_BUILT_AT.isoformat() if _RATE_INDEX_BUILT_AT else None,
+        "rebuilt_at": built_at.isoformat() if built_at else None,
     }), 200
 
 
@@ -490,6 +530,7 @@ def lookup_sample():
     state["sample_name"] = sample["sample_name"]
     state["sample_type"] = sample.get("sample_type", "")
     state["sample_description"] = sample.get("description", "")
+    added = _add_run_sample(state, sample)
     session.modified = True
 
     return jsonify({
@@ -498,6 +539,8 @@ def lookup_sample():
         "sample_name": sample["sample_name"],
         "sample_type": sample.get("sample_type", ""),
         "description": sample.get("description", ""),
+        "already_in_run": not added,
+        "run_samples": state["run_samples"],
     })
 
 
@@ -551,6 +594,12 @@ def create_sample():
     state["sample_name"] = returned_sample["sample_name"]
     state["sample_type"] = sample_type
     state["sample_description"] = description
+    _add_run_sample(state, {
+        "unique_id": returned_sample["unique_id"],
+        "sample_name": returned_sample["sample_name"],
+        "sample_type": sample_type,
+        "description": description,
+    })
     session.modified = True
 
     return jsonify({
@@ -558,7 +607,31 @@ def create_sample():
         "sample_name": returned_sample["sample_name"],
         "sample_type": sample_type,
         "description": description,
+        "run_samples": state["run_samples"],
     })
+
+
+# ---------- Samples linked to the next run ----------
+
+@b30_sputter_bp.route("/api/run-samples/remove", methods=["POST"])
+def remove_run_sample():
+    data = request.get_json(silent=True) or {}
+    unique_id = str(data.get("unique_id") or "").strip()
+
+    state = _get_state()
+    state["run_samples"] = [s for s in state["run_samples"] if s["unique_id"] != unique_id]
+    session.modified = True
+
+    return jsonify({"run_samples": state["run_samples"]})
+
+
+@b30_sputter_bp.route("/api/run-samples/clear", methods=["POST"])
+def clear_run_samples():
+    state = _get_state()
+    state["run_samples"] = []
+    session.modified = True
+    return jsonify({"run_samples": []})
+
 
 # --- Sample Barcode printing -----
 
@@ -572,7 +645,7 @@ def print_barcode():
         return jsonify({"error": "sample_id is required"}), 400
 
     try:
-        publish_barcode(PRINTER_NAME, sample_mfid, sample_name)
+        publish_barcode(_tool()["printer_name"], sample_mfid, sample_name)
     except Exception as e:
         current_app.logger.error(f"[b30] Barcode print failed: {e}")
         return jsonify({"error": str(e)}), 500
@@ -584,67 +657,82 @@ def print_barcode():
 
 @b30_sputter_bp.route("/api/upload-dataset", methods=["POST"])
 def upload_dataset():
-    """Create a sputtering dataset in Crucible and link it to the current sample."""
+    """Create a sputtering dataset in Crucible and link it to every sample in the run."""
     user = session.get("user")
     if not user:
         return jsonify({"error": "Not logged in"}), 401
 
+    tool = _tool()
     state = _get_state()
-    if not state.get("sample_unique_id"):
-        return jsonify({"error": "No sample selected. Scan a barcode first."}), 400
-    
-    def build_dataset_name(state, data):
+    run_samples = state["run_samples"]
+    if not run_samples:
+        return jsonify({"error": "No samples in this run. Look up or create a sample first."}), 400
+
+    def build_dataset_name(run_samples, data):
         date_str = datetime.now(LA_TZ).strftime("%Y%m%d_%H%M%S") #Timezone-aware date
         co_dep = bool(data.get("01_co_deposition_enabled"))
 
         t1 = (data.get("09_target_material") or "").strip()
         t2 = (data.get("13_target_material_2") or "").strip()
-        sample = (state.get("sample_name") or "").strip()
 
         if co_dep and t1 and t2:
             target_part = f"{t1}+{t2}"
         else:
             target_part = t1 or "unknown-target"
 
-        sample = sample or "unknown-sample"
-        return f"{date_str}_{target_part}_Sputtering_on_{sample}"
+        if len(run_samples) == 1:
+            sample_part = (run_samples[0].get("sample_name") or "").strip() or "unknown-sample"
+        else:
+            sample_part = f"{len(run_samples)}_samples"
+
+        return f"{date_str}_{target_part}_Sputtering_on_{sample_part}"
 
     data = request.get_json()
 
-    # Build scientific_metadata from the fields defined in B30_SPUTTER_CONFIG.
-    # To add or rename fields, update the "dataset_fields" list in config.py.
+    # Build scientific_metadata from the fields defined for this tool in config.py.
+    # To add or rename fields, update its "dataset_fields" list there.
     scientific_metadata = {}
-    for field in B30_SPUTTER_CONFIG["dataset_fields"]:
+    for field in tool["dataset_fields"]:
         key = field["key"]
         value = data.get(key, "").strip() if isinstance(data.get(key), str) else data.get(key, "")
         if value != "" and value is not None:
             scientific_metadata[key] = value
 
-    dataset_name = build_dataset_name(state, data or {})
+    dataset_name = build_dataset_name(run_samples, data or {})
 
     try:
         ds = Dataset(
             dataset_name=dataset_name,
-            dataset_type=B30_SPUTTER_CONFIG["dataset_type"],
+            dataset_type=tool["dataset_type"],
             owner_orcid=user["orcid"],
             project_id=user["selected_project"],
-            instrument_name=B30_SPUTTER_CONFIG["instrument_name"],
-            measurement=B30_SPUTTER_CONFIG["measurement"],
+            instrument_name=tool["instrument_name"],
+            measurement=tool["measurement"],
             timestamp=get_tz_isoformat(),
         )
         new_dataset = cruc_client.datasets.create(ds, scientific_metadata=scientific_metadata)
-
-        cruc_client.datasets.add_sample(
-            dataset_id=new_dataset["dsid"],
-            sample_id=state["sample_unique_id"],
-        )
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+    # The dataset exists by this point, so a failed link is reported per sample
+    # instead of failing the whole upload.
+    linked, failed = [], []
+    for s in run_samples:
+        try:
+            cruc_client.datasets.add_sample(
+                dataset_id=new_dataset["dsid"],
+                sample_id=s["unique_id"],
+            )
+            linked.append(s["sample_name"] or s["unique_id"])
+        except Exception as e:
+            current_app.logger.error(f"[b30] Failed to link sample {s['unique_id']}: {e}")
+            failed.append({"unique_id": s["unique_id"], "sample_name": s["sample_name"], "error": str(e)})
 
     return jsonify({
         "dataset_name": dataset_name,
         "dataset_id": new_dataset["dsid"],
-        "sample_name": state["sample_name"],
+        "linked_samples": linked,
+        "failed_samples": failed,
     })
 
 # ---------- Dataset lookup ----------
@@ -659,8 +747,8 @@ def recent_datasets():
     if not project_id:
         return jsonify({"error": "No selected project"}), 400
 
-    instrument_name = B30_SPUTTER_CONFIG["instrument_name"]
-    calibration_sample = REF_SAMPLE
+    instrument_name = _tool()["instrument_name"]
+    calibration_sample = _tool().get("calibration_sample_id", "")
     view = (request.args.get("view") or "Deposition only").strip()
     target = (request.args.get("target") or "All").strip()
     limit = int(request.args.get("limit", 100))
@@ -697,8 +785,8 @@ def recent_target_options():
     if not project_id:
         return jsonify({"error": "No selected project"}), 400
 
-    instrument_name = B30_SPUTTER_CONFIG["instrument_name"]
-    calibration_sample = REF_SAMPLE
+    instrument_name = _tool()["instrument_name"]
+    calibration_sample = _tool().get("calibration_sample_id", "")
     view = (request.args.get("view") or "Deposition only").strip()
 
     try:
@@ -717,7 +805,7 @@ def recent_target_options():
         return jsonify({"error": str(e)}), 500
 
 
-@b30_sputter_bp.route("/api/recent-datasets/b30_aja_recent_datasets.csv", methods=["GET"])
+@b30_sputter_bp.route("/api/recent-datasets.csv", methods=["GET"])
 def export_recent_datasets_csv():
     user = session.get("user")
     if not user:
@@ -727,8 +815,8 @@ def export_recent_datasets_csv():
     if not project_id:
         return jsonify({"error": "No selected project"}), 400
 
-    instrument_name = B30_SPUTTER_CONFIG["instrument_name"]
-    calibration_sample = REF_SAMPLE
+    instrument_name = _tool()["instrument_name"]
+    calibration_sample = _tool().get("calibration_sample_id", "")
     view = (request.args.get("view") or "Deposition only").strip()
     target = (request.args.get("target") or "All").strip()
     limit = int(request.args.get("limit", 100))
@@ -764,7 +852,7 @@ def export_recent_datasets_csv():
         return send_file(
             bio,
             as_attachment=True,
-            download_name=f"{ts}_aja_recent_datasets.csv",
+            download_name=f"{ts}_{_tool_key()}_recent_datasets.csv",
             mimetype="text/csv",
         )
     except Exception as e:
