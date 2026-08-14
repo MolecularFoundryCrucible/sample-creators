@@ -16,6 +16,7 @@
             {% for tool_key, tool in sputter_tools.items() %}
             <a href="{{ url_for(sputter_blueprint_name(tool_key) ~ '.page') }}">{{ tool.nav_label }}</a>
             {% endfor %}
+            <a href="{{ url_for('b30_ebeam.page') }}">B30 E-beam</a>
             <a href="{{ url_for('print.page') }}">Print Barcodes</a>
         </div>
         <div class="nav-user" id="nav-user-info"></div>

@@ -124,3 +124,28 @@ SPUTTER_TOOLS = {
         "dataset_fields": SPUTTER_DATASET_FIELDS,
     },
 }
+
+# B30 EBEAM CONFIG
+EBEAM_TARGET_MATERIAL_OPTIONS = [
+    "", "Ag", "Al", "Au", "Cr", "Cu", "Ge", "Ni", "Pd", "Pt", "Sn", "Ti", "TiO2"
+]
+
+# Unlike the sputter app there is a single e-beam tool, so this config names one instrument
+# directly instead of carrying a "tools" dict. There is no calibration sample either, so no
+# deposition-rate autofill — the rate is typed in from the crystal monitor.
+B30_EBEAM_CONFIG = {
+    "dataset_type": "E-beam Evaporation Parameters",
+    "measurement": "E-beam Evaporation",
+    "instrument_name": "b30 - ebeam evaporator",
+    "printer_name": "crucible-printer/b30-113",
+    # Fields shown on the upload form. To add/remove fields, edit this list.
+    # Each entry: {"key": used in Crucible metadata, "label": shown to user, "type": html input type}
+    "dataset_fields": [
+        {"key": "01_target_material",           "label": "Target material",            "type": "select", "options": EBEAM_TARGET_MATERIAL_OPTIONS},
+        {"key": "02_power_W",                   "label": "Power (W)",                  "type": "number"},
+        {"key": "03_rate_A_s",                  "label": "Deposition rate (Å/s)",      "type": "number"},
+        {"key": "04_base_pressure_mTorr",       "label": "Base pressure (mTorr)",      "type": "number"},
+        {"key": "05_deposition_pressure_mTorr", "label": "Deposition pressure (mTorr)", "type": "number"},
+        {"key": "06_comment",                   "label": "Comment",                    "type": "text"},
+    ],
+}
