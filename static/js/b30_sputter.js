@@ -16,6 +16,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     initDatasetGridResponsive();
+    captureDatasetFieldDefaults();
     initRunTimer();
     initCoDepositionToggle();
     initGas2Toggle();
@@ -494,37 +495,125 @@ function initCoDepositionToggle() {
     enabledEl.addEventListener('change', () => setVisible(enabledEl.checked));
 }
 
-// ========== Dataset Upload ==========
+// ========== Dataset create / update ==========
 
-async function uploadDataset() {
+// Set once a dataset has been created from this form. While it holds an ID the page is in
+// its saved state and Update Dataset writes back to that record.
+let currentDatasetId = null;
+
+// Captured before any autofill runs so New Dataset restores the configured defaults rather
+// than emptying every field.
+const datasetFieldDefaults = new Map();
+
+function captureDatasetFieldDefaults() {
+    document.querySelectorAll('#dataset-grid [data-key]').forEach(el => {
+        datasetFieldDefaults.set(el, el.type === 'checkbox' ? el.checked : el.value);
+    });
+}
+
+function buildDatasetPayload() {
+    const payload = collectDatasetFields();
+    payload.run_elapsed_seconds = String(runRemainingSeconds);
+    return payload;
+}
+
+async function createDataset() {
     const runSampleNames = getRunSampleNames();
     if (!runSampleNames.length) {
         showAlert('error', 'No samples in this run. Look up or create a sample first.');
         return;
     }
 
-    const payload = collectDatasetFields();
-    payload.run_elapsed_seconds = String(runRemainingSeconds);
+    const payload = buildDatasetPayload();
 
     showModal(
-        'Confirm Upload',
-        buildUploadPreview(runSampleNames, payload),
+        'Confirm Create Dataset',
+        buildDatasetPreview(runSampleNames, payload),
         async () => {
             try {
-                const result = await depApi('/api/upload-dataset', 'POST', payload);
-                showAlert('success', `Dataset uploaded: ${result.dataset_name} (${result.dataset_id})`);
-                if (result.failed_samples && result.failed_samples.length) {
-                    const names = result.failed_samples.map(s => s.sample_name || s.unique_id).join(', ');
-                    showAlert('error', `Dataset created but could not be linked to: ${names}`);
-                }
+                const result = await depApi('/api/create-dataset', 'POST', payload);
+                setDatasetSaved(result.dataset_id, result.dataset_name);
+                showAlert('success', `Dataset created: ${result.dataset_name} (${result.dataset_id})`);
+                reportFailedLinks(result.failed_samples);
             } catch (e) {
-                showAlert('error', `Upload failed: ${e.message}`);
+                showAlert('error', `Create failed: ${e.message}`);
             }
-        }
+        },
+        'Create Dataset'
     );
 }
 
-function buildUploadPreview(sampleNames, payload) {
+async function updateDataset() {
+    if (!currentDatasetId) return;
+
+    const payload = buildDatasetPayload();
+    payload.dataset_id = currentDatasetId;
+
+    try {
+        const result = await depApi('/api/update-dataset', 'POST', payload);
+        const linked = result.linked_samples || [];
+        showAlert('success', linked.length
+            ? `Dataset updated — newly linked: ${linked.join(', ')}`
+            : 'Dataset updated');
+        reportFailedLinks(result.failed_samples);
+    } catch (e) {
+        showAlert('error', `Update failed: ${e.message}`);
+    }
+}
+
+function resetForm() {
+    showModal(
+        'Reset Form',
+        '<p>Do you want to clear sample information in addition to resetting deposition parameters?</p>',
+        () => resetDatasetForm(false),
+        'Keep Samples',
+        { label: 'Clear Samples', onClick: () => resetDatasetForm(true) }
+    );
+}
+
+function resetDatasetForm(clearSamples) {
+    setDatasetSaved(null, null);
+
+    // Restore every value first, then notify — the co-deposition and rate-lookup handlers
+    // read sibling fields, so they need to see the fully reset form.
+    datasetFieldDefaults.forEach((value, el) => {
+        if (el.type === 'checkbox') el.checked = value;
+        else el.value = value;
+    });
+    datasetFieldDefaults.forEach((_, el) => {
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    resetRunTimer();
+
+    if (clearSamples) clearRunSamples(true);
+    showAlert('info', clearSamples
+        ? 'Form reset — deposition parameters and run samples cleared'
+        : 'Form reset — run samples kept');
+}
+
+function setDatasetSaved(datasetId, datasetName) {
+    currentDatasetId = datasetId;
+
+    const saved = !!datasetId;
+    document.getElementById('dataset-create-btn').classList.toggle('hidden', saved);
+    document.getElementById('dataset-saved-panel').classList.toggle('hidden', !saved);
+    document.getElementById('dataset-grid').classList.toggle('is-saved', saved);
+
+    if (saved) {
+        document.getElementById('dataset-saved-name').textContent = datasetName || '';
+        document.getElementById('dataset-saved-id').textContent = datasetId;
+    }
+}
+
+function reportFailedLinks(failed) {
+    if (!failed || !failed.length) return;
+    const names = failed.map(s => s.sample_name || s.unique_id).join(', ');
+    showAlert('error', `Could not link to: ${names}`);
+}
+
+function buildDatasetPreview(sampleNames, payload) {
     const HIDE_IN_PREVIEW = new Set(['run_elapsed_seconds']);
 
     let html = `<p><strong>Samples (${sampleNames.length}):</strong> ${sampleNames.map(escapeHtml).join(', ')}</p>`;

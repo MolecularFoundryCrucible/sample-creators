@@ -255,6 +255,19 @@ def link_samples_to_dataset(dataset_id, run_samples, log_prefix):
     return linked, failed
 
 
+def link_new_samples_to_dataset(dataset_id, run_samples, log_prefix):
+    """Link the run samples that are not on the dataset already.
+
+    Used when re-saving an existing dataset: the run may have grown since it was created,
+    and re-linking a sample that is already there would be an error rather than a no-op.
+    """
+    already_linked = {
+        s["unique_id"] for s in cruc_client.samples.list(dataset_id=dataset_id)
+    }
+    new_samples = [s for s in run_samples if s["unique_id"] not in already_linked]
+    return link_samples_to_dataset(dataset_id, new_samples, log_prefix)
+
+
 # ---------- Formatting helpers ----------
 
 def parse_ts(ts):

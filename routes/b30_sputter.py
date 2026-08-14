@@ -8,6 +8,7 @@ from routes.deposition_common import (
     fmt_num,
     get_name_from_orcid_cached,
     incremental_refresh_rows,
+    link_new_samples_to_dataset,
     link_samples_to_dataset,
     make_state_getter,
     parse_ts,
@@ -358,10 +359,10 @@ def reload_rate_index():
     }), 200
 
 
-# ---------- Dataset upload ----------
+# ---------- Dataset create / update ----------
 
-@b30_sputter_bp.route("/api/upload-dataset", methods=["POST"])
-def upload_dataset():
+@b30_sputter_bp.route("/api/create-dataset", methods=["POST"])
+def create_dataset():
     """Create a sputtering dataset in Crucible and link it to every sample in the run."""
     user = session.get("user")
     if not user:
@@ -422,6 +423,40 @@ def upload_dataset():
         "linked_samples": linked,
         "failed_samples": failed,
     })
+
+
+@b30_sputter_bp.route("/api/update-dataset", methods=["POST"])
+def update_dataset():
+    """Re-save the form onto a dataset already created from it.
+
+    The name is left as generated at creation time — it is printed on labels and quoted in
+    the logbook, so it stays stable even if the parameters behind it are corrected.
+    """
+    user = session.get("user")
+    if not user:
+        return jsonify({"error": "Not logged in"}), 401
+
+    data = request.get_json() or {}
+    dataset_id = (data.get("dataset_id") or "").strip()
+    if not dataset_id:
+        return jsonify({"error": "No dataset to update. Create one first."}), 400
+
+    scientific_metadata = build_scientific_metadata(_tool()["dataset_fields"], data)
+
+    try:
+        cruc_client.datasets.update_scientific_metadata(dataset_id, scientific_metadata)
+        linked, failed = link_new_samples_to_dataset(
+            dataset_id, _get_state()["run_samples"], "b30"
+        )
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    return jsonify({
+        "dataset_id": dataset_id,
+        "linked_samples": linked,
+        "failed_samples": failed,
+    })
+
 
 # ---------- Dataset lookup ----------
 

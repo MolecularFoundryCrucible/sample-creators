@@ -290,6 +290,35 @@ input[readonly] {
     background: #cbd5e0;
 }
 
+/* ========== Saved dataset panel (deposition pages) ========== */
+.dataset-saved {
+    margin-top: 16px;
+    padding: 12px 14px;
+    border: 1px solid #9ae6b4;
+    border-left: 4px solid #38a169;
+    border-radius: 4px;
+    background: #f0fff4;
+}
+
+.dataset-saved-name {
+    font-weight: 700;
+    color: #22543d;
+    word-break: break-all;
+}
+
+.dataset-saved-id {
+    margin-top: 2px;
+    font-size: 13px;
+    color: #2f855a;
+}
+
+/* Fields stay editable after saving, but should read as committed, not blank-slate. */
+#dataset-grid.is-saved input,
+#dataset-grid.is-saved select {
+    background: #f7fafc;
+    border-color: #a0aec0;
+}
+
 /* ========== Layout Table (GIWAXS) ========== */
 .layout-table {
     width: 100%;

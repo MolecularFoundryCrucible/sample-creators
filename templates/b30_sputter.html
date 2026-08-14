@@ -85,7 +85,7 @@
                 <!-- Samples the next uploaded dataset will be linked to -->
                 <div class="subsection-divider"></div>
                 <div class="subsection-header">Samples in this run (<span id="run-sample-count">0</span>)</div>
-                <p class="help-text">Every sample you look up or create is added here. The uploaded dataset is linked to all of them.</p>
+                <p class="help-text">Every sample you look up or create is added here. The dataset you create is linked to all of them.</p>
                 <table class="preview-table" style="margin-top:0;">
                     <tbody id="run-sample-body">
                         <tr><td>No samples yet.</td></tr>
@@ -103,7 +103,7 @@
             <!-- Dataset Fields -->
             <section class="section" id="section-dataset">
                 <h2>Sputtering Parameters</h2>
-                <p class="help-text">Fill in the deposition parameters, then click Upload.</p>
+                <p class="help-text">Fill in the deposition parameters, then click Create Dataset.</p>
 
                 <div id="dataset-grid" style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px 12px;">
                     {% for field in config.dataset_fields %}
@@ -129,8 +129,23 @@
                     {% endfor %}
                 </div>
 
+                <!-- Appears once a dataset exists, so it is always clear which record the
+                     fields above are now editing. Actions on that record live inside it. -->
+                <div id="dataset-saved-panel" class="dataset-saved hidden">
+                    <div class="dataset-saved-name" id="dataset-saved-name"></div>
+                    <div class="dataset-saved-id">ID: <span id="dataset-saved-id"></span></div>
+                    <p class="help-text" style="margin: 8px 0 0;">
+                        Correct any field above and click Update Dataset to save it onto this
+                        record. The dataset name stays as created.
+                    </p>
+                    <div class="button-row" style="margin-top: 10px;">
+                        <button class="btn btn-primary" onclick="updateDataset()">Update Dataset</button>
+                    </div>
+                </div>
+
                 <div class="button-row" style="margin-top: 16px;">
-                    <button class="btn btn-primary" onclick="uploadDataset()">Upload</button>
+                    <button class="btn btn-primary" id="dataset-create-btn" onclick="createDataset()">Create Dataset</button>
+                    <button class="btn btn-secondary" onclick="resetForm()">Reset Form</button>
                 </div>
             </section>
 

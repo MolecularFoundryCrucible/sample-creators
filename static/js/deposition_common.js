@@ -407,6 +407,9 @@ function setSampleStatus(state, name) {
         } finally {
             clearSample();
             await clearRunSamples(true);
+            // The sputter page tracks a created dataset for editing; the next user must not
+            // inherit it and update someone else's record.
+            if (typeof setDatasetSaved === 'function') setDatasetSaved(null, null);
         }
     };
 })();

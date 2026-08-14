@@ -31,7 +31,9 @@ function showAlert(type, message) {
 
 // ========== Modal ==========
 
-function showModal(title, bodyHTML, onConfirm, confirmLabel = 'Confirm') {
+// `altAction` ({label, onClick}) adds a second, non-primary choice next to Confirm, for
+// questions that are a fork rather than a yes/no.
+function showModal(title, bodyHTML, onConfirm, confirmLabel = 'Confirm', altAction = null) {
     document.getElementById('modal-title').textContent = title;
     document.getElementById('modal-body').innerHTML = bodyHTML;
     document.getElementById('modal-overlay').classList.remove('hidden');
@@ -45,6 +47,18 @@ function showModal(title, bodyHTML, onConfirm, confirmLabel = 'Confirm') {
         closeModal();
         onConfirm();
     });
+
+    const altBtn = document.getElementById('modal-alt');
+    const newAltBtn = altBtn.cloneNode(true);
+    altBtn.parentNode.replaceChild(newAltBtn, altBtn);
+    newAltBtn.classList.toggle('hidden', !altAction);
+    if (altAction) {
+        newAltBtn.textContent = altAction.label;
+        newAltBtn.addEventListener('click', () => {
+            closeModal();
+            altAction.onClick();
+        });
+    }
 }
 
 // Positions whose thin film name matched zero or several samples. These are
