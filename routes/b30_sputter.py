@@ -48,6 +48,26 @@ def blueprint_name(tool_key):
     return f"{BLUEPRINT_NAME_PREFIX}{tool_key}"
 
 
+def build_dataset_name(run_samples, data, date_str):
+    """Compose a dataset name from the deposition targets and the samples in the run."""
+    co_dep = bool(data.get("01_co_deposition_enabled"))
+
+    t1 = (data.get("09_target_material") or "").strip()
+    t2 = (data.get("13_target_material_2") or "").strip()
+
+    if co_dep and t1 and t2:
+        target_part = f"{t1}+{t2}"
+    else:
+        target_part = t1 or "unknown-target"
+
+    if len(run_samples) == 1:
+        sample_part = (run_samples[0].get("sample_name") or "").strip() or "unknown-sample"
+    else:
+        sample_part = f"{len(run_samples)}_samples"
+
+    return f"{date_str}_{target_part}_Sputtering_on_{sample_part}"
+
+
 def _tool_key():
     """The tool this request belongs to, read back from the registered blueprint name."""
     return (request.blueprint or "").removeprefix(BLUEPRINT_NAME_PREFIX)
@@ -374,31 +394,13 @@ def create_dataset():
     if not run_samples:
         return jsonify({"error": "No samples in this run. Look up or create a sample first."}), 400
 
-    def build_dataset_name(run_samples, data):
-        date_str = datetime.now(LA_TZ).strftime("%Y%m%d_%H%M%S") #Timezone-aware date
-        co_dep = bool(data.get("01_co_deposition_enabled"))
-
-        t1 = (data.get("09_target_material") or "").strip()
-        t2 = (data.get("13_target_material_2") or "").strip()
-
-        if co_dep and t1 and t2:
-            target_part = f"{t1}+{t2}"
-        else:
-            target_part = t1 or "unknown-target"
-
-        if len(run_samples) == 1:
-            sample_part = (run_samples[0].get("sample_name") or "").strip() or "unknown-sample"
-        else:
-            sample_part = f"{len(run_samples)}_samples"
-
-        return f"{date_str}_{target_part}_Sputtering_on_{sample_part}"
-
     data = request.get_json()
 
     # To add or rename fields, update this tool's "dataset_fields" list in config.py.
     scientific_metadata = build_scientific_metadata(tool["dataset_fields"], data)
 
-    dataset_name = build_dataset_name(run_samples, data or {})
+    date_str = datetime.now(LA_TZ).strftime("%Y%m%d_%H%M%S")  # Timezone-aware date
+    dataset_name = build_dataset_name(run_samples, data or {}, date_str)
 
     try:
         ds = Dataset(
@@ -429,8 +431,8 @@ def create_dataset():
 def update_dataset():
     """Re-save the form onto a dataset already created from it.
 
-    The name is left as generated at creation time — it is printed on labels and quoted in
-    the logbook, so it stays stable even if the parameters behind it are corrected.
+    The name is rebuilt so it keeps matching the targets it describes, reusing the timestamp
+    it was first stamped with rather than taking a new one.
     """
     user = session.get("user")
     if not user:
@@ -441,18 +443,23 @@ def update_dataset():
     if not dataset_id:
         return jsonify({"error": "No dataset to update. Create one first."}), 400
 
+    run_samples = _get_state()["run_samples"]
     scientific_metadata = build_scientific_metadata(_tool()["dataset_fields"], data)
+
+    # Keep the "YYYYMMDD_HHMMSS" the name was created with; only what follows is rebuilt.
+    date_str = "_".join((data.get("dataset_name") or "").split("_")[:2])
+    dataset_name = build_dataset_name(run_samples, data, date_str)
 
     try:
         cruc_client.datasets.update_scientific_metadata(dataset_id, scientific_metadata)
-        linked, failed = link_new_samples_to_dataset(
-            dataset_id, _get_state()["run_samples"], "b30"
-        )
+        cruc_client.datasets.update(dataset_id, dataset_name=dataset_name)
+        linked, failed = link_new_samples_to_dataset(dataset_id, run_samples, "b30")
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
     return jsonify({
         "dataset_id": dataset_id,
+        "dataset_name": dataset_name,
         "linked_samples": linked,
         "failed_samples": failed,
     })

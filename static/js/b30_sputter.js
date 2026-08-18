@@ -500,6 +500,7 @@ function initCoDepositionToggle() {
 // Set once a dataset has been created from this form. While it holds an ID the page is in
 // its saved state and Update Dataset writes back to that record.
 let currentDatasetId = null;
+let currentDatasetName = null;
 
 // Captured before any autofill runs so New Dataset restores the configured defaults rather
 // than emptying every field.
@@ -548,9 +549,11 @@ async function updateDataset() {
 
     const payload = buildDatasetPayload();
     payload.dataset_id = currentDatasetId;
+    payload.dataset_name = currentDatasetName;
 
     try {
         const result = await depApi('/api/update-dataset', 'POST', payload);
+        setDatasetSaved(result.dataset_id, result.dataset_name);
         const linked = result.linked_samples || [];
         showAlert('success', linked.length
             ? `Dataset updated — newly linked: ${linked.join(', ')}`
@@ -595,9 +598,9 @@ function resetDatasetForm(clearSamples) {
 
 function setDatasetSaved(datasetId, datasetName) {
     currentDatasetId = datasetId;
+    currentDatasetName = datasetName;
 
     const saved = !!datasetId;
-    document.getElementById('dataset-create-btn').classList.toggle('hidden', saved);
     document.getElementById('dataset-saved-panel').classList.toggle('hidden', !saved);
     document.getElementById('dataset-grid').classList.toggle('is-saved', saved);
 
