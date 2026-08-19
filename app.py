@@ -8,6 +8,7 @@ from routes.giwaxs import giwaxs_bp
 from routes.rga import rga_bp
 from routes.b30_sputter import b30_sputter_bp, blueprint_name
 from routes.b30_ebeam import b30_ebeam_bp
+from routes.b30_sem import b30_sem_bp
 
 from routes.print_only import print_bp
 
@@ -41,6 +42,7 @@ def create_app():
             url_prefix=tool["url_prefix"],
             name=blueprint_name(tool_key),
         )
+    app.register_blueprint(b30_sem_bp, url_prefix="/b30-sem")
     app.register_blueprint(b30_ebeam_bp, url_prefix="/b30-ebeam")
     app.register_blueprint(print_bp, url_prefix="/print")
 

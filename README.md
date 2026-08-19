@@ -1,6 +1,6 @@
 # Sample Data Entry Apps
 
-Flask web apps for beamline data entry (GIWAXS, RGA, B30 sputter, B30 e-beam).
+Flask web apps for beamline data entry (GIWAXS, RGA, B30 sputter, B30 SEM, B30 e-beam).
 
 ## Run locally
 
@@ -23,7 +23,7 @@ Open https://crucible.lbl.gov/sample-creators/.
 | Styles | `static/css/style.css` |
 | New page | add `routes/newpage.py`, `templates/newpage.html`, `static/js/newpage.js` |
 
-Pages: `giwaxs`, `rga`, `b30_sputter`, `b30_ebeam`. Shared utilities in `routes/shared.py` and
+Pages: `giwaxs`, `rga`, `b30_sputter`, `b30_sem`, `b30_ebeam`. Shared utilities in `routes/shared.py` and
 `static/js/shared.js`. The two B30 deposition pages share their sample handling, logbook and
 CSV export through `routes/deposition_common.py` and `static/js/deposition_common.js`.
 
