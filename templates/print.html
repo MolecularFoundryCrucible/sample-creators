@@ -1,0 +1,167 @@
+{% extends "base.html" %}
+{% block title %}Print Sample Barcodes{% endblock %}
+
+{% block content %}
+<h1>Print Sample Barcodes</h1>
+
+<div class="two-column">
+    <div class="left-panel">
+
+        <!-- User Login -->
+        <section class="section" id="section-login">
+            <h2>User Login</h2>
+            <div class="form-group">
+                <label>Email</label>
+                <div class="input-row">
+                    <input type="email" id="email" placeholder="user-email@lbl.gov">
+                    <button class="btn btn-primary" onclick="loginUser()">Login</button>
+                </div>
+            </div>
+            <div class="form-group">
+                <label>Username</label>
+                <input type="text" id="username" readonly>
+            </div>
+            <div class="form-group">
+                <label>Project</label>
+                <select id="project" onchange="setProject()"></select>
+            </div>
+            <button class="btn btn-secondary" onclick="logoutUser()">Logout</button>
+        </section>
+
+        <!-- Printer -->
+        <section class="section" id="section-printer">
+            <h2>Printer</h2>
+            <div class="form-group">
+                <label>{{ print_config.printer_topic_prefix }}/</label>
+                <input type="text" id="printer_name" placeholder="printer name" autocomplete="off">
+                <p class="help-text">Enter the printer name.</p>
+            </div>
+        </section>
+
+    </div>
+
+    <div class="right-panel">
+
+        <!-- Tabs -->
+        <div class="tab-bar" style="display:flex; gap:8px; margin-bottom:12px;">
+            <button class="btn tab-btn active" type="button" data-tab="tab-search" onclick="switchTab('tab-search')">Find samples</button>
+            <button class="btn tab-btn" type="button" data-tab="tab-bulk" onclick="switchTab('tab-bulk')">Paste or upload</button>
+        </div>
+
+        <!-- TAB 1: search -->
+        <div id="tab-search" class="tab-panel">
+            <section class="section">
+                <h2>Find Samples</h2>
+                <div class="params-row">
+                    <div class="form-group">
+                        <label>Sample name</label>
+                        <input type="text" id="search_name" placeholder="Sample name">
+                    </div>
+                    <div class="form-group">
+                        <label>Sample type</label>
+                        <input type="text" id="search_type" placeholder="Any type" autocomplete="off">
+                    </div>
+                </div>
+                <div class="params-row">
+                    <div class="form-group">
+                        <label>Created from</label>
+                        <input type="date" id="search_from">
+                    </div>
+                    <div class="form-group">
+                        <label>Created to</label>
+                        <input type="date" id="search_to">
+                    </div>
+                </div>
+                <div class="button-row" style="align-items:center; gap:12px;">
+                    <button class="btn btn-primary" type="button" onclick="runSearch()">Search</button>
+                    <button class="btn btn-secondary" type="button" onclick="clearSearch()">Clear</button>
+                    <label style="display:flex; align-items:center; gap:6px; margin:0;">
+                        <input type="checkbox" id="search_exact">
+                        Exact match
+                    </label>
+                    <span id="search-loading" class="info-text hidden">Searching…</span>
+                    <span id="search-summary" class="info-text"></span>
+                </div>
+                <p class="help-text">
+                    Names are matched loosely by default, so small typos still find the
+                    sample — but at most 50 results come back. Tick <strong>Exact
+                    match</strong> to look up an exact name or to list every sample of a
+                    given type.
+                </p>
+
+                <div style="overflow:auto; margin-top:10px;">
+                    <table class="preview-table" style="width:100%;">
+                        <thead>
+                            <tr>
+                                <th style="width:32px;"><input type="checkbox" id="select-all" onclick="toggleSelectAll(this)"></th>
+                                <th>Name</th>
+                                <th>Type</th>
+                                <th>MFID</th>
+                                <th>Description</th>
+                                <th>Created</th>
+                            </tr>
+                        </thead>
+                        <tbody id="search-results">
+                            <tr><td colspan="6">Log in and search to see samples.</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </section>
+        </div>
+
+        <!-- TAB 2: paste / upload -->
+        <div id="tab-bulk" class="tab-panel hidden">
+            <section class="section">
+                <h2>Paste or Upload a List</h2>
+                <p class="help-text">
+                    Two columns: sample name and MFID, comma- or tab-separated (paste
+                    straight from a spreadsheet). A header row is optional, and the columns
+                    can be in either order. Rows are printed exactly as given — they are not
+                    checked against Crucible.
+                </p>
+                <div class="form-group">
+                    <label>Paste rows</label>
+                    <textarea id="bulk_text" rows="8" style="width:100%; font-family:monospace;"
+                              placeholder="sample_name,mfid&#10;my-film-01,0tgfny1b35rwd000x35nr7a9d8"></textarea>
+                </div>
+                <div class="form-group">
+                    <label>…or upload a file</label>
+                    <input type="file" id="bulk_file" accept=".csv,.tsv,.txt">
+                </div>
+                <div class="button-row">
+                    <button class="btn btn-primary" type="button" onclick="addBulkRows()">Add to print list</button>
+                    <button class="btn btn-secondary" type="button" onclick="clearBulk()">Clear</button>
+                </div>
+            </section>
+        </div>
+
+        <!-- Print list -->
+        <section class="section" id="section-print-list">
+            <h2>Print List (<span id="print-count">0</span>)</h2>
+            <div style="overflow:auto; max-height:320px;">
+                <table class="preview-table" style="width:100%;">
+                    <thead>
+                        <tr>
+                            <th>Name</th>
+                            <th>MFID</th>
+                            <th style="width:40px;"></th>
+                        </tr>
+                    </thead>
+                    <tbody id="print-list">
+                        <tr><td colspan="3">No samples selected yet.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="button-row" style="margin-top:12px;">
+                <button class="btn btn-primary" type="button" onclick="printAll()">Print Barcodes</button>
+                <button class="btn btn-secondary" type="button" onclick="clearPrintList()">Clear List</button>
+            </div>
+        </section>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/print.js') }}"></script>
+{% endblock %}

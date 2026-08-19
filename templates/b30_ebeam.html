@@ -1,8 +1,8 @@
 {% extends "base.html" %}
-{% block title %}{{ config.nav_label }} Data Entry{% endblock %}
+{% block title %}B30 E-beam Data Entry{% endblock %}
 
 {% block content %}
-<h1>{{ config.page_title }}</h1>
+<h1>B30 - E-beam Evaporator Data Entry and Logbook</h1>
 
 <!-- Top-level tabs -->
 <div class="tab-bar" style="display:flex; gap:8px; margin-bottom:12px;">
@@ -85,7 +85,7 @@
                 <!-- Samples the next uploaded dataset will be linked to -->
                 <div class="subsection-divider"></div>
                 <div class="subsection-header">Samples in this run (<span id="run-sample-count">0</span>)</div>
-                <p class="help-text">Every sample you look up or create is added here. The dataset you create is linked to all of them.</p>
+                <p class="help-text">Every sample you look up or create is added here. The uploaded dataset is linked to all of them.</p>
                 <table class="preview-table" style="margin-top:0;">
                     <tbody id="run-sample-body">
                         <tr><td>No samples yet.</td></tr>
@@ -98,12 +98,12 @@
 
         </div>
 
-        <div class="right-panel">     
+        <div class="right-panel">
 
             <!-- Dataset Fields -->
             <section class="section" id="section-dataset">
-                <h2>Sputtering Parameters</h2>
-                <p class="help-text">Fill in the deposition parameters, then click Create Dataset.</p>
+                <h2>E-beam Evaporation Parameters</h2>
+                <p class="help-text">Fill in the deposition parameters, then click Upload.</p>
 
                 <div id="dataset-grid" style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px 12px;">
                     {% for field in config.dataset_fields %}
@@ -116,8 +116,6 @@
                             <option value="{{ opt }}">{{ opt }}</option>
                             {% endfor %}
                         </select>
-                        {% elif field.type == 'checkbox' %}
-                            <input type="checkbox" id="field_{{ loop.index0 }}" data-key="{{ field.key }}">
                         {% else %}
                         <input type="{{ field.type }}" id="field_{{ loop.index0 }}"
                             data-key="{{ field.key }}"
@@ -129,39 +127,9 @@
                     {% endfor %}
                 </div>
 
-                <!-- Appears once a dataset exists, so it is always clear which record the
-                     fields above are now editing. Actions on that record live inside it. -->
-                <div id="dataset-saved-panel" class="dataset-saved hidden">
-                    <div class="dataset-saved-name" id="dataset-saved-name"></div>
-                    <div class="dataset-saved-id">ID: <span id="dataset-saved-id"></span></div>
-                    <p class="help-text" style="margin: 8px 0 0;">
-                        Correct any field above and click Update Dataset to save it onto this
-                        record. The name updates too if you change the target material.
-                    </p>
-                    <div class="button-row" style="margin-top: 10px;">
-                        <button class="btn btn-primary" onclick="updateDataset()">Update Dataset</button>
-                    </div>
-                </div>
-
                 <div class="button-row" style="margin-top: 16px;">
-                    <button class="btn btn-primary" onclick="createDataset()">Create New Dataset</button>
-                    <button class="btn btn-secondary" onclick="resetForm()">Reset Form</button>
+                    <button class="btn btn-primary" onclick="uploadDataset()">Upload</button>
                 </div>
-            </section>
-
-            <!-- Timer -->
-            <section class="section" id="section-timer">
-                <h2>Run Timer</h2>
-                <div class="button-row" style="margin-top: 8px; align-items: center; gap: 8px; flex-wrap: wrap;">
-                    <button class="btn btn-primary" type="button" id="go-btn">Go</button>
-                    <button class="btn btn-secondary" type="button" id="stop-btn">Stop</button>
-                    <button class="btn" type="button" id="reset-timer-btn">Reset</button>
-                    <span id="timer-status-badge" class="info-text" style="padding:4px 8px; border-radius:999px; background:#e2e8f0; color:#2d3748;">
-                        IDLE
-                    </span>
-                    <span class="info-text"><strong>Remaining:</strong> <span id="run-timer-display">00:00:00</span></span>
-                </div>
-                <input type="hidden" id="run_elapsed_seconds" data-key="run_elapsed_seconds" value="0">
             </section>
         </div>
     </div>
@@ -170,15 +138,8 @@
 <!-- TAB 2: datasets only -->
 <div id="tab-recent" class="tab-panel hidden">
   <section class="section">
-    <h2>Logbook of 100 Most Recent Datasets</h2>
+    <h2>Logbook of Recent Datasets</h2>
     <div class="button-row" style="margin-top:8px; display:flex; align-items:center; gap:8px; flex-wrap:nowrap;">
-        <label for="recent-view"><strong>View:</strong></label>
-        <select id="recent-view">
-            <option>Deposition only</option>
-            <option>Calibration only</option>
-            <option>All</option>
-        </select>
-
         <label for="recent-target"><strong>Target:</strong></label>
         <select id="recent-target">
             <option>All</option>
@@ -186,11 +147,11 @@
 
         <label for="recent-limit" style="white-space: nowrap;"><strong>Max. entries:</strong></label>
         <select id="recent-limit">
-        <option value="50">50</option>
-        <option value="100" selected>100</option>
-        <option value="250">250</option>
-        <option value="500">500</option>
-        <option value="1000">1000</option>
+            <option value="50">50</option>
+            <option value="100" selected>100</option>
+            <option value="250">250</option>
+            <option value="500">500</option>
+            <option value="1000">1000</option>
         </select>
 
         <button class="btn btn-primary" type="button" id="recent-fetch-btn" onclick="fetchRecentDatasets()">Refresh</button>
@@ -205,37 +166,25 @@
           <tr>
             <th style="resize: horizontal; overflow: auto;">Date</th>
             <th style="resize: horizontal; overflow: auto;">User</th>
-            <th style="resize: horizontal; overflow: auto;">Gas</th><th style="resize: horizontal; overflow: auto;">Press. (mTorr)</th>
-            <th style="resize: horizontal; overflow: auto;">Temp. (°C)</th><th style="resize: horizontal; overflow: auto;">Target</th>
-            <th style="resize: horizontal; overflow: auto;">Source</th><th style="resize: horizontal; overflow: auto;">Power (W)</th>
-            <th style="resize: horizontal; overflow: auto;">DCV (V)</th><th style="resize: horizontal; overflow: auto;">Indiv. rates (Å/s)</th>
-            <th style="resize: horizontal; overflow: auto;">Tot. rate (Å/s)</th><th style="resize: horizontal; overflow: auto;">Time (s)</th>
-            <th style="resize: horizontal; overflow: auto;">Thickness (nm)</th><th style="resize: horizontal; overflow: auto;">Comment</th>
+            <th style="resize: horizontal; overflow: auto;">Target</th>
+            <th style="resize: horizontal; overflow: auto;">Power (W)</th>
+            <th style="resize: horizontal; overflow: auto;">Rate (Å/s)</th>
+            <th style="resize: horizontal; overflow: auto;">Base press. (mTorr)</th>
+            <th style="resize: horizontal; overflow: auto;">Dep. press. (mTorr)</th>
+            <th style="resize: horizontal; overflow: auto;">Comment</th>
           </tr>
         </thead>
         <tbody id="recent-table-body">
-          <tr><td colspan="14">Click Refresh to load datasets.</td></tr>
+          <tr><td colspan="8">Click Refresh to load datasets.</td></tr>
         </tbody>
       </table>
     </div>
   </section>
 </div>
-
-<div id="timer-finished-overlay" class="hidden"
-     style="position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:5000; display:flex; align-items:center; justify-content:center;">
-    <div style="background:white; padding:28px 36px; border-radius:10px; text-align:center; max-width:560px; width:90%;">
-        <div style="font-size:40px; font-weight:800; color:#c53030; margin-bottom:10px;">TIME IS UP</div>
-        <div style="font-size:18px; color:#2d3748; margin-bottom:18px;">Deposition countdown has finished.</div>
-        <button class="btn btn-primary" type="button" onclick="dismissTimerFinishedOverlay()">OK</button>
-    </div>
-</div>
 {% endblock %}
 
 {% block scripts %}
-<script>
-    // Which tool's page this is — every API call from this page is prefixed with it.
-    const DEPOSITION_API_BASE = {{ config.url_prefix | tojson }};
-</script>
+<script>const DEPOSITION_API_BASE = "/b30-ebeam";</script>
 <script src="{{ url_for('static', filename='js/deposition_common.js') }}"></script>
-<script src="{{ url_for('static', filename='js/b30_sputter.js') }}"></script>
+<script src="{{ url_for('static', filename='js/b30_ebeam.js') }}"></script>
 {% endblock %}

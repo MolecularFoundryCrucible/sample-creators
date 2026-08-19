@@ -1,8 +1,13 @@
 // B30 Sputter Data Entry - Page Logic
+//
+// Sample lookup/creation/run handling lives in deposition_common.js, which this page loads
+// first. What stays here is sputter-specific: the gas and co-deposition toggles,
+// deposition-rate autofill, the run timer, and the sputter logbook.
 
 document.addEventListener('DOMContentLoaded', async () => {
     await loadUserState();
-    await loadB30State();
+
+    await loadDepositionState();
 
     // Show create fields by default if no sample already loaded
     const hasLoadedSample = !!document.getElementById('sample_barcode').value.trim();
@@ -11,6 +16,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     initDatasetGridResponsive();
+    captureDatasetFieldDefaults();
     initRunTimer();
     initCoDepositionToggle();
     initGas2Toggle();
@@ -28,141 +34,6 @@ function refreshTimerFromDepositionTimeIfIdle() {
     if (runTimerInterval) return;
     syncTimerFromDepositionTime();
     updateTimerUI(runRemainingSeconds);
-}
-
-// ========== State ==========
-
-async function loadB30State() {
-    try {
-        const state = await api('/b30-sputter/api/state');
-        if (state.sample_unique_id) {
-            document.getElementById('sample_barcode').value = state.sample_unique_id;
-            populateSampleFields(state);
-            setSampleStatus('found', state.sample_name);
-            showSamplePanel('found');
-        }
-    } catch {
-        // No state yet, that's fine
-    }
-}
-
-// ========== Sample Panel Mode ==========
-
-function showSamplePanel(mode) {
-    const panel = document.getElementById('sample-detail-panel');
-    const header = document.getElementById('sample-panel-header');
-    const createRow = document.getElementById('create-btn-row');
-    const fieldIds = ['sample_name', 'sample_type', 'sample_description'];
-
-    if (mode === 'hidden') {
-        panel.classList.add('hidden');
-        for (const id of fieldIds) {
-            document.getElementById(id).classList.remove('hidden');
-            document.getElementById(id + '_text').classList.add('hidden');
-        }
-        return;
-    }
-
-    panel.classList.remove('hidden');
-    if (mode === 'found') {
-        header.textContent = 'Sample Details';
-        createRow.classList.add('hidden');
-        for (const id of fieldIds) {
-            const input = document.getElementById(id);
-            const span = document.getElementById(id + '_text');
-            span.textContent = input.value;
-            input.classList.add('hidden');
-            span.classList.remove('hidden');
-        }
-    } else {
-        header.textContent = 'Add New';
-        createRow.classList.remove('hidden');
-        for (const id of fieldIds) {
-            document.getElementById(id).classList.remove('hidden');
-            document.getElementById(id + '_text').classList.add('hidden');
-        }
-    }
-}
-
-// ========== Sample Lookup ==========
-
-async function lookupSample() {
-    const barcode = document.getElementById('sample_barcode').value.trim();
-    if (!barcode) {
-        showAlert('error', 'Please scan or enter a barcode');
-        return;
-    }
-    try {
-        const data = await api('/b30-sputter/api/lookup-sample', 'POST', { unique_id: barcode });
-        if (data.found) {
-            populateSampleFields(data);
-            setSampleStatus('found', data.sample_name);
-            showSamplePanel('found');
-            showAlert('success', `Found sample: ${data.sample_name}`);
-        } else {
-            document.getElementById('sample_barcode').value = '';
-            clearSampleFields();
-            setSampleStatus('not-found', '');
-            showSamplePanel('create');
-            showAlert('info', 'Sample not found — enter details and click Create');
-        }
-    } catch (e) {
-        showAlert('error', e.message);
-    }
-}
-
-// ========== Sample Creation ==========
-
-async function createSample() {
-    const sampleName = document.getElementById('sample_name').value.trim();
-    const sampleType = document.getElementById('sample_type').value.trim();
-    const description = document.getElementById('sample_description').value.trim();
-
-    if (!sampleName || !sampleType) {
-        showAlert('error', 'Sample name and type are required');
-        return;
-    }
-    try {
-        const data = await api('/b30-sputter/api/create-sample', 'POST', {
-            sample_name: sampleName,
-            sample_type: sampleType,
-            description,
-        });
-        document.getElementById('sample_barcode').value = data.unique_id;
-        populateSampleFields(data);
-        setSampleStatus('created', data.sample_name);
-        showSamplePanel('found');
-        showAlert('success', `Created sample: ${data.sample_name} (${data.unique_id})`);
-    } catch (e) {
-        showAlert('error', e.message);
-    }
-}
-
-function clearSample() {
-    document.getElementById('sample_barcode').value = '';
-    clearSampleFields();
-    showSamplePanel('create'); // changed from 'hidden'
-    setSampleStatus('', '');
-}
-
-async function printSampleBarcode() {
-    const barcode = document.getElementById('sample_barcode').value.trim();
-    const name = document.getElementById('sample_name').value.trim();
-
-    console.log('printSampleBarcode', { barcode, name });    
-    if (!barcode) {
-        showAlert('error', 'No sample selected — scan or create a sample first');
-        return;
-    }
-    try {
-        await api('/b30-sputter/api/print-barcode', 'POST', {
-            sample_id: barcode,
-            sample_name: name,
-        });
-        showAlert('success', `Sent barcode to printer: ${name || barcode}`);
-    } catch (e) {
-        showAlert('error', e.message);
-    }
 }
 
 // ========== Hide second gas fields unless used ==========
@@ -201,6 +72,8 @@ function initGas2Toggle() {
 }
 
 // ========== Look up deposition rates ==========
+
+let triggerRateLookup = null;
 
 function initDepositionRateAutofill() {
     // CHANGED: split keys into base/primary/secondary instead of one trigger list
@@ -297,9 +170,8 @@ function initDepositionRateAutofill() {
         };
     };
 
-    // CHANGED: one lookup call helper
     const lookupOne = async (payload) => {
-        const res = await api('/b30-sputter/api/lookup-rate', 'POST', payload);
+        const res = await depApi('/api/lookup-rate', 'POST', payload);
         if (res && res.found) {
             const n = Number(res["19_rate_A_s"]);
             return { rate: Number.isFinite(n) ? n : null, res };
@@ -354,6 +226,8 @@ function initDepositionRateAutofill() {
         }
     }, 250);
 
+    triggerRateLookup = lookup;
+
     // CHANGED: expanded trigger list includes secondary + co-dep toggle
     const triggerKeys = [
         ...requiredBaseKeys,
@@ -379,12 +253,6 @@ function debounce(fn, ms) {
         clearTimeout(t);
         t = setTimeout(() => fn(...args), ms);
     };
-}
-
-async function lookupSingleRate(payload) {
-    const res = await api('/b30-sputter/api/lookup-rate', 'POST', payload);
-    if (res && res.found) return Number(res["19_rate_A_s"] || 0);
-    return null;
 }
 
 // ========== Warn if rate is outdated ==========
@@ -588,21 +456,6 @@ function playTimerFinishedBeep() {
     }
 }
 
-// ========== Column Flexibility ==========
-
-function initDatasetGridResponsive() {
-    const grid = document.getElementById('dataset-grid');
-    if (!grid) return;
-
-    function updateDatasetGridColumns() {
-        grid.style.gridTemplateColumns =
-            window.innerWidth <= 700 ? '1fr' : 'repeat(2, minmax(0, 1fr))';
-    }
-
-    updateDatasetGridColumns();
-    window.addEventListener('resize', updateDatasetGridColumns);
-}
-
 // ========== Enable co-deposition ==========
 
 function initCoDepositionToggle() {
@@ -637,64 +490,142 @@ function initCoDepositionToggle() {
     }
 
     setVisible(enabledEl.checked);
-    enabledEl.addEventListener('change', () => {
-        setVisible(enabledEl.checked);
-        recalcTotalRate();
-        recalcDepositionTimeIfPresent();
+    // The rate autofill in initDepositionRateAutofill() also listens on this checkbox, so
+    // toggling it re-runs the lookup and the dependent time/timer recalc from there.
+    enabledEl.addEventListener('change', () => setVisible(enabledEl.checked));
+}
+
+// ========== Dataset create / update ==========
+
+// Set once a dataset has been created from this form. While it holds an ID the page is in
+// its saved state and Update Dataset writes back to that record.
+let currentDatasetId = null;
+let currentDatasetName = null;
+
+// Captured before any autofill runs so New Dataset restores the configured defaults rather
+// than emptying every field.
+const datasetFieldDefaults = new Map();
+
+function captureDatasetFieldDefaults() {
+    document.querySelectorAll('#dataset-grid [data-key]').forEach(el => {
+        datasetFieldDefaults.set(el, el.type === 'checkbox' ? el.checked : el.value);
     });
 }
 
-// ========== Dataset Upload ==========
+function buildDatasetPayload() {
+    const payload = collectDatasetFields();
+    payload.run_elapsed_seconds = String(runRemainingSeconds);
+    return payload;
+}
 
-async function uploadDataset() {
-    const barcode = document.getElementById('sample_barcode').value.trim();
-    if (!barcode) {
-        showAlert('error', 'No sample selected. Scan a barcode first.');
+async function createDataset() {
+    const runSampleNames = getRunSampleNames();
+    if (!runSampleNames.length) {
+        showAlert('error', 'No samples in this run. Look up or create a sample first.');
         return;
     }
 
-    // Collect dataset field values by their Crucible metadata key
-    const payload = {};
-    document.querySelectorAll('[data-key]').forEach(el => {
-        const key = el.dataset.key;
-        let val = '';
-
-        if (el.type === 'checkbox') {
-            val = el.checked ? 'true' : '';
-        } else {
-            val = (el.value ?? '').toString().trim();
-        }
-
-        if (val) payload[key] = val;
-    });
-    payload.run_elapsed_seconds = String(runRemainingSeconds);
-
-    const sampleName = document.getElementById('sample_name').value || barcode;
+    const payload = buildDatasetPayload();
 
     showModal(
-        'Confirm Upload',
-        buildUploadPreview(sampleName, payload),
+        'Confirm Create Dataset',
+        buildDatasetPreview(runSampleNames, payload),
         async () => {
             try {
-                const result = await api('/b30-sputter/api/upload-dataset', 'POST', payload);
-                showAlert('success', `Dataset uploaded: ${result.dataset_name} (${result.dataset_id})`);
+                const result = await depApi('/api/create-dataset', 'POST', payload);
+                setDatasetSaved(result.dataset_id, result.dataset_name);
+                showAlert('success', `Dataset created: ${result.dataset_name} (${result.dataset_id})`);
+                reportFailedLinks(result.failed_samples);
             } catch (e) {
-                showAlert('error', `Upload failed: ${e.message}`);
+                showAlert('error', `Create failed: ${e.message}`);
             }
-        }
+        },
+        'Create Dataset'
     );
 }
 
-function buildUploadPreview(sampleName, payload) {
+async function updateDataset() {
+    if (!currentDatasetId) return;
+
+    const payload = buildDatasetPayload();
+    payload.dataset_id = currentDatasetId;
+    payload.dataset_name = currentDatasetName;
+
+    try {
+        const result = await depApi('/api/update-dataset', 'POST', payload);
+        setDatasetSaved(result.dataset_id, result.dataset_name);
+        const linked = result.linked_samples || [];
+        showAlert('success', linked.length
+            ? `Dataset updated — newly linked: ${linked.join(', ')}`
+            : 'Dataset updated');
+        reportFailedLinks(result.failed_samples);
+    } catch (e) {
+        showAlert('error', `Update failed: ${e.message}`);
+    }
+}
+
+function resetForm() {
+    showModal(
+        'Reset Form',
+        '<p>Do you want to clear sample information in addition to resetting deposition parameters?</p>',
+        () => resetDatasetForm(false),
+        'Keep Samples',
+        { label: 'Clear Samples', onClick: () => resetDatasetForm(true) }
+    );
+}
+
+function resetDatasetForm(clearSamples) {
+    setDatasetSaved(null, null);
+
+    // Restore every value first, then notify — the co-deposition and rate-lookup handlers
+    // read sibling fields, so they need to see the fully reset form.
+    datasetFieldDefaults.forEach((value, el) => {
+        if (el.type === 'checkbox') el.checked = value;
+        else el.value = value;
+    });
+    datasetFieldDefaults.forEach((_, el) => {
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+    });
+
+    resetRunTimer();
+
+    if (clearSamples) clearRunSamples(true);
+    showAlert('info', clearSamples
+        ? 'Form reset — deposition parameters and run samples cleared'
+        : 'Form reset — run samples kept');
+}
+
+function setDatasetSaved(datasetId, datasetName) {
+    currentDatasetId = datasetId;
+    currentDatasetName = datasetName;
+
+    const saved = !!datasetId;
+    document.getElementById('dataset-saved-panel').classList.toggle('hidden', !saved);
+    document.getElementById('dataset-grid').classList.toggle('is-saved', saved);
+
+    if (saved) {
+        document.getElementById('dataset-saved-name').textContent = datasetName || '';
+        document.getElementById('dataset-saved-id').textContent = datasetId;
+    }
+}
+
+function reportFailedLinks(failed) {
+    if (!failed || !failed.length) return;
+    const names = failed.map(s => s.sample_name || s.unique_id).join(', ');
+    showAlert('error', `Could not link to: ${names}`);
+}
+
+function buildDatasetPreview(sampleNames, payload) {
     const HIDE_IN_PREVIEW = new Set(['run_elapsed_seconds']);
 
-    let html = `<p><strong>Sample:</strong> ${sampleName}</p>`;
+    let html = `<p><strong>Samples (${sampleNames.length}):</strong> ${sampleNames.map(escapeHtml).join(', ')}</p>`;
     html += '<table class="preview-table"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
 
     let shown = 0;
     for (const [k, v] of Object.entries(payload)) {
         if (HIDE_IN_PREVIEW.has(k)) continue;
-        html += `<tr><td>${k}</td><td>${v}</td></tr>`;
+        html += `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`;
         shown++;
     }
 
@@ -706,158 +637,49 @@ function buildUploadPreview(sampleName, payload) {
     return html;
 }
 
-// ========== Get datasets ==========
+// ========== Logbook ==========
 
-function setRecentLoading(isLoading) {
-  const el = document.getElementById('recent-loading');
-  const fetchBtn = document.getElementById('recent-fetch-btn');
-  const exportBtn = document.getElementById('recent-export-btn');
-  if (el) el.classList.toggle('hidden', !isLoading);
-  if (fetchBtn) fetchBtn.disabled = isLoading;
-  if (exportBtn) exportBtn.disabled = isLoading;
-}
+const SPUTTER_LOGBOOK_COLS = [
+  "Date", "User", "Gas", "Press. (mTorr)", "Temp. (\u00b0C)", "Target", "Source",
+  "Power (W)", "DCV (V)", "Indiv. rates (\u00c5/s)", "Tot. rate (\u00c5/s)", "Time (s)",
+  "Thickness (nm)", "Comment"
+];
 
-function updateTargetOptionsFromRows(rows, preserveSelection = true) {
-  const sel = document.getElementById('recent-target');
-  if (!sel) return;
-
-  const prev = preserveSelection ? (sel.value || 'All') : 'All';
-  const mats = new Set();
-
-  (rows || []).forEach(r => {
-    const t = String(r["Target"] || "").trim();
-    if (!t) return;
-    // handles "Au + Cu"
-    t.split("+").map(x => x.trim()).filter(Boolean).forEach(x => mats.add(x));
-  });
-
-  const options = ["All", ...Array.from(mats).sort((a, b) => a.localeCompare(b))];
-  sel.innerHTML = "";
-  options.forEach(opt => {
-    const o = document.createElement("option");
-    o.value = opt;
-    o.textContent = opt;
-    sel.appendChild(o);
-  });
-
-  sel.value = options.includes(prev) ? prev : "All";
+function logbookParams() {
+  return {
+    view: document.getElementById('recent-view')?.value || 'Deposition only',
+    target: document.getElementById('recent-target')?.value || 'All',
+    limit: document.getElementById('recent-limit')?.value || '100',
+  };
 }
 
 async function fetchRecentDatasets() {
-  const view = document.getElementById('recent-view')?.value || 'Deposition only';
-  const target = document.getElementById('recent-target')?.value || 'All';
+  const params = logbookParams();
 
   setRecentLoading(true);
   try {
-    const limit = document.getElementById('recent-limit')?.value || '100';
-    const res = await api(
-    `/b30-sputter/api/recent-datasets?view=${encodeURIComponent(view)}&target=${encodeURIComponent(target)}&limit=${encodeURIComponent(limit)}`
-    );
-    renderRecentDatasets(res.rows || []);
-    const currentTarget = document.getElementById('recent-target')?.value || 'All';
-    if (currentTarget === 'All') {
-    updateTargetOptionsFromRows(res.rows || [], true);
+    const qs = new URLSearchParams(params).toString();
+    const res = await depApi(`/api/recent-datasets?${qs}`);
+    renderLogbookRows(SPUTTER_LOGBOOK_COLS, res.rows || []);
+    if (params.target === 'All') {
+      updateTargetOptionsFromRows(res.rows || [], true);
     }
   } catch (e) {
     showAlert('error', `Failed to load recent datasets: ${e.message}`);
   } finally {
-    setRecentLoading(false); // stop spinner immediately after table call
+    setRecentLoading(false);
   }
 }
 
-function renderRecentDatasets(rows) {
-  const tbody = document.getElementById('recent-table-body');
-  if (!tbody) return;
-  tbody.innerHTML = '';
-
-  const cols = [
-    "Date", "User", "Gas", "Press. (mTorr)", "Temp. (°C)", "Target", "Source",
-    "Power (W)", "DCV (V)", "Indiv. rates (Å/s)", "Tot. rate (Å/s)", "Time (s)", "Thickness (nm)", "Comment"
-  ];
-
-  if (!rows.length) {
-    tbody.innerHTML = '<tr><td colspan="14">No datasets found.</td></tr>';
-    return;
-  }
-
-  rows.forEach((r, i) => {
-    const tr = document.createElement('tr');
-    tr.style.background = (i % 2 === 0) ? '#ffffff' : '#f2f2f2'; // alternating colors inline
-    tr.innerHTML = cols.map(c => `<td>${(r[c] ?? '')}</td>`).join('');
-    tbody.appendChild(tr);
-  });
-}
-
-async function exportRecentDatasets() {
-  const view = document.getElementById('recent-view')?.value || 'Deposition only';
-  const target = document.getElementById('recent-target')?.value || 'All';
-  const limit = document.getElementById('recent-limit')?.value || '100';
-
-  try {
-    const base = (typeof BASE_URL !== 'undefined' ? BASE_URL : '');
-    const url = `${base}/b30-sputter/api/recent-datasets/b30_aja_recent_datasets.csv`
-      + `?view=${encodeURIComponent(view)}`
-      + `&target=${encodeURIComponent(target)}`
-      + `&limit=${encodeURIComponent(limit)}`;
-
-    const res = await fetch(url, { method: 'GET' });
-    if (!res.ok) {
-      let msg = 'Export failed';
-      try {
-        const err = await res.json();
-        msg = err.error || msg;
-      } catch {}
-      throw new Error(msg);
-    }
-
-    const blob = await res.blob();
-    const dlUrl = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = dlUrl;
-
-    const disposition = res.headers.get('Content-Disposition');
-    const match = disposition && disposition.match(/filename="?([^"]+)"?/);
-    a.download = match ? match[1] : 'b30_aja_recent_datasets.csv';
-
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(dlUrl);
-    showAlert('success', 'CSV downloaded');
-  } catch (e) {
-    showAlert('error', e.message);
-  }
+function exportRecentDatasets() {
+  return downloadLogbookCsv(
+    '/api/recent-datasets/b30_sputter_recent_datasets.csv',
+    logbookParams(),
+    'b30_sputter_recent_datasets.csv'
+  );
 }
 
 // ========== Helpers ==========
-
-function populateSampleFields(data) {
-    document.getElementById('sample_name').value = data.sample_name || '';
-    document.getElementById('sample_type').value = data.sample_type || '';
-    document.getElementById('sample_description').value = data.description || '';
-}
-
-function clearSampleFields() {
-    document.getElementById('sample_name').value = '';
-    document.getElementById('sample_type').value = '';
-    document.getElementById('sample_description').value = '';
-}
-
-function setSampleStatus(state, name) {
-    const el = document.getElementById('sample-status');
-    if (state === 'found') {
-        el.textContent = `✓ Loaded: ${name}`;
-        el.style.color = 'var(--color-success, green)';
-    } else if (state === 'created') {
-        el.textContent = `✓ Created: ${name}`;
-        el.style.color = 'var(--color-success, green)';
-    } else if (state === 'not-found') {
-        el.textContent = 'Sample not found — fill in details to create';
-        el.style.color = 'var(--color-warning, orange)';
-    } else {
-        el.textContent = '';
-    }
-}
 
 function formatDateMMDDYYYY(isoTs) {
     if (!isoTs) return '';

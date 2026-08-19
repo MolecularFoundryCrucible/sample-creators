@@ -13,7 +13,11 @@
             <a href="{{ url_for('index') }}">Home</a>
             <a href="{{ url_for('giwaxs.page') }}">GIWAXS Bar</a>
             <a href="{{ url_for('rga.page') }}">RGA Carrier</a>
-            <a href="{{ url_for('b30_sputter.page') }}">B30 Sputter</a>
+            {% for tool_key, tool in sputter_tools.items() %}
+            <a href="{{ url_for(sputter_blueprint_name(tool_key) ~ '.page') }}">{{ tool.nav_label }}</a>
+            {% endfor %}
+            <a href="{{ url_for('b30_ebeam.page') }}">B30 E-beam</a>
+            <a href="{{ url_for('print.page') }}">Print Barcodes</a>
         </div>
         <div class="nav-user" id="nav-user-info"></div>
     </nav>
@@ -34,6 +38,7 @@
             <div class="modal-body" id="modal-body"></div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+                <button class="btn btn-secondary hidden" id="modal-alt"></button>
                 <button class="btn btn-primary" id="modal-confirm">Confirm</button>
             </div>
         </div>

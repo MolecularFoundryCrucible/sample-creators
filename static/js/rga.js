@@ -97,7 +97,11 @@ async function lookupCarrier() {
         document.getElementById('rga_mf_uuid').value = data.mf_uuid;
         document.getElementById('rga_als_uuid').value = data.als_uuid;
         updateCarrierButtons();
-        if (data.mf_uuid) {
+        if (data.matches > 1) {
+            showAlert('warning',
+                `${data.matches} carriers named '${rgaName}' exist in this project. ` +
+                `Cannot tell which one you mean — rename or remove the duplicates.`);
+        } else if (data.mf_uuid) {
             showAlert('success', `Found carrier '${rgaName}'`);
         } else {
             showAlert('info', `Carrier '${rgaName}' not found in Crucible — ready to create`);
@@ -114,13 +118,30 @@ async function registerCrucible() {
         return;
     }
     try {
-        const data = await api('/rga/api/register-crucible', 'POST', { rga_name: rgaName });
-        document.getElementById('rga_mf_uuid').value = data.mf_uuid;
-        updateCarrierButtons();
-        showAlert('success', `RGA '${data.rga_name}' created in Crucible. UUID: ${data.mf_uuid}`);
+        await postRegisterCrucible(rgaName, false);
     } catch (e) {
+        if (e.status === 409 && e.data && e.data.exists) {
+            showModal(
+                'Carrier already exists',
+                `<p>${escapeHtml(e.message)}</p>
+                 <p>Use the existing carrier, or cancel and pick a different name.</p>`,
+                () => postRegisterCrucible(rgaName, true).catch(err => showAlert('error', err.message)),
+                'Use existing'
+            );
+            return;
+        }
         showAlert('error', e.message);
     }
+}
+
+async function postRegisterCrucible(rgaName, useExisting) {
+    const data = await api('/rga/api/register-crucible', 'POST',
+        { rga_name: rgaName, use_existing: useExisting });
+    document.getElementById('rga_mf_uuid').value = data.mf_uuid;
+    document.getElementById('rga_als_uuid').value = data.als_uuid || '';
+    updateCarrierButtons();
+    const verb = useExisting ? 'linked' : 'created';
+    showAlert('success', `RGA '${data.rga_name}' ${verb} in Crucible. UUID: ${data.mf_uuid}`);
 }
 
 async function registerALS() {
@@ -298,8 +319,16 @@ async function previewAndUpload() {
         showAlert('success', 'Collecting sample info from Crucible...');
         const preview = await api('/rga/api/collect-preview', 'POST');
 
+        const skipped = preview.skipped || [];
+
         if (!preview.samples || preview.samples.length === 0) {
-            showAlert('error', 'No samples found in RGA carrier layout');
+            if (skipped.length) {
+                showAlert('error',
+                    `None of the ${skipped.length} thin films in the layout could be resolved. ` +
+                    `First problem: ${skipped[0].tf_name} — ${skipped[0].reason}.`);
+            } else {
+                showAlert('error', 'No samples found in RGA carrier layout');
+            }
             return;
         }
 
@@ -307,6 +336,7 @@ async function previewAndUpload() {
         html += `<p><strong>Crucible UUID:</strong> ${preview.rga_mf_uuid}</p>`;
         html += `<p><strong>ALS Set ID:</strong> ${preview.rga_als_uuid}</p>`;
         html += `<p><strong>Samples:</strong> ${preview.samples.length}</p>`;
+        html += renderSkippedWarning(skipped);
         html += '<table class="preview-table"><thead><tr><th>Pos</th><th>Thin Film</th><th>MFID</th><th>Parameters</th></tr></thead><tbody>';
         for (const s of preview.samples) {
             const scanLines = Object.entries(s.scan_params || {})
@@ -327,7 +357,7 @@ async function previewAndUpload() {
             } catch (e) {
                 showAlert('error', `Upload failed: ${e.message}`);
             }
-        });
+        }, skipped.length ? `Upload ${preview.samples.length} anyway` : 'Confirm');
     } catch (e) {
         showAlert('error', e.message);
     }
