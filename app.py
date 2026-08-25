@@ -55,6 +55,18 @@ def create_app():
     def inject_sputter_tools():
         return {"sputter_tools": SPUTTER_TOOLS, "sputter_blueprint_name": blueprint_name}
 
+    @app.url_defaults
+    def add_static_version(endpoint, values):
+        """Append the file's mtime to static URLs so a deploy invalidates browser caches."""
+        if endpoint != "static" or "filename" not in values:
+            return
+        try:
+            path = os.path.join(app.static_folder, values["filename"])
+            values["v"] = int(os.path.getmtime(path))
+        except OSError:
+            # A missing asset should 404 on its own, not 500 every page that links it.
+            pass
+
     @app.route("/")
     def index():
         return render_template("index.html")
