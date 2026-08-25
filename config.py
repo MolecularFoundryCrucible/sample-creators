@@ -52,7 +52,7 @@ PRINT_CONFIG = {
     "print_delay_s": 0.1,
 }
 
-# B30 SPUTTER CONFIG
+# B30 SPUTTER CONFIG (AJA + Lesker)
 TARGET_MATERIAL_OPTIONS = [
     "", "Ag", "Al", "Al2O3", "Au", "Bi2O3", "BVO", "C", "Co", "Co3O4", "Cu",
     "CuAlO2", "Fe", "Ga2O3", "Gd", "Ge", "In", "Ir", "ITO", "Mn", "Nb", "Ni",
@@ -147,5 +147,29 @@ B30_EBEAM_CONFIG = {
         {"key": "04_base_pressure_mTorr",       "label": "Base pressure (mTorr)",      "type": "number"},
         {"key": "05_deposition_pressure_mTorr", "label": "Deposition pressure (mTorr)", "type": "number"},
         {"key": "06_comment",                   "label": "Comment",                    "type": "text"},
+    ],
+}
+
+# B30 SEM CONFIG
+B30_SEM_CONFIG = {
+    "dataset_name_prefix": "SEM Images for",
+    "dataset_type": "SEM Images",
+    "instrument_name": "b30 - FEI SEM",
+    "measurement": "Scanning electron microscope",
+    "printer_name": "crucible-printer/b30-122",
+    # Fields shown on the upload form. To add/remove fields, edit this list.
+    # Each entry: {"key": used in Crucible metadata, "label": shown to user, "type": html input type}
+    "dataset_fields": [
+        #SEM parameters -> are they saved in the file(s)?
+        {"key": "images_saved",       "label": "Images Saved?",          "type": "checkbox"},
+        {"key": "vacuum_level",       "label": "Vacuum Level",          "type": "select",  "options": ["High", "Low", "ESEM"]},
+        {"key": "spot_size", "label": "Spot Size", "type": "number"},
+        {"key": "high_voltage_V", "label": "High Voltage (V)", "type": "number"},
+        {"key": "emission_current_A", "label": "Emission Current (A)", "type": "number"},
+        {"key": "chamber_pressure_Torr", "label": "Chamber Pressure (Torr)", "type": "number"},
+        {"key": "edx_used",       "label": "Edx Used?",          "type": "checkbox"},
+        #EDX parameters -> are they saved in the file(s)?
+        {"key": "primary_energy_keV", "label": "Primary Energy (keV)", "type": "number"},
+        {"key": "comment",          "label": "Comment",               "type": "text"},
     ],
 }

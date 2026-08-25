@@ -86,6 +86,16 @@ function closeModal() {
 
 // ========== User Login/Logout ==========
 
+// ========== Login/Logout Reset Hooks ==========
+
+// Pages register callbacks here to reset their own form state. Several layers can be
+// registered on one page (shared deposition UI plus the per-tool form), so all of them run.
+const logoutResetFns = [];
+
+function registerLogoutReset(fn) {
+    logoutResetFns.push(fn);
+}
+
 async function loginUser() {
     const email = document.getElementById('email').value.trim();
     if (!email) {
@@ -108,6 +118,8 @@ async function logoutUser() {
         showAlert('success', 'Logged out');
     } catch (e) {
         showAlert('error', e.message);
+    } finally {
+        for (const fn of logoutResetFns) await fn();
     }
 }
 
@@ -156,6 +168,25 @@ async function setProject() {
     await api('/api/user/project', 'POST', { project });
 }
 
+// ========== Generic Field Reset ==========
+
+// Resets each matched form element back to the state defined by its original
+// HTML (the browser's defaultValue/defaultChecked/option.defaultSelected),
+// undoing any values the user typed in. File inputs are cleared outright.
+function resetFieldsToDefault(selector, root = document) {
+    root.querySelectorAll(selector).forEach(el => {
+        if (el.tagName === 'SELECT') {
+            const defaultOption = Array.from(el.options).find(o => o.defaultSelected);
+            el.selectedIndex = defaultOption ? defaultOption.index : 0;
+        } else if (el.type === 'checkbox' || el.type === 'radio') {
+            el.checked = el.defaultChecked;
+        } else if (el.type === 'file') {
+            el.value = '';
+        } else {
+            el.value = el.defaultValue;
+        }
+    });
+}
 // ========== Tabs ==========
 
 function switchTab(tabId) {

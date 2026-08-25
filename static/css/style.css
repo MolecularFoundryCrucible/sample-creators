@@ -271,6 +271,13 @@ input[readonly] {
     background: #f7fafc;
 }
 
+.btn:disabled,
+.btn:disabled:hover {
+    opacity: 0.5;
+    cursor: not-allowed;
+    background: #edf2f7;
+}
+
 .btn-primary {
     background: #2b6cb0;
     color: white;

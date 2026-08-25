@@ -704,3 +704,41 @@ function setTimerStatus(running) {
         badge.style.color = '#2d3748';
     }
 }
+
+function switchTab(tabId) {
+  document.querySelectorAll('.tab-panel').forEach(el => el.classList.add('hidden'));
+  document.getElementById(tabId)?.classList.remove('hidden');
+
+  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
+  document.querySelector(`.tab-btn[data-tab="${tabId}"]`)?.classList.add('active');
+}
+
+// ========== Form Reset ==========
+
+function resetSputterForm() {
+  resetFieldsToDefault('#dataset-grid [data-key]');
+
+  // Re-run the show/hide + dependent-field logic tied to the toggle checkboxes
+  const keyToEl = {};
+  document.querySelectorAll('#dataset-grid [data-key]').forEach(el => keyToEl[el.dataset.key] = el);
+  ['01_co_deposition_enabled', '02_second_gas_enabled'].forEach(key => {
+    keyToEl[key]?.dispatchEvent(new Event('change', { bubbles: true }));
+  });
+}
+
+(function patchLogoutUserForB30() {
+  if (typeof window.logoutUser !== 'function') return;
+
+  const originalLogoutUser = window.logoutUser;
+
+  window.logoutUser = async function (...args) {
+    try {
+      // run existing shared logout behavior
+      await originalLogoutUser.apply(this, args);
+    } finally {
+      // always clear local sample UI/state on this page
+      if (typeof clearSample === 'function') clearSample();
+      resetSputterForm();
+    }
+  };
+})();
