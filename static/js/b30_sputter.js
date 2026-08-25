@@ -344,7 +344,19 @@ function syncTimerFromDepositionTime() {
 }
 
 function startRunTimer() {
-    if (runTimerInterval) return; // already running
+    if (runTimerInterval) {
+        showModal(
+            'Timer Already Running',
+            `<p>A run is already in progress with <strong>${formatElapsed(runRemainingSeconds)}</strong> remaining.</p>
+             <p>Stopping it discards the current countdown and restarts from the deposition time now in the form.</p>`,
+            () => {
+                resetRunTimer();
+                startRunTimer();
+            },
+            'Stop and Restart'
+        );
+        return;
+    }
 
     // If timer is at/below 0, reload from deposition_time_s
     if (runRemainingSeconds <= 0) {
@@ -392,10 +404,6 @@ function resetRunTimer() {
 function updateTimerUI(totalSeconds) {
     const display = document.getElementById('run-timer-display');
     if (display) display.textContent = formatElapsed(totalSeconds);
-
-    const hidden = document.getElementById('run_elapsed_seconds');
-    // Keep existing upload key, but now store remaining countdown seconds
-    if (hidden) hidden.value = String(totalSeconds);
 }
 
 function formatElapsed(totalSeconds) {
@@ -513,9 +521,7 @@ function captureDatasetFieldDefaults() {
 }
 
 function buildDatasetPayload() {
-    const payload = collectDatasetFields();
-    payload.run_elapsed_seconds = String(runRemainingSeconds);
-    return payload;
+    return collectDatasetFields();
 }
 
 async function createDataset() {
@@ -574,7 +580,7 @@ function resetForm() {
     );
 }
 
-function resetDatasetForm(clearSamples) {
+function resetDatasetForm(clearSamples, { silent = false } = {}) {
     setDatasetSaved(null, null);
 
     // Restore every value first, then notify — the co-deposition and rate-lookup handlers
@@ -588,12 +594,14 @@ function resetDatasetForm(clearSamples) {
         el.dispatchEvent(new Event('change', { bubbles: true }));
     });
 
-    resetRunTimer();
-
+    // The countdown is deliberately left alone: a run can still be depositing while the
+    // form is being filled in for the next one.
     if (clearSamples) clearRunSamples(true);
-    showAlert('info', clearSamples
-        ? 'Form reset — deposition parameters and run samples cleared'
-        : 'Form reset — run samples kept');
+    if (!silent) {
+        showAlert('info', clearSamples
+            ? 'Form reset — deposition parameters and run samples cleared'
+            : 'Form reset — run samples kept');
+    }
 }
 
 function setDatasetSaved(datasetId, datasetName) {
@@ -617,14 +625,11 @@ function reportFailedLinks(failed) {
 }
 
 function buildDatasetPreview(sampleNames, payload) {
-    const HIDE_IN_PREVIEW = new Set(['run_elapsed_seconds']);
-
     let html = `<p><strong>Samples (${sampleNames.length}):</strong> ${sampleNames.map(escapeHtml).join(', ')}</p>`;
     html += '<table class="preview-table"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
 
     let shown = 0;
     for (const [k, v] of Object.entries(payload)) {
-        if (HIDE_IN_PREVIEW.has(k)) continue;
         html += `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(v)}</td></tr>`;
         shown++;
     }
@@ -692,6 +697,15 @@ function formatDateMMDDYYYY(isoTs) {
 }
 
 function setTimerStatus(running) {
+    const logoutBtn = document.getElementById('logout-btn');
+    if (logoutBtn) logoutBtn.disabled = running;
+    // The tooltip lives on the wrapper because browsers suppress hover events on
+    // disabled elements.
+    const logoutWrap = document.getElementById('logout-wrap');
+    if (logoutWrap) {
+        logoutWrap.title = running ? 'Wait for the timer to complete before logging out' : '';
+    }
+
     const badge = document.getElementById('timer-status-badge');
     if (!badge) return;
     if (running) {
@@ -705,40 +719,9 @@ function setTimerStatus(running) {
     }
 }
 
-function switchTab(tabId) {
-  document.querySelectorAll('.tab-panel').forEach(el => el.classList.add('hidden'));
-  document.getElementById(tabId)?.classList.remove('hidden');
-
-  document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-  document.querySelector(`.tab-btn[data-tab="${tabId}"]`)?.classList.add('active');
-}
-
-// ========== Form Reset ==========
-
-function resetSputterForm() {
-  resetFieldsToDefault('#dataset-grid [data-key]');
-
-  // Re-run the show/hide + dependent-field logic tied to the toggle checkboxes
-  const keyToEl = {};
-  document.querySelectorAll('#dataset-grid [data-key]').forEach(el => keyToEl[el.dataset.key] = el);
-  ['01_co_deposition_enabled', '02_second_gas_enabled'].forEach(key => {
-    keyToEl[key]?.dispatchEvent(new Event('change', { bubbles: true }));
-  });
-}
-
-(function patchLogoutUserForB30() {
-  if (typeof window.logoutUser !== 'function') return;
-
-  const originalLogoutUser = window.logoutUser;
-
-  window.logoutUser = async function (...args) {
-    try {
-      // run existing shared logout behavior
-      await originalLogoutUser.apply(this, args);
-    } finally {
-      // always clear local sample UI/state on this page
-      if (typeof clearSample === 'function') clearSample();
-      resetSputterForm();
-    }
-  };
-})();
+// Unlike the Reset Form button, logging out does clear the countdown — the logout button is
+// disabled while a run is timing, so this only ever reseeds an already-finished timer.
+registerLogoutReset(() => {
+    resetDatasetForm(true, { silent: true });
+    resetRunTimer();
+});
