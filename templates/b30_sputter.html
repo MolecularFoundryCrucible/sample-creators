@@ -33,7 +33,7 @@
                     <label>Project</label>
                     <select id="project" onchange="setProject()"></select>
                 </div>
-                <button class="btn btn-secondary" onclick="logoutUser()">Logout</button>
+                <span id="logout-wrap"><button id="logout-btn" class="btn btn-secondary" onclick="logoutUser()">Logout</button></span>
             </section>
 
             <!-- Sample Lookup / Creation -->
@@ -161,7 +161,6 @@
                     </span>
                     <span class="info-text"><strong>Remaining:</strong> <span id="run-timer-display">00:00:00</span></span>
                 </div>
-                <input type="hidden" id="run_elapsed_seconds" data-key="run_elapsed_seconds" value="0">
             </section>
         </div>
     </div>

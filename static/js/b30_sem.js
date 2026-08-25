@@ -575,13 +575,6 @@ function setSampleStatus(state, name) {
     }
 }
 
-function switchTab(tabId) {
-    document.querySelectorAll('.tab-panel').forEach(el => el.classList.add('hidden'));
-    document.getElementById(tabId)?.classList.remove('hidden');
-    document.querySelectorAll('.tab-btn').forEach(btn => btn.classList.remove('active'));
-    document.querySelector(`.tab-btn[data-tab="${tabId}"]`)?.classList.add('active');
-}
-
 // ========== Form Reset ==========
 
 function resetSemForm() {
@@ -612,15 +605,7 @@ function resetSemForm() {
     document.getElementById('upload-status').textContent = '';
 }
 
-(function patchLogoutUserForSem() {
-    if (typeof window.logoutUser !== 'function') return;
-    const originalLogoutUser = window.logoutUser;
-    window.logoutUser = async function (...args) {
-        try {
-            await originalLogoutUser.apply(this, args);
-        } finally {
-            if (typeof clearSample === 'function') clearSample();
-            resetSemForm();
-        }
-    };
-})();
+registerLogoutReset(() => {
+    clearSample();
+    resetSemForm();
+});
