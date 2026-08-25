@@ -396,20 +396,10 @@ function setSampleStatus(state, name) {
 
 // Logging out has to drop the sample UI too, otherwise the next user inherits the previous
 // user's run.
-(function patchLogoutUserForDeposition() {
-    if (typeof window.logoutUser !== 'function') return;
-
-    const originalLogoutUser = window.logoutUser;
-
-    window.logoutUser = async function (...args) {
-        try {
-            await originalLogoutUser.apply(this, args);
-        } finally {
-            clearSample();
-            await clearRunSamples(true);
-            // The sputter page tracks a created dataset for editing; the next user must not
-            // inherit it and update someone else's record.
-            if (typeof setDatasetSaved === 'function') setDatasetSaved(null, null);
-        }
-    };
-})();
+registerLogoutReset(async () => {
+    clearSample();
+    await clearRunSamples(true);
+    // The sputter page tracks a created dataset for editing; the next user must not
+    // inherit it and update someone else's record.
+    if (typeof setDatasetSaved === 'function') setDatasetSaved(null, null);
+});
