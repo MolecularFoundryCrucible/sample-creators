@@ -62,7 +62,10 @@
                     </div>
                     <div class="form-group">
                         <label>Sample Type</label>
-                        <input type="text" id="sample_type" placeholder="e.g. Si_wafer">
+                        <div class="typeahead">
+                            <input type="text" id="sample_type" placeholder="e.g. Si_wafer" autocomplete="off">
+                            <div id="sample_type_results" class="typeahead-results hidden"></div>
+                        </div>
                         <span id="sample_type_text" class="field-text hidden"></span>
                     </div>
                     <div class="form-group">
