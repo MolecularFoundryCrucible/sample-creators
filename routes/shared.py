@@ -75,6 +75,19 @@ def get_next_serial_sample(sample_prefix, sample_type, project):
     return nums[-1] + 1
 
 
+@shared_bp.route("/api/sample-types", methods=["GET"])
+def sample_types():
+    """Distinct sample types already used in the selected project, for the type typeahead."""
+    user = session.get("user")
+    if not user:
+        return jsonify({"error": "Not logged in"}), 401
+    project = user.get("selected_project", "")
+    if not project:
+        return jsonify([])
+    samples = cruc_client.samples.list(project_id=project, limit=int(1e8))
+    return jsonify(sorted({s["sample_type"] for s in samples if s.get("sample_type")}))
+
+
 @shared_bp.route("/api/user/login", methods=["POST"])
 def login():
     data = request.get_json()

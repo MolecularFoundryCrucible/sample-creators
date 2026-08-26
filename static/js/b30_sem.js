@@ -35,6 +35,7 @@ async function loadSemState() {
 // ========== Sample Panel Mode ==========
 
 function showSamplePanel(mode) {
+    document.getElementById('sample_type_results')?.classList.add('hidden');
     const panel = document.getElementById('sample-detail-panel');
     const header = document.getElementById('sample-panel-header');
     const createRow = document.getElementById('create-btn-row');

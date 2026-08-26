@@ -148,6 +148,8 @@ function populateUserInfo(user) {
 
     // Update nav
     document.getElementById('nav-user-info').textContent = user.user_name;
+
+    loadSampleTypes();
 }
 
 function clearUserInfo() {
@@ -161,11 +163,13 @@ function clearUserInfo() {
     if (tagsEl) tagsEl.value = '';
     const commentsEl = document.getElementById('comments');
     if (commentsEl) commentsEl.value = '';
+    sampleTypeOptions = [];
 }
 
 async function setProject() {
     const project = document.getElementById('project').value;
     await api('/api/user/project', 'POST', { project });
+    await loadSampleTypes();
 }
 
 // ========== Generic Field Reset ==========
@@ -216,3 +220,45 @@ function populateThinFilmDropdown(thinFilms) {
         select.appendChild(opt);
     }
 }
+
+// ========== Sample Type Typeahead ==========
+
+// Distinct types for the selected project, fetched once per project and filtered in the
+// browser. A type someone else creates mid-session won't show up until the page reloads.
+let sampleTypeOptions = [];
+
+async function loadSampleTypes() {
+    try {
+        sampleTypeOptions = await api('/api/sample-types');
+    } catch {
+        sampleTypeOptions = [];
+    }
+}
+
+function initSampleTypeTypeahead() {
+    const input = document.getElementById('sample_type');
+    const results = document.getElementById('sample_type_results');
+    if (!input || !results) return;
+
+    const close = () => results.classList.add('hidden');
+
+    input.addEventListener('input', () => {
+        const q = input.value.trim().toLowerCase();
+        const matches = q ? sampleTypeOptions.filter(t => t.toLowerCase().includes(q)) : [];
+        if (!matches.length) { close(); return; }
+        results.innerHTML = matches.map(t =>
+            `<button type="button" class="typeahead-item">${escapeHtml(t)}</button>`
+        ).join('');
+        results.classList.remove('hidden');
+        results.querySelectorAll('button').forEach((btn, i) =>
+            btn.addEventListener('click', () => { input.value = matches[i]; close(); })
+        );
+    });
+
+    input.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+    document.addEventListener('mousedown', e => {
+        if (!results.contains(e.target) && e.target !== input) close();
+    });
+}
+
+document.addEventListener('DOMContentLoaded', initSampleTypeTypeahead);

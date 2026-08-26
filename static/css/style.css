@@ -570,3 +570,32 @@ input[readonly] {
     font-size: 11px;
     word-break: break-all;
 }
+
+/* ========== Typeahead ========== */
+.typeahead { position: relative; }
+
+.typeahead-results {
+    position: absolute;
+    top: 100%; left: 0; right: 0;
+    z-index: 20;
+    max-height: 180px;
+    overflow-y: auto;
+    background: white;
+    border: 1px solid #cbd5e0;
+    border-radius: 4px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.12);
+}
+
+.typeahead-item {
+    display: block;
+    width: 100%;
+    padding: 6px 10px;
+    border: 0;
+    background: none;
+    text-align: left;
+    font-family: inherit;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.typeahead-item:hover { background: #edf2f7; }
