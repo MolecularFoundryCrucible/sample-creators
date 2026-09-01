@@ -2,6 +2,7 @@ from flask import Blueprint, request, jsonify, session, render_template
 from config import GIWAXS_CONFIG
 from routes.shared import cruc_client, get_next_serial_sample
 from routes.als_shared import als_sc_client
+from crucible import Sample
 from crucible.utils import get_tz_isoformat
 from beamline_data_toolkit.sample_tracker import SampleSetCreateDto, SampleCreateDto, SampleSetParameterValuesByNameDto
 
@@ -152,13 +153,13 @@ def register_crucible():
         state["bar_als_uuid"] = _als_uuid_from_description(bar["description"])
     else:
         try:
-            bar = cruc_client.samples.create(
+            bar = cruc_client.samples.create(Sample(
                 sample_name=bar_name,
                 timestamp=get_tz_isoformat(),
-                owner_orcid=user["orcid"],
+                owner=user["orcid"],
                 project_id=project,
                 sample_type="giwaxs bar",
-            )
+            ))
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
@@ -196,7 +197,7 @@ def register_als():
         )
         new_set = als_sc_client.set_create(new_set_dto)
         cruc_client.samples.update(
-            unique_id=state["bar_mf_uuid"],
+            sample_mfid=state["bar_mf_uuid"],
             description=f"ALS GIWAXS Bar || Set ID: {new_set.slug}",
         )
         state["bar_als_uuid"] = new_set.slug
@@ -297,7 +298,7 @@ def collect_preview():
         sample_syn_md = {}
         if tf_name != "TF000000":
             sample_ds = cruc_client.datasets.list(
-                sample_id=tf_mfid, measurement="spin_run", include_metadata=True
+                sample_mfid=tf_mfid, measurement="spin_run", include_metadata=True
             )
             sample_synds = [ds for ds in sample_ds if ds["measurement"] == "spin_run"]
             if sample_synds:

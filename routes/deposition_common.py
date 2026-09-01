@@ -18,6 +18,7 @@ from zoneinfo import ZoneInfo
 import requests
 from flask import current_app, jsonify, request, send_file, session
 
+from crucible import Sample
 from crucible.utils import get_tz_isoformat
 from routes.shared import cruc_client, publish_barcode
 
@@ -144,14 +145,14 @@ def register_sample_routes(bp, get_state, printer_name, log_prefix):
                 }), 409
 
         try:
-            returned_sample = cruc_client.samples.create(
+            returned_sample = cruc_client.samples.create(Sample(
                 sample_name=sample_name,
                 timestamp=get_tz_isoformat(),
-                owner_orcid=user["orcid"],
+                owner=user["orcid"],
                 project_id=project,
                 sample_type=sample_type,
                 description=description or None,
-            )
+            ))
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
@@ -232,7 +233,7 @@ def build_scientific_metadata(dataset_fields, data):
     return metadata
 
 
-def link_samples_to_dataset(dataset_id, run_samples, log_prefix):
+def link_samples_to_dataset(dataset_mfid, run_samples, log_prefix):
     """Link a freshly created dataset to every sample in the run.
 
     The dataset already exists by this point, so a failed link is reported per sample
@@ -241,7 +242,10 @@ def link_samples_to_dataset(dataset_id, run_samples, log_prefix):
     linked, failed = [], []
     for s in run_samples:
         try:
-            cruc_client.datasets.add_sample(dataset_id=dataset_id, sample_id=s["unique_id"])
+            cruc_client.datasets.add_sample(
+                dataset_mfid=dataset_mfid,
+                sample_mfid=s["unique_id"],
+            )
             linked.append(s["sample_name"] or s["unique_id"])
         except Exception as e:
             current_app.logger.error(
@@ -255,17 +259,17 @@ def link_samples_to_dataset(dataset_id, run_samples, log_prefix):
     return linked, failed
 
 
-def link_new_samples_to_dataset(dataset_id, run_samples, log_prefix):
+def link_new_samples_to_dataset(dataset_mfid, run_samples, log_prefix):
     """Link the run samples that are not on the dataset already.
 
     Used when re-saving an existing dataset: the run may have grown since it was created,
     and re-linking a sample that is already there would be an error rather than a no-op.
     """
     already_linked = {
-        s["unique_id"] for s in cruc_client.samples.list(dataset_id=dataset_id)
+        s["unique_id"] for s in cruc_client.samples.list(dataset_mfid=dataset_mfid)
     }
     new_samples = [s for s in run_samples if s["unique_id"] not in already_linked]
-    return link_samples_to_dataset(dataset_id, new_samples, log_prefix)
+    return link_samples_to_dataset(dataset_mfid, new_samples, log_prefix)
 
 
 # ---------- Formatting helpers ----------
@@ -421,7 +425,7 @@ def incremental_refresh_rows(cache_key, fetch_summaries, build_row):
         cached_ts = ts_by_id.get(dsid)
 
         if (dsid not in row_by_id) or (cached_ts is None) or (s_ts > cached_ts):
-            details = cruc_client.datasets.get(dsid=dsid, include_metadata=True)
+            details = cruc_client.datasets.get(dataset_mfid=dsid, include_metadata=True)
             row_by_id[dsid] = build_row(details)
             ts_by_id[dsid] = parse_ts(details.get("timestamp"))
 

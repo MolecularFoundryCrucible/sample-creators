@@ -146,8 +146,8 @@ def upload_dataset():
     try:
         ds = Dataset(
             dataset_name=dataset_name,
-            dataset_type=B30_EBEAM_CONFIG["dataset_type"],
-            owner_orcid=user["orcid"],
+            data_type=B30_EBEAM_CONFIG["dataset_type"],
+            owner=user["orcid"],
             project_id=user["selected_project"],
             instrument_name=INSTRUMENT_NAME,
             measurement=B30_EBEAM_CONFIG["measurement"],
@@ -157,11 +157,12 @@ def upload_dataset():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-    linked, failed = link_samples_to_dataset(new_dataset["dsid"], run_samples, "b30-ebeam")
+    dataset_mfid = new_dataset["dataset_mfid"]
+    linked, failed = link_samples_to_dataset(dataset_mfid, run_samples, "b30-ebeam")
 
     return jsonify({
         "dataset_name": dataset_name,
-        "dataset_id": new_dataset["dsid"],
+        "dataset_id": dataset_mfid,
         "linked_samples": linked,
         "failed_samples": failed,
     })
