@@ -13,6 +13,12 @@ uv run flask run
 
 Open https://crucible.lbl.gov/sample-creators/.
 
+## Test
+
+```bash
+uv run python -m unittest discover -s tests -v
+```
+
 ## Making changes
 
 | What to change | Where |

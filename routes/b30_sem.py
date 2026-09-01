@@ -1,6 +1,6 @@
 from flask import Blueprint, request, jsonify, session, render_template, current_app, send_file
 from routes.shared import cruc_client
-from crucible import Dataset
+from crucible import Dataset, Sample
 from crucible.utils import get_tz_isoformat
 from config import B30_SEM_CONFIG
 from datetime import datetime, timezone
@@ -169,7 +169,7 @@ def _incremental_refresh_rows(project_id, instrument_name):
         cached_ts = ts_by_id.get(dsid)
         need_fetch = (dsid not in row_by_id) or (cached_ts is None) or (s_ts > cached_ts)
         if need_fetch:
-            details = cruc_client.datasets.get(dsid=dsid, include_metadata=True)
+            details = cruc_client.datasets.get(dataset_mfid=dsid, include_metadata=True)
             row_by_id[dsid] = _dataset_to_row(details)
             ts_by_id[dsid] = _parse_ts(details.get("timestamp"))
 
@@ -418,14 +418,14 @@ def create_sample():
         return jsonify({"error": "sample_name and sample_type are required"}), 400
 
     try:
-        returned_sample = cruc_client.samples.create(
+        returned_sample = cruc_client.samples.create(Sample(
             sample_name=sample_name,
             timestamp=get_tz_isoformat(),
-            owner_orcid=user["orcid"],
+            owner=user["orcid"],
             project_id=user["selected_project"],
             sample_type=sample_type,
             description=description or None,
-        )
+        ))
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -553,19 +553,19 @@ def upload_dataset():
     try:
         ds = Dataset(
             dataset_name=dataset_name,
-            dataset_type=B30_SEM_CONFIG["dataset_type"],
-            owner_orcid=user["orcid"],
+            data_type=B30_SEM_CONFIG["dataset_type"],
+            owner=user["orcid"],
             project_id=user["selected_project"],
             instrument_name=B30_SEM_CONFIG["instrument_name"],
             measurement=B30_SEM_CONFIG["measurement"],
             timestamp=get_tz_isoformat(),
         )
         new_dataset = cruc_client.datasets.create(ds, scientific_metadata=scientific_metadata)
-        dataset_id = new_dataset["dsid"]
+        dataset_mfid = new_dataset["dataset_mfid"]
 
         cruc_client.datasets.add_sample(
-            dataset_id=dataset_id,
-            sample_id=state["sample_unique_id"],
+            dataset_mfid=dataset_mfid,
+            sample_mfid=state["sample_unique_id"],
         )
 
         # Upload files if provided
@@ -583,7 +583,7 @@ def upload_dataset():
                 fobj.save(tmp)
                 tmp_path = tmp.name
             try:
-                cruc_client.files.add_file_to_dataset(dataset_id, tmp_path)
+                cruc_client.datasets.add_file(dataset_mfid, tmp_path)
                 uploaded_files.append(fobj.filename)
             except Exception as e:
                 current_app.logger.warning(f"[b30_sem] File upload failed for {fobj.filename}: {e}")
@@ -595,7 +595,7 @@ def upload_dataset():
 
     return jsonify({
         "dataset_name": dataset_name,
-        "dataset_id": dataset_id,
+        "dataset_id": dataset_mfid,
         "sample_name": state["sample_name"],
         "uploaded_files": uploaded_files,
     })
