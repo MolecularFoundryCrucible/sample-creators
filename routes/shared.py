@@ -13,7 +13,7 @@ import paho.mqtt.publish as publish
 
 from config import PRINT_CONFIG
 from crucible import CrucibleClient
-cruc_client = CrucibleClient(api_url = 'https://crucible.lbl.gov/api/v2',
+cruc_client = CrucibleClient(api_url = 'https://crucible.lbl.gov/api/v3',
                              api_key=os.environ.get('CRUCIBLE_API_KEY', ''))
 
 
