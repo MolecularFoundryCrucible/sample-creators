@@ -287,18 +287,21 @@ def _get_filtered_dataset_summaries(project_id, instrument_name, calibration_sam
     all_ds = cruc_client.datasets.list(
         project_id=project_id,
         instrument_name=instrument_name,
-        limit=2000
+        include_links=bool(calibration_sample),
+        limit=2000,
     )
 
     calib_ids = set()
     if calibration_sample:
-        calib_ds = cruc_client.datasets.list(
-            project_id=project_id,
-            instrument_name=instrument_name,
-            limit=2000,
-            sample_mfid=calibration_sample
-        )
-        calib_ids = {d.get("unique_id") for d in calib_ds if d.get("unique_id")}
+        calib_ids = {
+            dataset.get("unique_id")
+            for dataset in all_ds
+            if any(
+                link.get("resource_type") == "sample"
+                and link.get("unique_id") == calibration_sample
+                for link in dataset.get("links") or []
+            )
+        }
 
     if view == "Calibration only":
         filtered = [d for d in all_ds if d.get("unique_id") in calib_ids]

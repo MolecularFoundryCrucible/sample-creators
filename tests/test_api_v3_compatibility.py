@@ -7,6 +7,7 @@ os.environ.setdefault("CRUCIBLE_API_KEY", "test-api-key")
 
 from app import create_app
 from config import B30_EBEAM_CONFIG, B30_SEM_CONFIG, SPUTTER_TOOLS
+from routes.b30_sputter import _get_filtered_dataset_summaries
 
 DATASET_MFID = "0tkn2knjast3h0008nyq9zps2c"
 
@@ -67,6 +68,41 @@ class ApiV3PayloadTests(unittest.TestCase):
             self.dataset_post_payload(request),
             tool["dataset_type"],
             tool["instrument_name"],
+        )
+
+    def test_sputter_calibration_filter_uses_top_level_dataset_links(self):
+        calibration_sample = "0tgfny1b35rwd000x35nr7a9d8"
+        datasets = [
+            {
+                "unique_id": "calibration-dataset",
+                "timestamp": "2026-09-01T10:00:00Z",
+                "links": [{
+                    "unique_id": calibration_sample,
+                    "resource_type": "sample",
+                    "relationship": "associated",
+                }],
+            },
+            {
+                "unique_id": "deposition-dataset",
+                "timestamp": "2026-09-01T11:00:00Z",
+                "links": [],
+            },
+        ]
+
+        with patch("routes.b30_sputter.cruc_client.datasets.list", return_value=datasets) as list_datasets:
+            result = _get_filtered_dataset_summaries(
+                "test-project",
+                "b30 - aja sputter tool",
+                calibration_sample,
+                "Calibration only",
+            )
+
+        self.assertEqual([dataset["unique_id"] for dataset in result], ["calibration-dataset"])
+        list_datasets.assert_called_once_with(
+            project_id="test-project",
+            instrument_name="b30 - aja sputter tool",
+            include_links=True,
+            limit=2000,
         )
 
     def test_ebeam_dataset_uses_v3_fields(self):
