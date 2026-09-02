@@ -6,7 +6,7 @@ from routes.deposition_common import (
     clean,
     csv_response,
     fmt_num,
-    get_name_from_orcid_cached,
+    format_user,
     incremental_refresh_rows,
     link_new_samples_to_dataset,
     link_samples_to_dataset,
@@ -262,11 +262,10 @@ def _dataset_to_row(details):
     indiv_rates = " + ".join([x for x in [r1, r2] if x])
 
     owner_orcid = pick(details, "owner_orcid", default="")
-    user_name = get_name_from_orcid_cached(owner_orcid) if owner_orcid else ""
 
     return {
         "Date": date_str,
-        "User": user_name or owner_orcid,
+        "User": format_user(details.get("owner"), owner_orcid),
         "Gas": _canonical_reactive_gas(sci),
         "Press. (mTorr)": pick(sci, "07_pressure_mTorr", "pressure_mTorr", default=""),
         "Temp. (°C)": pick(sci, "08_substrates_temperature_C", default=""),
@@ -287,18 +286,21 @@ def _get_filtered_dataset_summaries(project_id, instrument_name, calibration_sam
     all_ds = cruc_client.datasets.list(
         project_id=project_id,
         instrument_name=instrument_name,
-        limit=2000
+        include_links=bool(calibration_sample),
+        limit=2000,
     )
 
     calib_ids = set()
     if calibration_sample:
-        calib_ds = cruc_client.datasets.list(
-            project_id=project_id,
-            instrument_name=instrument_name,
-            limit=2000,
-            sample_mfid=calibration_sample
-        )
-        calib_ids = {d.get("unique_id") for d in calib_ds if d.get("unique_id")}
+        calib_ids = {
+            dataset.get("unique_id")
+            for dataset in all_ds
+            if any(
+                link.get("resource_type") == "sample"
+                and link.get("unique_id") == calibration_sample
+                for link in dataset.get("links") or []
+            )
+        }
 
     if view == "Calibration only":
         filtered = [d for d in all_ds if d.get("unique_id") in calib_ids]

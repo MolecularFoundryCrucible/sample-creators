@@ -18,7 +18,7 @@ from routes.deposition_common import (
     clean,
     csv_response,
     fmt_num,
-    get_name_from_orcid_cached,
+    format_user,
     incremental_refresh_rows,
     link_samples_to_dataset,
     make_state_getter,
@@ -52,7 +52,7 @@ def _dataset_to_row(details):
 
     return {
         "Date": dt.astimezone(LA_TZ).strftime("%Y-%m-%d %H:%M") if dt else "",
-        "User": get_name_from_orcid_cached(owner_orcid) if owner_orcid else "",
+        "User": format_user(details.get("owner"), owner_orcid),
         "Target": clean(sci.get("01_target_material")),
         "Power (W)": clean(sci.get("02_power_W")),
         "Rate (Å/s)": fmt_num(sci.get("03_rate_A_s"), 2),

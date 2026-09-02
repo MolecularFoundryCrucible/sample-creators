@@ -1,12 +1,11 @@
 from flask import Blueprint, request, jsonify, session, render_template, current_app, send_file
-from routes.shared import cruc_client
+from routes.shared import cruc_client, format_user
 from crucible import Dataset, Sample
 from crucible.utils import get_tz_isoformat
 from config import B30_SEM_CONFIG
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 from threading import Lock
-import requests
 import io
 import csv
 import os
@@ -20,9 +19,6 @@ b30_sem_bp = Blueprint("b30_sem", __name__)
 
 PRINTER_NAME = B30_SEM_CONFIG.get("printer_name", "crucible-printer/b30-122")
 LA_TZ = ZoneInfo("America/Los_Angeles")
-
-_ORCID_NAME_CACHE = {}
-_ORCID_NAME_CACHE_LOCK = Lock()
 
 _INCREMENTAL_CACHE = {}
 _INCREMENTAL_CACHE_LOCK = Lock()
@@ -71,11 +67,10 @@ def _dataset_to_row(details):
     date_str = dt.astimezone(LA_TZ).strftime("%Y-%m-%d %H:%M") if dt else ""
 
     owner_orcid = _pick(details, "owner_orcid", default="")
-    user_name = get_name_from_orcid_cached(owner_orcid) if owner_orcid else ""
 
     return {
         "Date": date_str,
-        "User": user_name or owner_orcid,
+        "User": format_user(details.get("owner"), owner_orcid),
         "Vacuum": _clean(sci.get("vacuum_level")),
         "Spot": _clean(sci.get("spot_size")),
         "HV (V)": _clean(sci.get("high_voltage_V")),
@@ -87,48 +82,6 @@ def _dataset_to_row(details):
         "_dataset_id": details.get("unique_id") or details.get("dsid") or "",
         "_timestamp": details.get("timestamp") or "",
     }
-
-
-def get_name_from_orcid(orcid_id):
-    url = f"https://orcid.org/{orcid_id}"
-    headers = {"Accept": "application/json"}
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-        data = response.json()
-        name_data = data.get("person", {}).get("name", {})
-        given_names = ""
-        family_name = ""
-        credit_name = ""
-        if "given-names" in name_data:
-            given_names = name_data.get("given-names", {}).get("value", "")
-        if "family-name" in name_data:
-            family_name = name_data.get("family-name", {}).get("value", "")
-        if "credit-name" in name_data:
-            credit_name = ((name_data or {}).get("credit-name") or {}).get("value", "")
-        if credit_name:
-            return credit_name
-        elif given_names or family_name:
-            return f"{given_names} {family_name}".strip()
-        else:
-            return "Name is private or not set."
-    except requests.exceptions.RequestException as e:
-        return f"Error fetching data: {e}"
-
-
-def get_name_from_orcid_cached(orcid_id: str) -> str:
-    oid = (orcid_id or "").strip()
-    if not oid:
-        return ""
-    with _ORCID_NAME_CACHE_LOCK:
-        if oid in _ORCID_NAME_CACHE:
-            return _ORCID_NAME_CACHE[oid]
-    name = get_name_from_orcid(oid)
-    if not name:
-        name = oid
-    with _ORCID_NAME_CACHE_LOCK:
-        _ORCID_NAME_CACHE[oid] = name
-    return name
 
 
 def _get_cache_bucket(key):
@@ -169,7 +122,11 @@ def _incremental_refresh_rows(project_id, instrument_name):
         cached_ts = ts_by_id.get(dsid)
         need_fetch = (dsid not in row_by_id) or (cached_ts is None) or (s_ts > cached_ts)
         if need_fetch:
-            details = cruc_client.datasets.get(dataset_mfid=dsid, include_metadata=True)
+            details = cruc_client.datasets.get(
+                dataset_mfid=dsid,
+                include_metadata=True,
+                include_owner=True,
+            )
             row_by_id[dsid] = _dataset_to_row(details)
             ts_by_id[dsid] = _parse_ts(details.get("timestamp"))
 
