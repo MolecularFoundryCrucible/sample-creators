@@ -96,14 +96,15 @@ function registerLogoutReset(fn) {
     logoutResetFns.push(fn);
 }
 
-async function loginUser() {
-    const email = document.getElementById('email').value.trim();
-    if (!email) {
-        showAlert('error', 'Please enter an email address');
+async function loginUser(event) {
+    event?.preventDefault();
+    const userReference = document.getElementById('email').value.trim();
+    if (!userReference) {
+        showAlert('error', 'Please enter an email or username');
         return;
     }
     try {
-        const user = await api('/api/user/login', 'POST', { email });
+        const user = await api('/api/user/login', 'POST', { user_ref: userReference });
         populateUserInfo(user);
         showAlert('success', `Logged in as ${user.user_name}`);
     } catch (e) {
@@ -133,7 +134,7 @@ async function loadUserState() {
 }
 
 function populateUserInfo(user) {
-    document.getElementById('email').value = user.email;
+    document.getElementById('email').value = user.login_reference || user.email || user.username || '';
     document.getElementById('username').value = user.user_name;
 
     const projectSelect = document.getElementById('project');

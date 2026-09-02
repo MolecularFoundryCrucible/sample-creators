@@ -15,12 +15,11 @@ from datetime import datetime, timezone
 from threading import Lock
 from zoneinfo import ZoneInfo
 
-import requests
 from flask import current_app, jsonify, request, send_file, session
 
 from crucible import Sample
 from crucible.utils import get_tz_isoformat
-from routes.shared import cruc_client, publish_barcode
+from routes.shared import cruc_client, format_user, publish_barcode
 
 LA_TZ = ZoneInfo("America/Los_Angeles")
 
@@ -308,53 +307,6 @@ def fmt_num(x, ndigits=None):
     return f"{v:.{ndigits}f}" if ndigits is not None else f"{v:g}"
 
 
-# ---------- ORCID name lookup ----------
-
-_ORCID_NAME_CACHE = {}
-_ORCID_NAME_CACHE_LOCK = Lock()
-
-
-def get_name_from_orcid(orcid_id):
-    url = f"https://orcid.org/{orcid_id}"
-    headers = {"Accept": "application/json"}
-
-    try:
-        response = requests.get(url, headers=headers)
-        response.raise_for_status()
-
-        name_data = response.json().get("person", {}).get("name", {}) or {}
-
-        credit_name = (name_data.get("credit-name") or {}).get("value", "")
-        given_names = (name_data.get("given-names") or {}).get("value", "")
-        family_name = (name_data.get("family-name") or {}).get("value", "")
-
-        if credit_name:
-            return credit_name
-        if given_names or family_name:
-            return f"{given_names} {family_name}".strip()
-        return "Name is private or not set."
-
-    except requests.exceptions.RequestException as e:
-        return f"Error fetching data: {e}"
-
-
-def get_name_from_orcid_cached(orcid_id):
-    oid = (orcid_id or "").strip()
-    if not oid:
-        return ""
-
-    with _ORCID_NAME_CACHE_LOCK:
-        if oid in _ORCID_NAME_CACHE:
-            return _ORCID_NAME_CACHE[oid]
-
-    name = get_name_from_orcid(oid) or oid
-
-    with _ORCID_NAME_CACHE_LOCK:
-        _ORCID_NAME_CACHE[oid] = name
-
-    return name
-
-
 # ---------- Target filtering ----------
 
 def norm_target(s):
@@ -425,7 +377,11 @@ def incremental_refresh_rows(cache_key, fetch_summaries, build_row):
         cached_ts = ts_by_id.get(dsid)
 
         if (dsid not in row_by_id) or (cached_ts is None) or (s_ts > cached_ts):
-            details = cruc_client.datasets.get(dataset_mfid=dsid, include_metadata=True)
+            details = cruc_client.datasets.get(
+                dataset_mfid=dsid,
+                include_metadata=True,
+                include_owner=True,
+            )
             row_by_id[dsid] = build_row(details)
             ts_by_id[dsid] = parse_ts(details.get("timestamp"))
 

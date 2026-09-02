@@ -75,6 +75,22 @@ def get_next_serial_sample(sample_prefix, sample_type, project):
     return nums[-1] + 1
 
 
+def format_user(user, fallback=""):
+    if not isinstance(user, dict):
+        return fallback
+    full_name = " ".join(
+        part.strip()
+        for part in (user.get("first_name", ""), user.get("last_name", ""))
+        if isinstance(part, str) and part.strip()
+    )
+    username = user.get("username")
+    if full_name and username:
+        return f"{full_name} (@{username})"
+    if username:
+        return f"@{username}"
+    return full_name or fallback
+
+
 @shared_bp.route("/api/sample-types", methods=["GET"])
 def sample_types():
     """Distinct sample types already used in the selected project, for the type typeahead."""
@@ -90,30 +106,29 @@ def sample_types():
 
 @shared_bp.route("/api/user/login", methods=["POST"])
 def login():
-    data = request.get_json()
-    email = data.get("email", "").strip()
-    logger.info(f'{email=}')
-    if not email:
-        return jsonify({"error": "Email required"}), 400
+    data = request.get_json() or {}
+    user_ref = str(data.get("user_ref") or data.get("email") or "").strip()
+    if not user_ref:
+        return jsonify({"error": "Email or username required"}), 400
 
     try:
-        user_info = cruc_client.users.get(email=email)
+        user_info = cruc_client.users.get(user_ref)
     except Exception as e:
-        logger.error(f"Error occurred while fetching user info for email {email}: {e}")
+        logger.error(f"Error occurred while fetching user info: {e}")
         return jsonify({"error": "User not found"}), 404
 
-    user_name = f"{user_info['first_name']}_{user_info['last_name']}"
-    orcid = user_info.get('unique_id', None)
-    if orcid is None:
-        orcid = user_info["orcid"]
+    user_unique_id = user_info.get("unique_id") or user_info.get("orcid")
+    user_name = format_user(user_info, user_unique_id or user_ref)
 
-    projects = cruc_client.projects.list(orcid=orcid, limit = int(1e5))
+    projects = cruc_client.projects.list(orcid=user_unique_id, limit=int(1e5))
     project_ids = sorted(x["project_id"] for x in projects)
 
     session["user"] = {
-        "email": email,
+        "email": user_info.get("email", ""),
+        "login_reference": user_ref,
+        "username": user_info.get("username", ""),
         "user_name": user_name,
-        "orcid": orcid,
+        "orcid": user_unique_id,
         "projects": project_ids,
         "selected_project": project_ids[0] if project_ids else "",
     }
