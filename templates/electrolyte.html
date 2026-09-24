@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Electrolyte Sample Creator{% endblock %}
+
+{% block content %}
+<h1>Electrolyte Sample Creator</h1>
+
+<div class="two-column">
+    <div class="left-panel">
+        <section class="section" id="section-login">
+            <h2>User Login</h2>
+            <div class="form-group">
+                <label>Email or username</label>
+                <form class="input-row" onsubmit="loginUser(event)">
+                    <input type="text" id="email" placeholder="user-email@lbl.gov or username" autocomplete="username">
+                    <button type="submit" class="btn btn-primary">Login</button>
+                </form>
+            </div>
+            <div class="form-group">
+                <label>User</label>
+                <input type="text" id="username" readonly>
+            </div>
+            <div class="form-group">
+                <label>Project</label>
+                <select id="project" onchange="setElectrolyteProject()"></select>
+            </div>
+            <button class="btn btn-secondary" onclick="logoutUser()">Logout</button>
+        </section>
+
+        <section class="section" id="section-printer">
+            <h2>Barcode Printer</h2>
+            <div class="form-group">
+                <label for="printer-name">{{ print_config.printer_topic_prefix }}/</label>
+                <input type="text" id="printer-name" placeholder="printer name" autocomplete="off">
+            </div>
+            <button type="button" class="btn btn-primary" id="print-electrolyte" onclick="printElectrolyte()" disabled>
+                Print Created Barcode
+            </button>
+        </section>
+    </div>
+
+    <div class="right-panel">
+        <section class="section">
+            <h2>Electrolyte Details</h2>
+            <form id="electrolyte-form" onsubmit="createElectrolyte(event)">
+                <div class="form-group">
+                    <label for="electrolyte-name">Electrolyte Name</label>
+                    <input type="text" id="electrolyte-name" required>
+                    <p class="help-text" id="electrolyte-name-status"></p>
+                </div>
+                <div class="params-row">
+                    <div class="form-group">
+                        <label for="preparation-date">Date of Preparation</label>
+                        <input type="date" id="preparation-date" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="electrolyte-concentration">Concentration</label>
+                        <input type="text" id="electrolyte-concentration" placeholder="e.g. 1 M" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="electrolyte-ph">pH</label>
+                        <input type="number" id="electrolyte-ph" min="0" max="14" step="any" required>
+                    </div>
+                </div>
+
+                <div class="subsection-divider"></div>
+                <div class="subsection-header">Ingredients</div>
+                <table class="preview-table" style="margin-top:0;">
+                    <thead>
+                        <tr>
+                            <th>Type</th>
+                            <th>Amount</th>
+                            <th></th>
+                        </tr>
+                    </thead>
+                    <tbody id="ingredient-rows"></tbody>
+                </table>
+                <div class="button-row">
+                    <button type="button" class="btn btn-secondary" onclick="addIngredientRow()">Add Ingredient</button>
+                </div>
+
+                <div class="button-row" style="margin-top:16px;">
+                    <button type="submit" class="btn btn-primary" id="create-electrolyte">Create Electrolyte Sample</button>
+                </div>
+            </form>
+
+            <div id="created-electrolyte" class="dataset-saved hidden">
+                <div class="dataset-saved-name" id="created-electrolyte-name"></div>
+                <div class="dataset-saved-id" id="created-electrolyte-id"></div>
+                <table class="preview-table">
+                    <tbody id="created-electrolyte-summary"></tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/electrolyte.js') }}"></script>
+{% endblock %}
