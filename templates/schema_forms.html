@@ -1,0 +1,143 @@
+{% extends "base.html" %}
+{% block title %}Schema Data Entry{% endblock %}
+
+{% block content %}
+<h1>Schema Data Entry</h1>
+
+<div class="two-column">
+    <div class="left-panel">
+        <section class="section" id="section-login">
+            <h2>User Login</h2>
+            <div class="form-group">
+                <label>Email or username</label>
+                <form class="input-row" onsubmit="loginSchemaUser(event)">
+                    <input type="text" id="email" placeholder="user-email@lbl.gov or username" autocomplete="username">
+                    <button type="submit" class="btn btn-primary">Login</button>
+                </form>
+            </div>
+            <div class="form-group">
+                <label>User</label>
+                <input type="text" id="username" readonly>
+            </div>
+            <div class="form-group">
+                <label>Project</label>
+                <select id="project" onchange="setSchemaProject()"></select>
+            </div>
+            <button class="btn btn-secondary" onclick="logoutUser()">Logout</button>
+        </section>
+
+        <section class="section">
+            <h2>Data Type</h2>
+            <div class="form-group">
+                <label for="schema-select">Schema</label>
+                <select id="schema-select" onchange="selectSchema()"></select>
+                <p class="help-text" id="schema-status">Log in to load this project's schemas.</p>
+            </div>
+            <button type="button" class="btn btn-secondary" onclick="openSchemaBuilder()">Add a data type schema</button>
+        </section>
+
+        <section class="section" id="section-printer">
+            <h2>Barcode Printer</h2>
+            <div class="form-group">
+                <label for="printer-name">{{ print_config.printer_topic_prefix }}/</label>
+                <input type="text" id="printer-name" placeholder="printer name" autocomplete="off">
+            </div>
+            <button type="button" class="btn btn-primary" id="print-sample" onclick="printLinkedSample()" disabled>
+                Print Linked Sample Barcode
+            </button>
+        </section>
+    </div>
+
+    <div class="right-panel">
+        <section class="section hidden" id="section-builder">
+            <h2>New Data Type Schema</h2>
+            <div class="form-group">
+                <label for="builder-name">Schema Name</label>
+                <input type="text" id="builder-name" placeholder="e.g. XRD measurement">
+            </div>
+            <div class="subsection-header">Fields</div>
+            <div id="builder-fields"></div>
+            <div class="button-row" style="margin-top:16px;">
+                <button type="button" class="btn btn-secondary" onclick="closeSchemaBuilder()">Cancel</button>
+                <button type="button" class="btn btn-primary" id="save-schema" onclick="saveSchema()">Save Schema</button>
+            </div>
+        </section>
+
+        <section class="section hidden" id="section-form">
+            <h2 id="form-title"></h2>
+            <form id="schema-form" onsubmit="submitSchemaForm(event)">
+                <div class="form-group">
+                    <label for="dataset-name">Dataset Name *</label>
+                    <input type="text" id="dataset-name" required>
+                </div>
+                <div id="schema-form-fields"></div>
+                <div class="button-row" style="margin-top:16px;">
+                    <button type="submit" class="btn btn-primary" id="create-dataset">Create Dataset</button>
+                </div>
+            </form>
+
+            <div id="created-dataset" class="dataset-saved hidden">
+                <div class="dataset-saved-name" id="created-dataset-name"></div>
+                <div class="dataset-saved-id" id="created-dataset-id"></div>
+            </div>
+        </section>
+
+        <section class="section hidden" id="section-sample">
+            <h2>Sample</h2>
+            <p class="help-text">Optional. The dataset will be linked to the selected sample.</p>
+            <div class="form-group">
+                <label>Linked sample</label>
+                <div class="input-row">
+                    <input type="text" id="linked-sample" readonly placeholder="No sample linked">
+                    <button type="button" class="btn btn-secondary" onclick="clearLinkedSample()">Clear</button>
+                </div>
+            </div>
+
+            <div class="subsection-divider"></div>
+            <div class="subsection-header">Link an existing sample</div>
+            <form class="input-row" onsubmit="searchSamples(event)">
+                <input type="text" id="sample-search" placeholder="Sample name">
+                <button type="submit" class="btn btn-secondary">Search</button>
+            </form>
+            <label class="help-text"><input type="checkbox" id="sample-search-exact"> Exact match</label>
+            <p class="help-text" id="sample-search-status"></p>
+            <table class="preview-table hidden" id="sample-results-table">
+                <thead><tr><th>Name</th><th>Type</th><th>MFID</th><th></th></tr></thead>
+                <tbody id="sample-results"></tbody>
+            </table>
+
+            <div class="subsection-divider"></div>
+            <div class="subsection-header">Create a new sample</div>
+            <form id="new-sample-form" onsubmit="createSample(event)">
+                <div class="params-row">
+                    <div class="form-group">
+                        <label for="new-sample-name">Sample Name</label>
+                        <input type="text" id="new-sample-name" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="sample_type">Sample Type</label>
+                        <div class="typeahead">
+                            <input type="text" id="sample_type" autocomplete="off">
+                            <div id="sample_type_results" class="typeahead-results hidden"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label for="new-sample-description">Description</label>
+                    <input type="text" id="new-sample-description">
+                </div>
+                <div class="form-group">
+                    <label for="new-sample-timestamp">Timestamp</label>
+                    <input type="datetime-local" id="new-sample-timestamp" required>
+                    <p class="help-text">When the sample was created.</p>
+                </div>
+                <button type="submit" class="btn btn-secondary" id="create-sample">Create and Link Sample</button>
+            </form>
+        </section>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/schema_forms.js') }}"></script>
+{% endblock %}
