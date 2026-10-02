@@ -47,6 +47,7 @@ async function loadSchemas(selectId = '') {
     const status = document.getElementById('schema-status');
     select.innerHTML = '';
     hideSchemaForm();
+    status.textContent = 'Loading schemas…';
     try {
         schemas = await api('/schema-forms/api/schemas');
     } catch (error) {
@@ -71,13 +72,23 @@ async function loadSchemas(selectId = '') {
     }
 }
 
-function selectSchema() {
+async function selectSchema() {
     const id = document.getElementById('schema-select').value;
-    currentSchema = schemas.find(schema => schema.id === id) || null;
-    if (!currentSchema) {
-        hideSchemaForm();
+    hideSchemaForm();
+    if (!id) return;
+    const status = document.getElementById('schema-status');
+    status.textContent = 'Loading schema…';
+    let schema;
+    try {
+        schema = await api(`/schema-forms/api/schemas/${encodeURIComponent(id)}`);
+    } catch (error) {
+        status.textContent = `Could not load schema: ${error.message}`;
         return;
     }
+    // Ignore a slow response if the user picked a different schema meanwhile.
+    if (document.getElementById('schema-select').value !== id) return;
+    status.textContent = `${schemas.length} schema(s) in this project.`;
+    currentSchema = schema;
     closeSchemaBuilder();
     renderSchemaForm();
     document.getElementById('section-sample').classList.remove('hidden');

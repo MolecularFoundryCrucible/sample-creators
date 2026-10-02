@@ -37,22 +37,27 @@ def _require_user():
 
 
 def _load_schemas(project):
-    """All schemas created in this project, sorted by name."""
+    """Names and IDs of the schemas created in this project, sorted by name."""
     records = cruc_client.datasets.list(
         project_id=project,
-        measurement=SCHEMA_MEASUREMENT,
-        include_metadata=True,
+        data_type=SCHEMA_MEASUREMENT,
         limit=None,
     )
     schemas = [
-        {
-            "id": record["unique_id"],
-            "name": record.get("dataset_name", ""),
-            "fields": (record.get("scientific_metadata") or {}).get("fields") or [],
-        }
+        {"id": record["unique_id"], "name": record.get("dataset_name", "")}
         for record in records
     ]
     return sorted(schemas, key=lambda s: s["name"].lower())
+
+
+def _get_schema(project, schema_id):
+    """One schema with its fields, or None if it isn't a schema in this project."""
+    summary = next((s for s in _load_schemas(project) if s["id"] == schema_id), None)
+    if summary is None:
+        return None
+    record = cruc_client.datasets.get(schema_id, include_metadata=True)
+    fields = (record.get("scientific_metadata") or {}).get("fields") or []
+    return {**summary, "fields": fields}
 
 
 def _save_schema(user, name, fields):
@@ -188,6 +193,20 @@ def list_schemas():
         return jsonify({"error": str(exc)}), 500
 
 
+@schema_forms_bp.route("/api/schemas/<schema_id>", methods=["GET"])
+def get_schema(schema_id):
+    user, err = _require_user()
+    if err:
+        return err
+    try:
+        schema = _get_schema(user["selected_project"], schema_id)
+    except Exception as exc:
+        return jsonify({"error": str(exc)}), 500
+    if schema is None:
+        return jsonify({"error": "Schema not found in the selected project"}), 404
+    return jsonify(schema)
+
+
 @schema_forms_bp.route("/api/schemas", methods=["POST"])
 def create_schema():
     user, err = _require_user()
@@ -266,10 +285,9 @@ def create_dataset():
         return jsonify({"error": "Dataset name is required"}), 400
 
     try:
-        schemas = _load_schemas(user["selected_project"])
+        schema = _get_schema(user["selected_project"], schema_id)
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500
-    schema = next((s for s in schemas if s["id"] == schema_id), None)
     if schema is None:
         return jsonify({"error": "Schema not found in the selected project"}), 404
 
