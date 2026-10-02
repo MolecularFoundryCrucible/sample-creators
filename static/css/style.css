@@ -235,6 +235,32 @@ input[readonly] {
     flex: 1;
 }
 
+.builder-row .input-row {
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.builder-row .builder-name {
+    flex: 2;
+}
+
+.builder-row .builder-type {
+    flex: 1;
+    width: auto;
+}
+
+.builder-row label {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 13px;
+    white-space: nowrap;
+}
+
+.builder-row label input {
+    flex: none;
+}
+
 .button-row {
     display: flex;
     gap: 8px;
