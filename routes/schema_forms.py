@@ -5,7 +5,6 @@ from zoneinfo import ZoneInfo
 from flask import Blueprint, jsonify, render_template, request, session
 
 from crucible import Dataset, Sample
-from config import PRINT_CONFIG
 from routes.shared import cruc_client
 
 
@@ -23,7 +22,7 @@ NESTED_TYPES = ("group", "list")
 
 @schema_forms_bp.route("/")
 def page():
-    return render_template("schema_forms.html", print_config=PRINT_CONFIG)
+    return render_template("schema_forms.html")
 
 
 def _require_user():

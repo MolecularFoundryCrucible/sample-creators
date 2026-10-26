@@ -7,6 +7,7 @@ let checkingName = '';
 document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('preparation-date').value = localDateString();
     addIngredientRow();
+    populatePrinterSelect('printer-name');
     const nameInput = document.getElementById('electrolyte-name');
     nameInput.addEventListener('input', onElectrolyteNameInput);
     nameInput.addEventListener('blur', checkElectrolyteName);
@@ -299,7 +300,7 @@ async function loadExistingPreparation(sample) {
 async function printElectrolyte() {
     const printer = document.getElementById('printer-name').value.trim();
     if (!printer) {
-        showAlert('error', 'Enter a printer name');
+        showAlert('error', 'Select a printer');
         return;
     }
     if (!createdElectrolyte) {

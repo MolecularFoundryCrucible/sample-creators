@@ -39,8 +39,11 @@
         <section class="section" id="section-printer">
             <h2>Barcode Printer</h2>
             <div class="form-group">
-                <label for="printer-name">{{ print_config.printer_topic_prefix }}/</label>
-                <input type="text" id="printer-name" placeholder="printer name" autocomplete="off">
+                <label for="printer-name">Printer</label>
+                <div class="input-row">
+                    <select id="printer-name"><option value="">Loading printers…</option></select>
+                    <button class="btn btn-secondary" type="button" onclick="populatePrinterSelect('printer-name')">Refresh</button>
+                </div>
             </div>
             <button type="button" class="btn btn-primary" id="print-sample" onclick="printLinkedSample()" disabled>
                 Print Linked Sample Barcode

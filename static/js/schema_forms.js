@@ -9,6 +9,7 @@ let linkedSample = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
     resetSampleTimestamp();
+    populatePrinterSelect('printer-name');
     await loadUserState();
     await loadSchemas();
 });
@@ -370,7 +371,7 @@ async function createSample(event) {
 async function printLinkedSample() {
     const printer = document.getElementById('printer-name').value.trim();
     if (!printer) {
-        showAlert('error', 'Enter a printer name');
+        showAlert('error', 'Select a printer');
         return;
     }
     if (!linkedSample) {
