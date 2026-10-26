@@ -200,6 +200,35 @@ function addBulkRows() {
     addParsed(document.getElementById('bulk_text').value);
 }
 
+// ========== Printer selection ==========
+
+async function loadPrinters() {
+    const select = document.getElementById('printer_name');
+    const previous = select.value;
+    select.innerHTML = '<option value="">Loading printers…</option>';
+    try {
+        const data = await api('/print/api/printers');
+        const printers = [...data.printers].sort((a, b) => a.printer_id.localeCompare(b.printer_id));
+
+        if (!printers.length) {
+            select.innerHTML = '<option value="">No printers found</option>';
+            return;
+        }
+
+        select.innerHTML = '';
+        for (const p of printers) {
+            const opt = document.createElement('option');
+            opt.value = p.printer_id;
+            opt.textContent = `${p.printer_id} — ${p.online ? 'online' : 'offline'}`;
+            select.appendChild(opt);
+        }
+        if (printers.some(p => p.printer_id === previous)) select.value = previous;
+    } catch (e) {
+        select.innerHTML = '<option value="">Failed to load printers</option>';
+        showAlert('error', `Could not load printers: ${e.message}`);
+    }
+}
+
 // ========== Printing ==========
 
 function printAll() {
@@ -207,7 +236,7 @@ function printAll() {
     const items = [...printList.entries()].map(([mfid, name]) => ({ mfid, name }));
 
     if (!printer) {
-        showAlert('error', 'Enter a printer name');
+        showAlert('error', 'Select a printer');
         return;
     }
     if (!items.length) {
@@ -243,4 +272,5 @@ async function sendPrintJob(printer, items) {
 document.addEventListener('DOMContentLoaded', async () => {
     await loadUserState();
     renderPrintList();
+    loadPrinters();
 });

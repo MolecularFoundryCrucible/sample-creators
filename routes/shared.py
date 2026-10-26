@@ -59,6 +59,20 @@ def publish_barcode(printer, mfid, name=""):
     raise RuntimeError(detail)
 
 
+def list_printers():
+    """Printers crucible-api has ever seen a status heartbeat from, with live online state.
+
+    Discovery only: a printer that's never been powered on won't appear, and this list is
+    never checked against PRINT_CONFIG's allowlist (or used to enforce one) -- it's purely
+    informational, for the print page's dropdown.
+
+    Not yet wrapped by nano-crucible (only client.print.barcode() exists there), so this
+    calls the client's own internal request method directly, same as every resource module
+    in nano-crucible itself does.
+    """
+    return cruc_client._request("get", "/print/printers").get("printers", [])
+
+
 def get_next_serial_sample(sample_prefix, sample_type, project):
     project_samples = cruc_client.samples.list(
         project_id=project, sample_type=sample_type, limit=int(1e8)

@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 from flask import Blueprint, request, jsonify, session, render_template, current_app
 
 from config import PRINT_CONFIG
-from routes.shared import cruc_client, publish_barcode, resolve_printer, PrinterTimeoutError
+from routes.shared import cruc_client, publish_barcode, resolve_printer, list_printers, PrinterTimeoutError
 
 print_bp = Blueprint("print", __name__)
 
@@ -65,6 +65,18 @@ def _to_row(sample):
 @print_bp.route("/")
 def page():
     return render_template("print.html", print_config=PRINT_CONFIG)
+
+
+@print_bp.route("/api/printers", methods=["GET"])
+def printers():
+    # Not project- or user-scoped (just which printers crucible-api has heard a heartbeat
+    # from), so unlike the rest of this blueprint this doesn't require being logged in.
+    try:
+        printers = list_printers()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    return jsonify({"printers": printers})
 
 
 @print_bp.route("/api/search", methods=["POST"])
