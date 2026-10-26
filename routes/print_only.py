@@ -5,7 +5,7 @@ from zoneinfo import ZoneInfo
 from flask import Blueprint, request, jsonify, session, render_template, current_app
 
 from config import PRINT_CONFIG
-from routes.shared import cruc_client, publish_barcode, resolve_printer
+from routes.shared import cruc_client, publish_barcode, resolve_printer, list_printers, PrinterTimeoutError
 
 print_bp = Blueprint("print", __name__)
 
@@ -65,6 +65,18 @@ def _to_row(sample):
 @print_bp.route("/")
 def page():
     return render_template("print.html", print_config=PRINT_CONFIG)
+
+
+@print_bp.route("/api/printers", methods=["GET"])
+def printers():
+    # Not project- or user-scoped (just which printers crucible-api has heard a heartbeat
+    # from), so unlike the rest of this blueprint this doesn't require being logged in.
+    try:
+        printers = list_printers()
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+    return jsonify({"printers": printers})
 
 
 @print_bp.route("/api/search", methods=["POST"])
@@ -143,6 +155,7 @@ def print_batch():
         }), 400
 
     results = []
+    timed_out = False
     for i, item in enumerate(items):
         mfid = str(item.get("mfid") or "").strip()
         name = str(item.get("name") or "").strip()
@@ -151,12 +164,25 @@ def print_batch():
             results.append({"mfid": "", "name": name, "ok": False, "error": "Missing MFID"})
             continue
 
+        # A timeout likely means the printer is offline; stop burning the wait window
+        # on every remaining label and just mark them skipped.
+        if timed_out:
+            results.append({
+                "mfid": mfid, "name": name, "ok": False,
+                "error": "Skipped — an earlier label timed out, printer may be offline",
+            })
+            continue
+
         if i:
             time.sleep(PRINT_CONFIG["print_delay_s"])
 
         try:
             publish_barcode(printer, mfid, name)
             results.append({"mfid": mfid, "name": name, "ok": True, "error": ""})
+        except PrinterTimeoutError as e:
+            current_app.logger.error(f"[print] Timeout printing {mfid} on {printer}: {e}")
+            results.append({"mfid": mfid, "name": name, "ok": False, "error": str(e)})
+            timed_out = True
         except Exception as e:
             current_app.logger.error(f"[print] Failed to print {mfid} on {printer}: {e}")
             results.append({"mfid": mfid, "name": name, "ok": False, "error": str(e)})
