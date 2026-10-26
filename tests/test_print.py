@@ -32,10 +32,18 @@ class PublishBarcodeTests(unittest.TestCase):
         self.assertNotIsInstance(ctx.exception, PrinterTimeoutError)
         self.assertIn("printer jammed", str(ctx.exception))
 
-    def test_unknown_printer_is_rejected_before_calling_api(self):
+    def test_unknown_but_well_formed_printer_is_not_rejected_locally(self):
+        # No local allowlist anymore -- an unrecognized printer_id is crucible-api's call
+        # to make (it'll come back as a timeout/error from the real printer), not ours.
+        result = {"job_id": "abc", "status": "ok", "detail": None}
+        with patch("routes.shared.cruc_client.print.barcode", return_value=result) as barcode:
+            publish_barcode("not-a-real-printer", "mfid123", "Sample 1")
+        barcode.assert_called_once_with(printer_id="not-a-real-printer", mfid="mfid123", name="Sample 1")
+
+    def test_malformed_printer_id_is_rejected_before_calling_api(self):
         with patch("routes.shared.cruc_client.print.barcode") as barcode:
             with self.assertRaises(ValueError):
-                publish_barcode("not-a-real-printer", "mfid123", "Sample 1")
+                publish_barcode("weird/printer", "mfid123", "Sample 1")
         barcode.assert_not_called()
 
 

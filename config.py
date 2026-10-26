@@ -41,11 +41,11 @@ RGA_POSITIONS = [f"{row}{col}" for row in "ABCDEF" for col in range(1, 7)]
 COORDS_FILE = "coords_36sample.txt"
 
 # BARCODE PRINTING
-# "printers" is the allowlist: a print request naming anything else is rejected.
-# The list is never sent to the browser — users type the name of the printer they are at.
+# The print page's dropdown is populated live from crucible-api's GET /print/printers
+# (routes/shared.py::list_printers()), so there is no local allowlist of printer names here
+# anymore — a static list just went stale against the real fleet.
 PRINT_CONFIG = {
     "printer_topic_prefix": "crucible-printer",
-    "printers": ["ucd1", "b30-113", "b67-1202", "print1"],
     # A batch is published synchronously, so max_batch * print_delay_s is the worst-case
     # request duration. Keep the product well under any proxy timeout.
     "max_batch": 100,
