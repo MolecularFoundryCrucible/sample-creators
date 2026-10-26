@@ -1,4 +1,5 @@
 import os
+import re
 import logging
 from dotenv import load_dotenv
 load_dotenv()
@@ -16,25 +17,25 @@ cruc_client = CrucibleClient(api_url = 'https://crucible.lbl.gov/api/v3',
 shared_bp = Blueprint("shared", __name__)
 
 
+_PRINTER_ID_RE = re.compile(r"^[A-Za-z0-9_-]{1,64}$")
+
+
 def resolve_printer(printer):
-    """Turn user input into a validated short printer name.
+    """Turn user input into a validated printer_id.
 
-    Accepts either "b30-113" or the fully qualified "crucible-printer/b30-113".
-    crucible-api's print endpoint doesn't validate printer_id against a known-
-    printers list, so it is checked against the allowlist in PRINT_CONFIG here
-    rather than merely sanitized.
-
-    The error deliberately does not name the valid printers — users are expected to
-    know the printer they are standing next to.
+    Accepts either "b30-113" or the fully qualified "crucible-printer/b30-113"
+    (an older config value or a copy-pasted MQTT topic). Only validates the
+    shape crucible-api itself requires for printer_id (letters, digits, '_',
+    '-', 1-64 chars) -- which printers actually exist is what GET
+    /print/printers (and the print page's dropdown built from it) is for, not
+    a local allowlist, which would just go stale against the real fleet.
     """
     prefix = PRINT_CONFIG["printer_topic_prefix"] + "/"
-    name = str(printer or "").strip().lower()
+    name = str(printer or "").strip()
     if name.startswith(prefix):
         name = name[len(prefix):]
-    if not name:
-        raise ValueError("No printer name given")
-    if name not in PRINT_CONFIG["printers"]:
-        raise ValueError(f"'{name}' is not a known printer")
+    if not _PRINTER_ID_RE.fullmatch(name):
+        raise ValueError(f"'{name}' is not a valid printer id")
     return name
 
 
