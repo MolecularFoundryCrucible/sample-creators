@@ -33,6 +33,10 @@ class PrefixMiddleware:
 def create_app():
     app = Flask(__name__)
     app.secret_key = secrets.token_hex(32)
+    # A missing-trailing-slash request would otherwise get a 308 redirect built from
+    # whatever Host header the proxy in front of this app forwards, which isn't always
+    # crucible.lbl.gov -- so avoid that redirect entirely and accept both forms.
+    app.url_map.strict_slashes = False
 
     app.register_blueprint(shared_bp)
     app.register_blueprint(giwaxs_bp, url_prefix="/giwaxs")
