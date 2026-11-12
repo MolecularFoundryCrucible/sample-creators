@@ -7,7 +7,7 @@ as not requested), so there is no file upload route here.
 import logging
 from concurrent.futures import ThreadPoolExecutor
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, render_template, request
 
 from crucible import Dataset
 from crucible.utils import get_tz_isoformat
@@ -209,6 +209,12 @@ def name_taken(name, project):
     return bool(cruc_client.samples.list(sample_name=name, project_id=project))
 
 
+@fabrication_bp.route("/")
+@fabrication_bp.route("/wafer/<wafer_id>")
+def page(wafer_id=None):
+    return render_template("fabrication.html", wafer_id=wafer_id)
+
+
 @fabrication_bp.route("/api/templates", methods=["GET"])
 def list_templates():
     return jsonify({"templates": FAB_TEMPLATES})
@@ -282,6 +288,7 @@ def get_traveler(wafer_id):
     return jsonify({
         "template_id": template_id,
         "template_name": template["name"],
+        "project": wafer.get("project_id"),
         "label_after_step": template.get("label_after_step"),
         "template_defaults": template["template_defaults"],
         "template_default": (spec_record or {}).get("template_default") or DEFAULT_TEMPLATE_DEFAULT,

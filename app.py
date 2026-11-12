@@ -95,13 +95,33 @@ def create_app():
     @app.context_processor
     def inject_vite_entry():
         def vite_entry(name):
-            """<script>/<link> tags for a Vite entry from frontend/vite.config.ts."""
-            chunk = next((c for c in vite_manifest().values() if c.get("isEntry") and c.get("name") == name), None)
+            """<script>/<link> tags for a Vite entry from frontend/vite.config.ts.
+
+            CSS shared by several entries lives on the chunks they import, so walk the static
+            imports and emit their stylesheets (and preload the imported JS) as well.
+            """
+            manifest = vite_manifest()
+            key, chunk = next(((k, c) for k, c in manifest.items() if c.get("isEntry") and c.get("name") == name),
+                              (None, None))
             if chunk is None:
                 app.logger.warning("Vite entry %r not built; run `npm run build` in frontend/", name)
                 return Markup(f"<!-- vite entry {escape(name)} missing -->")
+
+            css, preloads, seen = [], [], set()
+
+            def walk(chunk_key):
+                if chunk_key in seen or chunk_key not in manifest:
+                    return
+                seen.add(chunk_key)
+                for imported in manifest[chunk_key].get("imports", []):
+                    walk(imported)
+                    preloads.append(manifest[imported]["file"])
+                css.extend(manifest[chunk_key].get("css", []))
+
+            walk(key)
             asset = lambda path: url_for("static", filename=f"dist/{path}")
-            tags = [f'<link rel="stylesheet" href="{asset(css)}">' for css in chunk.get("css", [])]
+            tags = [f'<link rel="stylesheet" href="{asset(c)}">' for c in dict.fromkeys(css)]
+            tags += [f'<link rel="modulepreload" href="{asset(p)}">' for p in dict.fromkeys(preloads)]
             tags.append(f'<script type="module" src="{asset(chunk["file"])}"></script>')
             return Markup("\n".join(tags))
         return {"vite_entry": vite_entry}
