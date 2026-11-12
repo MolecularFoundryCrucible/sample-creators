@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, session, render_template, current_app, send_file
-from routes.shared import cruc_client, format_user, publish_barcode
+from routes.shared import cruc_client, format_user, instrument_mfid, publish_barcode
 from crucible import Dataset, Sample
 from crucible.utils import get_tz_isoformat
 from config import B30_SEM_CONFIG
@@ -17,6 +17,8 @@ b30_sem_bp = Blueprint("b30_sem", __name__)
 
 PRINTER_NAME = B30_SEM_CONFIG.get("printer_name", "crucible-printer/b30-122")
 LA_TZ = ZoneInfo("America/Los_Angeles")
+PA_TO_TORR = 0.00750062
+INSTRUMENT_MFID = instrument_mfid(B30_SEM_CONFIG["instrument_mfid"])
 
 _INCREMENTAL_CACHE = {}
 _INCREMENTAL_CACHE_LOCK = Lock()
@@ -94,13 +96,13 @@ def _get_cache_bucket(key):
         return _INCREMENTAL_CACHE[key]
 
 
-def _incremental_refresh_rows(project_id, instrument_name):
-    key = (project_id, instrument_name)
+def _incremental_refresh_rows(project_id, instrument):
+    key = (project_id, instrument)
     bucket = _get_cache_bucket(key)
 
     all_ds = cruc_client.datasets.list(
         project_id=project_id,
-        instrument_name=instrument_name,
+        instrument_mfid=instrument,
         limit=2000
     )
     summaries = sorted(all_ds, key=lambda d: _parse_ts(d.get("timestamp")), reverse=True)
@@ -177,9 +179,13 @@ def _parse_fei_metadata(metadata: dict) -> dict:
     if current is not None:
         result["emission_current_A"] = str(current)
 
+    # FEI writes ChPressure in pascals; the form field is in Torr.
     pressure = _find_fei_value(metadata, ("Vacuum", "ChPressure"))
     if pressure is not None:
-        result["chamber_pressure_Torr"] = str(pressure)
+        try:
+            result["chamber_pressure_Torr"] = str(float(pressure) * PA_TO_TORR)
+        except (TypeError, ValueError):
+            pass
 
     return result
 
@@ -489,7 +495,7 @@ def upload_dataset():
             data_type=B30_SEM_CONFIG["dataset_type"],
             owner=user["orcid"],
             project_id=user["selected_project"],
-            instrument_name=B30_SEM_CONFIG["instrument_name"],
+            instrument_mfid=INSTRUMENT_MFID,
             measurement=B30_SEM_CONFIG["measurement"],
             timestamp=get_tz_isoformat(),
         )
@@ -510,18 +516,19 @@ def upload_dataset():
         )
 
         for _kind, fobj in all_file_objs:
-            # Write to a temp file so cruc_client.files can read it from disk
-            suffix = os.path.splitext(fobj.filename)[1]
-            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-                fobj.save(tmp)
-                tmp_path = tmp.name
-            try:
-                cruc_client.datasets.add_file(dataset_mfid, tmp_path)
-                uploaded_files.append(fobj.filename)
-            except Exception as e:
-                current_app.logger.warning(f"[b30_sem] File upload failed for {fobj.filename}: {e}")
-            finally:
-                os.unlink(tmp_path)
+            # add_file() stores the file under its on-disk basename, so save it under the
+            # original name in its own temp dir (one per file, so equal names can't collide).
+            filename = os.path.basename(fobj.filename.replace("\\", "/"))
+            if not filename:
+                continue
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                tmp_path = os.path.join(tmp_dir, filename)
+                fobj.save(tmp_path)
+                try:
+                    cruc_client.datasets.add_file(dataset_mfid, tmp_path)
+                    uploaded_files.append(filename)
+                except Exception as e:
+                    current_app.logger.warning(f"[b30_sem] File upload failed for {filename}: {e}")
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
@@ -546,12 +553,11 @@ def recent_datasets():
     if not project_id:
         return jsonify({"error": "No selected project"}), 400
 
-    instrument_name = B30_SEM_CONFIG["instrument_name"]
     limit = int(request.args.get("limit", 100))
     limit = max(1, min(limit, 5000))
 
     try:
-        rows_all = _incremental_refresh_rows(project_id, instrument_name)
+        rows_all = _incremental_refresh_rows(project_id, INSTRUMENT_MFID)
         rows = []
         for row in rows_all:
             out = dict(row)
@@ -575,7 +581,6 @@ def export_recent_datasets_csv():
     if not project_id:
         return jsonify({"error": "No selected project"}), 400
 
-    instrument_name = B30_SEM_CONFIG["instrument_name"]
     limit = int(request.args.get("limit", 100))
     limit = max(1, min(limit, 5000))
 
@@ -583,7 +588,7 @@ def export_recent_datasets_csv():
             "Pressure (Torr)", "EDX", "Energy (keV)", "Comment"]
 
     try:
-        rows_all = _incremental_refresh_rows(project_id, instrument_name)
+        rows_all = _incremental_refresh_rows(project_id, INSTRUMENT_MFID)
         selected = rows_all[:limit]
 
         sio = io.StringIO()

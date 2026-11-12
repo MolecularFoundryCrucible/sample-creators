@@ -7,6 +7,7 @@ os.environ.setdefault("CRUCIBLE_API_KEY", "test-api-key")
 
 from app import create_app
 from config import B30_EBEAM_CONFIG, B30_SEM_CONFIG, SPUTTER_TOOLS
+from routes.b30_sem import _parse_fei_metadata
 from routes.b30_sputter import _get_filtered_dataset_summaries
 
 DATASET_MFID = "0tkn2knjast3h0008nyq9zps2c"
@@ -39,7 +40,8 @@ class ApiV3PayloadTests(unittest.TestCase):
 
     def assert_v3_dataset(self, payload, expected_data_type, expected_instrument):
         self.assertEqual(payload["data_type"], expected_data_type)
-        self.assertEqual(payload["instrument_name"], expected_instrument)
+        self.assertEqual(payload["instrument_mfid"], expected_instrument)
+        self.assertNotIn("instrument_name", payload)
         self.assertEqual(payload["owner"], self.user["orcid"])
         self.assertNotIn("dataset_type", payload)
         self.assertNotIn("owner_orcid", payload)
@@ -67,7 +69,7 @@ class ApiV3PayloadTests(unittest.TestCase):
         self.assert_v3_dataset(
             self.dataset_post_payload(request),
             tool["dataset_type"],
-            tool["instrument_name"],
+            tool["instrument_mfid"],
         )
 
     def test_sputter_calibration_filter_uses_top_level_dataset_links(self):
@@ -92,7 +94,7 @@ class ApiV3PayloadTests(unittest.TestCase):
         with patch("routes.b30_sputter.cruc_client.datasets.list", return_value=datasets) as list_datasets:
             result = _get_filtered_dataset_summaries(
                 "test-project",
-                "b30 - aja sputter tool",
+                "0tfn1vtxesrdn000waaft9ntrg",
                 calibration_sample,
                 "Calibration only",
             )
@@ -100,7 +102,7 @@ class ApiV3PayloadTests(unittest.TestCase):
         self.assertEqual([dataset["unique_id"] for dataset in result], ["calibration-dataset"])
         list_datasets.assert_called_once_with(
             project_id="test-project",
-            instrument_name="b30 - aja sputter tool",
+            instrument_mfid="0tfn1vtxesrdn000waaft9ntrg",
             include_links=True,
             limit=2000,
         )
@@ -119,7 +121,7 @@ class ApiV3PayloadTests(unittest.TestCase):
         self.assert_v3_dataset(
             self.dataset_post_payload(request),
             B30_EBEAM_CONFIG["dataset_type"],
-            B30_EBEAM_CONFIG["instrument_name"],
+            B30_EBEAM_CONFIG["instrument_mfid"],
         )
 
     def test_sem_dataset_uses_v3_fields_and_canonical_link_arguments(self):
@@ -139,7 +141,7 @@ class ApiV3PayloadTests(unittest.TestCase):
         self.assert_v3_dataset(
             self.dataset_post_payload(request),
             B30_SEM_CONFIG["dataset_type"],
-            B30_SEM_CONFIG["instrument_name"],
+            B30_SEM_CONFIG["instrument_mfid"],
         )
         add_sample.assert_called_once_with(
             dataset_mfid=DATASET_MFID,
@@ -169,6 +171,15 @@ class ApiV3PayloadTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual(add_file.call_args.args[0], DATASET_MFID)
+        # add_file() names the stored file after the path's basename.
+        self.assertEqual(os.path.basename(add_file.call_args.args[1]), "image.png")
+        self.assertEqual(response.get_json()["uploaded_files"], ["image.png"])
+
+    def test_sem_autofill_converts_chamber_pressure_to_torr(self):
+        fields = _parse_fei_metadata({"Vacuum": {"UserMode": "Low vacuum", "ChPressure": "100"}})
+        self.assertAlmostEqual(float(fields["chamber_pressure_Torr"]), 0.750062)
+        self.assertEqual(fields["vacuum_level"], "Low")
+        self.assertNotIn("chamber_pressure_Torr", _parse_fei_metadata({"Vacuum": {"ChPressure": "n/a"}}))
 
     def test_deposition_sample_uses_sample_model_and_owner(self):
         self.set_user()

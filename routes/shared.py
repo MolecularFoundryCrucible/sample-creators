@@ -1,3 +1,4 @@
+import json
 import os
 import re
 import logging
@@ -10,8 +11,16 @@ from flask import Blueprint, request, jsonify, session
 
 from config import PRINT_CONFIG
 from crucible import CrucibleClient
-cruc_client = CrucibleClient(api_url = 'https://crucible.lbl.gov/api/v3',
+cruc_client = CrucibleClient(api_url=os.environ.get('CRUCIBLE_API_URL', 'https://crucible.lbl.gov/api/v3'),
                              api_key=os.environ.get('CRUCIBLE_API_KEY', ''))
+
+# config.py names instruments by their prod MFID. An environment whose instruments were
+# registered separately (staging) maps prod MFIDs to its own, e.g. '{"<prod>": "<staging>"}'.
+_INSTRUMENT_MFID_OVERRIDES = json.loads(os.environ.get("INSTRUMENT_MFID_OVERRIDES") or "{}")
+
+
+def instrument_mfid(prod_mfid):
+    return _INSTRUMENT_MFID_OVERRIDES.get(prod_mfid, prod_mfid)
 
 
 shared_bp = Blueprint("shared", __name__)

@@ -104,7 +104,7 @@ SPUTTER_TOOLS = {
         "nav_label": "B30 AJA Sputter",
         "page_title": "B30 - AJA Sputter Tool Data Entry and Logbook",
         "card_description": "Look up or create samples by barcode and upload AJA sputtering deposition parameters to Crucible.",
-        "instrument_name": "b30 - aja sputter tool",
+        "instrument_mfid": "0tfn1vtxesrdn000waaft9ntrg",  # b30 - aja sputter tool (prod MFID)
         "calibration_sample_id": "0tgfny1b35rwd000x35nr7a9d8",
         "printer_name": "crucible-printer/b30-113",
         "dataset_type": "Sputtering Parameters",
@@ -116,7 +116,7 @@ SPUTTER_TOOLS = {
         "nav_label": "B30 KJLesker Sputter",
         "page_title": "B30 - KJLesker Sputter Tool Data Entry and Logbook",
         "card_description": "Look up or create samples by barcode and upload KJLesker sputtering deposition parameters to Crucible.",
-        "instrument_name": "b30 - kjlesker sputter tool",
+        "instrument_mfid": "0tkvnt23hdz2b000hd0gbjj3g0",  # b30 - kjlesker sputter tool (prod MFID)
         "calibration_sample_id": "",  # TODO: Crucible ID of the KJLesker calibration sample
         "printer_name": "crucible-printer/b30-113",
         "dataset_type": "Sputtering Parameters",
@@ -136,7 +136,7 @@ EBEAM_TARGET_MATERIAL_OPTIONS = [
 B30_EBEAM_CONFIG = {
     "dataset_type": "E-beam Evaporation Parameters",
     "measurement": "E-beam Evaporation",
-    "instrument_name": "b30 - ebeam evaporator",
+    "instrument_mfid": "0tkvnttwxntbz000bzd7s875j0",  # b30 - ebeam evaporator (prod MFID)
     "printer_name": "crucible-printer/b30-113",
     # Fields shown on the upload form. To add/remove fields, edit this list.
     # Each entry: {"key": used in Crucible metadata, "label": shown to user, "type": html input type}
@@ -154,7 +154,7 @@ B30_EBEAM_CONFIG = {
 B30_SEM_CONFIG = {
     "dataset_name_prefix": "SEM Images for",
     "dataset_type": "SEM Images",
-    "instrument_name": "b30 - FEI SEM",
+    "instrument_mfid": "0tkadnh6g9zys00089c7g5ycmg",  # b30 - FEI SEM (prod MFID)
     "measurement": "Scanning electron microscope",
     "printer_name": "crucible-printer/b30-122",
     # Fields shown on the upload form. To add/remove fields, edit this list.
