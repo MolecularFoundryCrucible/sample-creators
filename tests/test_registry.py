@@ -56,7 +56,7 @@ class DivisionPagesTests(unittest.TestCase):
     def test_division_page_lists_its_tools(self):
         html = self.client.get("/division/b30").get_data(as_text=True)
         html = html.split('<main class="container">', 1)[1]  # skip the nav, which links every tool
-        for path in ("/b30-aja-sputter/", "/b30-kjlesker-sputter/", "/b30-ebeam/", "/b30-sem/",
+        for path in ("/b30-aja-sputter/", "/b30-kjlesker-sputter/", "/b30-ebeam/", "/b30-sem/", "/b30-raman/",
                      "/electrolyte/", "/schema-forms/", "/print/"):
             self.assertIn(f'href="{path}"', html)
         self.assertNotIn('href="/giwaxs/"', html)

@@ -152,7 +152,7 @@ B30_EBEAM_CONFIG = {
 
 # B30 SEM CONFIG
 B30_SEM_CONFIG = {
-    "dataset_name_prefix": "SEM Images for",
+    "dataset_label": "SEM",  # dataset names: <timestamp>_SEM_on_<sample>
     "dataset_type": "SEM Images",
     "instrument_mfid": "0tkadnh6g9zys00089c7g5ycmg",  # b30 - FEI SEM (prod MFID)
     "measurement": "Scanning electron microscope",
@@ -171,6 +171,27 @@ B30_SEM_CONFIG = {
         #EDX parameters -> are they saved in the file(s)?
         {"key": "primary_energy_keV", "label": "Primary Energy (keV)", "type": "number"},
         {"key": "comment",          "label": "Comment",               "type": "text"},
+    ],
+}
+
+# B30 RAMAN CONFIG (Horiba LabRAM, LabSpec 6 .ngs single spectra)
+# Field keys and number/string types match crucible-ingestion's HoribaNgsIngestor, which fills
+# in anything left empty; values entered here win over ingested ones.
+B30_RAMAN_CONFIG = {
+    "dataset_label": "Raman",  # dataset names: <timestamp>_Raman_on_<sample>
+    "dataset_type": "Raman Spectrum",
+    "instrument_mfid": "0tqp46b2ess53000qg1b1t4scm",  # B30 - Horiba Labram Raman (prod MFID)
+    "measurement": "Raman spectroscopy",
+    "printer_name": "crucible-printer/b30-122",
+    "ingestion_class": "HoribaNgsIngestor",
+    "dataset_fields": [
+        {"key": "laser_wavelength_nm", "label": "Laser (nm)", "type": "number", "as_number": True},
+        {"key": "exposure_time_s", "label": "Exposure (s)", "type": "number", "as_number": True},
+        {"key": "accumulation", "label": "Accumulation", "type": "text"},
+        {"key": "grating", "label": "Grating", "type": "text"},
+        {"key": "objective", "label": "Objective", "type": "text"},
+        {"key": "raman_shift_range_cm-1", "label": "Raman shift range (1/cm)", "type": "range"},
+        {"key": "comment", "label": "Comment", "type": "text"},
     ],
 }
 
@@ -199,6 +220,9 @@ TOOLS = [
     {"key": "b30_sem", "division": "b30", "endpoint": "b30_sem.page",
      "nav_label": "B30 SEM", "card_title": "B30 SEM Data Entry",
      "card_description": "Look up or create samples by barcode and upload SEM/EDX images to Crucible."},
+    {"key": "b30_raman", "division": "b30", "endpoint": "b30_raman.page",
+     "nav_label": "B30 Raman", "card_title": "B30 Raman Data Entry",
+     "card_description": "Look up or create samples by barcode and upload Horiba LabRAM spectra (.ngs) to Crucible."},
     {"key": "electrolyte", "division": "b30", "endpoint": "electrolyte.page",
      "nav_label": "Electrolytes", "card_title": "Electrolyte Sample Creator",
      "card_description": "Create electrolyte samples with ingredients, preparation date, concentration, and pH."},
