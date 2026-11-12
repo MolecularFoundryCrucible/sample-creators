@@ -203,8 +203,8 @@ def sign():
         url = part.get("url") or ""
         if not url.startswith("https://"):
             raise UploadError(502, "Crucible returned an unusable upload URL.")
-        # Browsers forbid scripts from setting Content-Length; they derive it from the body.
-        headers = {k: v for k, v in (part.get("headers") or {}).items() if k.lower() != "content-length"}
+        # Browsers refuse to let scripts set these; they derive them from the URL and body.
+        headers = {k: v for k, v in (part.get("headers") or {}).items() if k.lower() not in ("content-length", "host")}
         out.append({"part_number": part.get("part_number"), "url": url, "headers": headers})
     return jsonify({"parts": out})
 

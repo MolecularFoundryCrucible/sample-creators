@@ -17,7 +17,6 @@ b30_sem_bp = Blueprint("b30_sem", __name__)
 
 PRINTER_NAME = B30_SEM_CONFIG.get("printer_name", "crucible-printer/b30-122")
 LA_TZ = ZoneInfo("America/Los_Angeles")
-PA_TO_TORR = 0.00750062
 INSTRUMENT_MFID = instrument_mfid(B30_SEM_CONFIG["instrument_mfid"])
 
 _INCREMENTAL_CACHE = {}
@@ -140,57 +139,6 @@ def _incremental_refresh_rows(project_id, instrument):
 
 # ---------- TIFF metadata extraction ----------
 
-def _find_fei_value(metadata: dict, *pairs):
-    """Returns the first non-empty value found at any of the given (section, key) pairs."""
-    for section, key in pairs:
-        value = (metadata.get(section) or {}).get(key)
-        if value is not None and str(value).strip() != "":
-            return value
-    return None
-
-
-def _parse_fei_metadata(metadata: dict) -> dict:
-    """
-    Maps an FEI SEM metadata dict (as returned by tifffile's `fei_metadata`
-    property, e.g. {"Vacuum": {"UserMode": ..., "ChPressure": ...}, "EBeam": {...}})
-    to our config keys.
-    """
-    result = {}
-
-    vacuum_raw = _find_fei_value(metadata, ("Vacuum", "UserMode"))
-    if vacuum_raw:
-        v = str(vacuum_raw).lower()
-        if "esem" in v or "wet" in v or "environ" in v:
-            result["vacuum_level"] = "ESEM"
-        elif "low" in v:
-            result["vacuum_level"] = "Low"
-        else:
-            result["vacuum_level"] = "High"
-
-    spot = _find_fei_value(metadata, ("Beam", "Spot"), ("EBeam", "Spot"))
-    if spot is not None:
-        result["spot_size"] = str(spot)
-
-    # High voltage — stored in V, may need conversion
-    hv = _find_fei_value(metadata, ("Beam", "HV"), ("EBeam", "HV"))
-    if hv is not None:
-        result["high_voltage_V"] = str(hv)
-
-    current = _find_fei_value(metadata, ("EBeam", "EmissionCurrent"))
-    if current is not None:
-        result["emission_current_A"] = str(current)
-
-    # FEI writes ChPressure in pascals; the form field is in Torr.
-    pressure = _find_fei_value(metadata, ("Vacuum", "ChPressure"))
-    if pressure is not None:
-        try:
-            result["chamber_pressure_Torr"] = str(float(pressure) * PA_TO_TORR)
-        except (TypeError, ValueError):
-            pass
-
-    return result
-
-
 def _sanitize_metadata_value(value):
     """Recursively coerce a value into something JSON-serializable."""
     if isinstance(value, dict):
@@ -227,33 +175,6 @@ def page():
 @b30_sem_bp.route("/api/state", methods=["GET"])
 def get_state():
     return jsonify(_get_state())
-
-
-# ---------- TIFF metadata ----------
-
-@b30_sem_bp.route("/api/extract-tiff-metadata", methods=["POST"])
-def extract_tiff_metadata():
-    """Receive a TIFF file, extract FEI SEM metadata, return mapped field values."""
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "No file provided"}), 400
-
-    filename = f.filename or ""
-    if not filename.lower().endswith((".tif", ".tiff")):
-        return jsonify({"error": "File must be a TIFF (.tif or .tiff)"}), 400
-
-    try:
-        with tifffile.TiffFile(io.BytesIO(f.read())) as tif:
-            metadata = tif.fei_metadata
-    except Exception as e:
-        current_app.logger.warning(f"[b30_sem] tifffile parse error: {e}")
-        return jsonify({"found": False, "fields": {}, "message": "Could not read this TIFF file. Please enter values manually."}), 200
-
-    if not metadata:
-        return jsonify({"found": False, "fields": {}, "message": "No FEI metadata found in this TIFF. Please enter values manually."}), 200
-
-    fields = _parse_fei_metadata(metadata)
-    return jsonify({"found": bool(fields), "fields": fields}), 200
 
 
 # ---------- Sample lookup (barcode scan) ----------

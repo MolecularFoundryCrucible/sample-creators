@@ -94,7 +94,7 @@ class UploadRoutesTests(unittest.TestCase):
     def test_sign_drops_content_length_and_rejects_insecure_urls(self):
         self.login()
         signed = {"parts": [{"part_number": 1, "url": "https://storage.googleapis.com/x",
-                             "headers": {"Content-Length": "5", "x-goog-hash": f"crc32c={CRC}"}}]}
+                             "headers": {"Content-Length": "5", "Host": "storage.googleapis.com", "x-goog-hash": f"crc32c={CRC}"}}]}
         with patch("routes.uploads.crucible_api.multipart_sign_parts", return_value=signed) as call:
             response = self.client.post("/api/uploads/sign", json={
                 "dataset_mfid": DATASET, "upload_id": "up-1", "parts": [{"part_number": 1, "crc32c": CRC}]})
