@@ -25,6 +25,8 @@ steps:
       - '--platform'
       - 'managed'
       - '--port=5000'
+      # Reachable only through crucible.lbl.gov's proxy, never directly at *.run.app.
+      - '--ingress=internal'
       - '--set-env-vars'
       - 'SCRIPT_NAME=${_SCRIPT_NAME},CRUCIBLE_API_URL=${_CRUCIBLE_API_URL},ALS_SAMPLE_TRACKER_ENABLED=${_ALS_SAMPLE_TRACKER_ENABLED}'
       - '--set-secrets'
