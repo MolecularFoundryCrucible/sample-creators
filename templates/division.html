@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}{{ division.label }} - Sample Management Apps{% endblock %}
+
+{% block content %}
+<p class="breadcrumb"><a href="{{ url_for('index') }}">Home</a> / {{ division.label }}</p>
+<h1>{{ division.label }}</h1>
+<div class="card-grid">
+    {% for tool in division.tools %}
+    <a href="{{ url_for(tool.endpoint) }}" class="card">
+        <h2>{{ tool.card_title }}</h2>
+        <p>{{ tool.card_description }}</p>
+    </a>
+    {% endfor %}
+</div>
+{% endblock %}
