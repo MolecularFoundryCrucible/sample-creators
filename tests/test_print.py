@@ -5,7 +5,8 @@ from unittest.mock import patch
 os.environ.setdefault("CRUCIBLE_API_KEY", "test-api-key")
 
 from app import create_app
-from routes.shared import publish_barcode, list_printers, PrinterTimeoutError
+from routes.crucible_api import list_printers
+from routes.shared import publish_barcode, PrinterTimeoutError
 
 
 class PublishBarcodeTests(unittest.TestCase):
