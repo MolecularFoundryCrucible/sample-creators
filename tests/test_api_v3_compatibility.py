@@ -1,4 +1,3 @@
-import io
 import os
 import unittest
 from unittest.mock import patch
@@ -146,33 +145,6 @@ class ApiV3PayloadTests(unittest.TestCase):
             dataset_mfid=DATASET_MFID,
             sample_mfid="sample-1",
         )
-
-    def test_sem_upload_uses_dataset_file_operation(self):
-        self.set_session("b30_sem", {
-            "sample_unique_id": "sample-1",
-            "sample_name": "sample",
-            "sample_type": "film",
-            "sample_description": "",
-        })
-        created = {"dataset_mfid": DATASET_MFID}
-
-        with patch("routes.b30_sem.cruc_client.datasets.create", return_value=created), \
-             patch("routes.b30_sem.cruc_client.datasets.add_sample"), \
-             patch("routes.b30_sem.cruc_client.datasets.add_file") as add_file:
-            response = self.client.post(
-                "/b30-sem/api/upload-dataset",
-                data={
-                    "metadata": "{}",
-                    "sem_images": (io.BytesIO(b"image"), "image.png"),
-                },
-                content_type="multipart/form-data",
-            )
-
-        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
-        self.assertEqual(add_file.call_args.args[0], DATASET_MFID)
-        # add_file() names the stored file after the path's basename.
-        self.assertEqual(os.path.basename(add_file.call_args.args[1]), "image.png")
-        self.assertEqual(response.get_json()["uploaded_files"], ["image.png"])
 
     def test_deposition_sample_uses_sample_model_and_owner(self):
         self.set_user()

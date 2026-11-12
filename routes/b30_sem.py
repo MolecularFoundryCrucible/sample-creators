@@ -8,10 +8,6 @@ from zoneinfo import ZoneInfo
 from threading import Lock
 import io
 import csv
-import os
-import json
-import tempfile
-import tifffile
 
 b30_sem_bp = Blueprint("b30_sem", __name__)
 
@@ -137,34 +133,6 @@ def _incremental_refresh_rows(project_id, instrument):
     return [row_by_id[i] for i in ordered_ids]
 
 
-# ---------- TIFF metadata extraction ----------
-
-def _sanitize_metadata_value(value):
-    """Recursively coerce a value into something JSON-serializable."""
-    if isinstance(value, dict):
-        return {str(k): _sanitize_metadata_value(v) for k, v in value.items()}
-    if isinstance(value, (list, tuple)):
-        return [_sanitize_metadata_value(v) for v in value]
-    if isinstance(value, (str, int, float, bool)) or value is None:
-        return value
-    return str(value)
-
-
-def _extract_full_tiff_metadata(fobj):
-    """Read the FEI metadata for a single uploaded TIFF FileStorage, leaving its
-    stream position reset to 0 so it can still be saved to disk afterwards."""
-    try:
-        file_bytes = fobj.read()
-        fobj.seek(0)
-        with tifffile.TiffFile(io.BytesIO(file_bytes)) as tif:
-            metadata = tif.fei_metadata
-    except Exception:
-        return None
-    if not metadata:
-        return None
-    return _sanitize_metadata_value(metadata)
-
-
 # ---------- Routes ----------
 
 @b30_sem_bp.route("/")
@@ -277,11 +245,10 @@ def print_barcode():
 
 @b30_sem_bp.route("/api/upload-dataset", methods=["POST"])
 def upload_dataset():
-    """
-    Create a SEM dataset in Crucible.
-    Accepts multipart/form-data: metadata fields as JSON in 'metadata' part,
-    optional SEM image files in 'sem_images', optional EDX images in 'edx_images',
-    optional EDX spectrum CSV in 'edx_spectrum'.
+    """Create the SEM dataset (form fields only) and link the sample.
+
+    The browser then uploads the files straight to storage via /api/uploads and requests
+    ingestion; the FEI SEM and Bruker EDX ingestors fill in the file metadata.
     """
     user = session.get("user")
     if not user:
@@ -291,21 +258,7 @@ def upload_dataset():
     if not state.get("sample_unique_id"):
         return jsonify({"error": "No sample selected. Scan a barcode first."}), 400
 
-    # Support both multipart (with files) and JSON-only requests
-    if request.content_type and "multipart/form-data" in request.content_type:
-        raw_meta = request.form.get("metadata", "{}")
-        try:
-            data = json.loads(raw_meta)
-        except json.JSONDecodeError:
-            return jsonify({"error": "Invalid metadata JSON"}), 400
-        sem_images = request.files.getlist("sem_images")
-        edx_images = request.files.getlist("edx_images")
-        edx_spectrum = request.files.get("edx_spectrum")
-    else:
-        data = request.get_json() or {}
-        sem_images = []
-        edx_images = []
-        edx_spectrum = None
+    data = request.get_json(silent=True) or {}
 
     # Build scientific metadata from config-defined fields
     scientific_metadata = {}
@@ -318,20 +271,6 @@ def upload_dataset():
             value = value.strip()
         if value != "" and value is not None:
             scientific_metadata[key] = value
-
-    # Capture the *full* FEI metadata embedded in any uploaded TIFFs, not just
-    # the handful of fields mapped onto the form.
-    tiff_metadata_by_file = {}
-    for fobj in sem_images:
-        if not fobj or not fobj.filename:
-            continue
-        if os.path.splitext(fobj.filename)[1].lower() not in (".tif", ".tiff"):
-            continue
-        full_meta = _extract_full_tiff_metadata(fobj)
-        if full_meta:
-            tiff_metadata_by_file[fobj.filename] = full_meta
-    if tiff_metadata_by_file:
-        scientific_metadata["tiff_metadata"] = tiff_metadata_by_file
 
     sample_name = (state.get("sample_name") or "").strip() or "unknown-sample"
     date_str = datetime.now(LA_TZ).strftime("%Y%m%d_%H%M%S")
@@ -355,29 +294,6 @@ def upload_dataset():
             sample_mfid=state["sample_unique_id"],
         )
 
-        # Upload files if provided
-        uploaded_files = []
-        all_file_objs = (
-            [("sem", f) for f in sem_images if f and f.filename]
-            + [("edx_img", f) for f in edx_images if f and f.filename]
-            + ([("edx_spectrum", edx_spectrum)] if edx_spectrum and edx_spectrum.filename else [])
-        )
-
-        for _kind, fobj in all_file_objs:
-            # add_file() stores the file under its on-disk basename, so save it under the
-            # original name in its own temp dir (one per file, so equal names can't collide).
-            filename = os.path.basename(fobj.filename.replace("\\", "/"))
-            if not filename:
-                continue
-            with tempfile.TemporaryDirectory() as tmp_dir:
-                tmp_path = os.path.join(tmp_dir, filename)
-                fobj.save(tmp_path)
-                try:
-                    cruc_client.datasets.add_file(dataset_mfid, tmp_path)
-                    uploaded_files.append(filename)
-                except Exception as e:
-                    current_app.logger.warning(f"[b30_sem] File upload failed for {filename}: {e}")
-
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
@@ -385,7 +301,6 @@ def upload_dataset():
         "dataset_name": dataset_name,
         "dataset_id": dataset_mfid,
         "sample_name": state["sample_name"],
-        "uploaded_files": uploaded_files,
     })
 
 

@@ -406,15 +406,8 @@ async function uploadDataset() {
     );
 }
 
-// "direct": files go from the browser straight to storage (no size limit) and are ingested by
-// the FEI SEM / Bruker EDX ingestors. "legacy": files are posted to this app, which forwards
-// them (Cloud Run caps that request at 32 MB). ?upload=direct|legacy overrides the default.
-function semUploadMode() {
-    const requested = new URLSearchParams(window.location.search).get('upload');
-    if (requested === 'direct' || requested === 'legacy') return requested;
-    return typeof SEM_UPLOAD_MODE_DEFAULT !== 'undefined' ? SEM_UPLOAD_MODE_DEFAULT : 'legacy';
-}
-
+// Files go from the browser straight to storage (no size limit) and are ingested by the FEI
+// SEM / Bruker EDX ingestors; this app only creates the dataset.
 function selectedSemFiles() {
     const files = [];
     if (document.getElementById('images-yes').checked) {
@@ -444,7 +437,6 @@ async function _doDirectUpload(metadata, files) {
         throw new Error('The upload module did not load. Reload the page and try again.');
     }
     const progressEl = document.getElementById('upload-progress');
-    // Without files in the request, this only creates the dataset and links the sample.
     const dataset = await api('/b30-sem/api/upload-dataset', 'POST', metadata);
 
     const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
@@ -479,52 +471,13 @@ async function _doDirectUpload(metadata, files) {
 
 async function _doUpload(metadata) {
     const files = selectedSemFiles();
-    const hasFiles = files.length > 0;
-    const imagesSaved = document.getElementById('images-yes').checked;
-    const edxUsed = document.getElementById('field_edx_used').checked;
-
     try {
-        if (hasFiles && semUploadMode() === 'direct') {
+        if (files.length > 0) {
             await _doDirectUpload(metadata, files);
             return;
         }
-        let result;
-        if (hasFiles) {
-            // Use multipart upload
-            const formData = new FormData();
-            formData.append('metadata', JSON.stringify(metadata));
-
-            if (imagesSaved) {
-                for (const f of document.getElementById('sem-image-files').files) {
-                    formData.append('sem_images', f);
-                }
-            }
-            if (edxUsed) {
-                for (const f of document.getElementById('edx-image-files').files) {
-                    formData.append('edx_images', f);
-                }
-                const spectrum = document.getElementById('edx-spectrum-file').files[0];
-                if (spectrum) {
-                    formData.append('edx_spectrum', spectrum);
-                }
-            }
-
-            const base = (typeof BASE_URL !== 'undefined' ? BASE_URL : '');
-            const res = await fetch(`${base}/b30-sem/api/upload-dataset`, {
-                method: 'POST',
-                body: formData,
-            });
-            result = await res.json();
-            if (!res.ok) throw new Error(result.error || 'Upload failed');
-        } else {
-            result = await api('/b30-sem/api/upload-dataset', 'POST', metadata);
-        }
-
-        let msg = `Dataset uploaded: ${result.dataset_name} (${result.dataset_id})`;
-        if (result.uploaded_files && result.uploaded_files.length > 0) {
-            msg += ` — ${result.uploaded_files.length} file(s) attached`;
-        }
-        showAlert('success', msg);
+        const result = await api('/b30-sem/api/upload-dataset', 'POST', metadata);
+        showAlert('success', `Dataset uploaded: ${result.dataset_name} (${result.dataset_id})`);
     } catch (e) {
         showAlert('error', `Upload failed: ${e.message}`);
     }

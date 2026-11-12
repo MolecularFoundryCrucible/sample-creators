@@ -259,7 +259,6 @@
 {% endblock %}
 
 {% block scripts %}
-<script>const SEM_UPLOAD_MODE_DEFAULT = {{ config.upload_mode | tojson }};</script>
 {{ vite_entry('upload') }}
 <script src="{{ url_for('static', filename='js/b30_sem.js') }}"></script>
 {% endblock %}
