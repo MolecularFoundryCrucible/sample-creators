@@ -178,17 +178,14 @@
                         <p class="help-text">Select one or more elemental map images.</p>
                     </div>
 
-                    <!-- EDX spectrum XLSX -->
+                    <!-- EDX spectrum (Bruker Esprit export) -->
                     <div class="form-group">
-                        <label>EDX spectrum file (XLSX)</label>
-                        <div class="input-row">
-                            <input type="file" id="edx-spectrum-file" accept=".xlsx,.xls" onchange="onEdxSpectrumSelected()">
-                            <button class="btn btn-primary" type="button" id="btn-parse-spectrum" onclick="parseEdxSpectrum()" disabled>Parse Spectrum</button>
-                        </div>
+                        <label>EDX spectrum file (Bruker .spx or .rtx)</label>
+                        <input type="file" id="edx-spectrum-file" accept=".spx,.rtx" onchange="onEdxSpectrumSelected()">
                         <span id="edx-spectrum-status" class="info-text" style="margin-top:4px; display:block;"></span>
                     </div>
 
-                    <!-- Primary energy (auto-filled from XLSX or manual) -->
+                    <!-- Primary energy (auto-filled from the spectrum file, or manual) -->
                     <div class="form-group">
                         <label>Primary Energy (keV)</label>
                         <input type="number" step="any" id="field_primary_energy_keV" data-key="primary_energy_keV" placeholder="e.g. 15">
@@ -209,6 +206,7 @@
                 <div class="button-row">
                     <button class="btn btn-primary" onclick="uploadDataset()">Upload</button>
                 </div>
+                <span id="upload-progress" class="info-text" style="margin-top:6px; display:block;"></span>
                 <div id="upload-status" class="info-text" style="margin-top:8px;"></div>
             </section>
 
@@ -261,5 +259,7 @@
 {% endblock %}
 
 {% block scripts %}
+<script>const SEM_UPLOAD_MODE_DEFAULT = {{ config.upload_mode | tojson }};</script>
+{{ vite_entry('upload') }}
 <script src="{{ url_for('static', filename='js/b30_sem.js') }}"></script>
 {% endblock %}

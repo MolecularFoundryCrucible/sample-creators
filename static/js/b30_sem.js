@@ -269,64 +269,52 @@ function onEdxToggle() {
         document.getElementById('edx-spectrum-file').value = '';
         document.getElementById('field_primary_energy_keV').value = '';
         document.getElementById('edx-spectrum-status').textContent = '';
-        document.getElementById('btn-parse-spectrum').disabled = true;
     }
 }
 
-function onEdxSpectrumSelected() {
-    const input = document.getElementById('edx-spectrum-file');
-    const btn = document.getElementById('btn-parse-spectrum');
-    btn.disabled = !input.files || input.files.length === 0;
-}
-
-// ========== EDX spectrum parsing ==========
-
-async function parseEdxSpectrum() {
+async function onEdxSpectrumSelected() {
     const input = document.getElementById('edx-spectrum-file');
     const statusEl = document.getElementById('edx-spectrum-status');
-
-    if (!input.files || input.files.length === 0) {
-        showAlert('error', 'Please select an EDX spectrum file first');
+    const file = input.files && input.files[0];
+    if (!file) {
+        statusEl.textContent = '';
         return;
     }
-
-    statusEl.textContent = 'Parsing…';
-
-    const formData = new FormData();
-    formData.append('file', input.files[0]);
-
+    statusEl.textContent = 'Reading spectrum…';
     try {
-        const base = (typeof BASE_URL !== 'undefined' ? BASE_URL : '');
-        const res = await fetch(`${base}/b30-sem/api/parse-edx-spectrum`, {
-            method: 'POST',
-            body: formData,
-        });
-        const data = await res.json();
-
-        if (!res.ok) {
-            statusEl.textContent = '';
-            showAlert('error', data.error || 'Parsing failed');
+        const keV = await readBrukerPrimaryEnergy(file);
+        if (keV === null) {
+            statusEl.textContent = 'No primary energy found in this file. Please enter it manually.';
             return;
         }
-
-        const meta = data.metadata || {};
-        let filled = 0;
-
-        if (meta.primary_energy_keV != null) {
-            document.getElementById('field_primary_energy_keV').value = meta.primary_energy_keV;
-            filled++;
-        }
-
-        statusEl.textContent = filled > 0 ? `✓ Parsed — ${filled} field(s) auto-filled` : 'Parsed (no recognized metadata found)';
-        if (filled > 0) {
-            showAlert('success', `EDX spectrum parsed: ${filled} field(s) auto-filled`);
-        } else {
-            showAlert('info', 'Spectrum parsed but no recognized metadata found. Please fill in primary energy manually.');
-        }
+        document.getElementById('field_primary_energy_keV').value = keV;
+        statusEl.textContent = `✓ Primary energy ${keV} keV filled from the spectrum`;
     } catch (e) {
         statusEl.textContent = '';
-        showAlert('error', `Parse error: ${e.message}`);
+        showAlert('error', `Could not read the spectrum: ${e.message}`);
     }
+}
+
+// ========== Bruker EDX parsing ==========
+
+// Primary energy (keV) of the first spectrum in a Bruker Esprit .spx/.rtx export, or null.
+// The value sits in each spectrum's TRTESMAHeader as e.g. <PrimaryEnergy>1E1</PrimaryEnergy>,
+// and in .rtx projects with maps it can be tens of MB into the file, so read in chunks.
+async function readBrukerPrimaryEnergy(file) {
+    const CHUNK = 4 * 1024 * 1024;
+    const OVERLAP = 256;
+    const decoder = new TextDecoder('windows-1252');
+    const pattern = /<PrimaryEnergy>\s*([^<\s]+)\s*<\/PrimaryEnergy>/;
+    for (let offset = 0; offset < file.size; offset += CHUNK) {
+        const start = Math.max(0, offset - OVERLAP);
+        const text = decoder.decode(await file.slice(start, offset + CHUNK).arrayBuffer());
+        const match = pattern.exec(text);
+        if (match) {
+            const keV = Number(match[1]);
+            return Number.isFinite(keV) ? keV : null;
+        }
+    }
+    return null;
 }
 
 // ========== Dataset Upload ==========
@@ -362,20 +350,88 @@ async function uploadDataset() {
     );
 }
 
+// "direct": files go from the browser straight to storage (no size limit) and are ingested by
+// the FEI SEM / Bruker EDX ingestors. "legacy": files are posted to this app, which forwards
+// them (Cloud Run caps that request at 32 MB). ?upload=direct|legacy overrides the default.
+function semUploadMode() {
+    const requested = new URLSearchParams(window.location.search).get('upload');
+    if (requested === 'direct' || requested === 'legacy') return requested;
+    return typeof SEM_UPLOAD_MODE_DEFAULT !== 'undefined' ? SEM_UPLOAD_MODE_DEFAULT : 'legacy';
+}
+
+function selectedSemFiles() {
+    const files = [];
+    if (document.getElementById('images-yes').checked) {
+        files.push(...document.getElementById('sem-image-files').files);
+    }
+    if (document.getElementById('field_edx_used').checked) {
+        files.push(...document.getElementById('edx-image-files').files);
+        files.push(...document.getElementById('edx-spectrum-file').files);
+    }
+    return files;
+}
+
+function semIngestion(file) {
+    const name = file.name.toLowerCase();
+    if (name.endsWith('.tif') || name.endsWith('.tiff')) {
+        // Falls back to the generic TIFF ingestor if the file has no FEI metadata.
+        return { requested: true, ingestionClass: 'FeiSemTifIngestor' };
+    }
+    if (name.endsWith('.spx') || name.endsWith('.rtx')) {
+        return { requested: true, ingestionClass: 'BrukerEdxIngestor' };
+    }
+    return { requested: true };
+}
+
+async function _doDirectUpload(metadata, files) {
+    if (!window.CrucibleUpload) {
+        throw new Error('The upload module did not load. Reload the page and try again.');
+    }
+    const progressEl = document.getElementById('upload-progress');
+    // Without files in the request, this only creates the dataset and links the sample.
+    const dataset = await api('/b30-sem/api/upload-dataset', 'POST', metadata);
+
+    const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
+    const uploaded = new Map();
+    progressEl.textContent = `Uploading ${files.length} file(s)…`;
+    let results;
+    try {
+        results = await window.CrucibleUpload.uploadFiles({
+            datasetMfid: dataset.dataset_id,
+            files,
+            ingestion: semIngestion,
+            onProgress: (file, progress) => {
+                uploaded.set(file, progress.uploadedBytes);
+                let done = 0;
+                for (const bytes of uploaded.values()) done += bytes;
+                const pct = totalBytes ? Math.min(100, Math.floor((100 * done) / totalBytes)) : 100;
+                progressEl.textContent = `Uploading ${files.length} file(s): ${pct}%`;
+            },
+        });
+    } finally {
+        progressEl.textContent = '';
+    }
+
+    const ok = results.filter(r => r.ok);
+    let msg = `Dataset uploaded: ${dataset.dataset_name} (${dataset.dataset_id}) — ${ok.length} of ${files.length} file(s) attached`;
+    showAlert(ok.length === files.length ? 'success' : 'error', msg);
+    for (const r of results) {
+        if (!r.ok) showAlert('error', `${r.file.name}: ${r.error}`);
+        else if (r.ingestionError) showAlert('error', `${r.file.name} uploaded, but ingestion couldn't be requested: ${r.ingestionError}`);
+    }
+}
+
 async function _doUpload(metadata) {
+    const files = selectedSemFiles();
+    const hasFiles = files.length > 0;
     const imagesSaved = document.getElementById('images-yes').checked;
     const edxUsed = document.getElementById('field_edx_used').checked;
 
-    const hasFiles = (
-        imagesSaved && document.getElementById('sem-image-files').files.length > 0
-    ) || (
-        edxUsed && (
-            document.getElementById('edx-image-files').files.length > 0 ||
-            document.getElementById('edx-spectrum-file').files.length > 0
-        )
-    );
-
     try {
+        if (hasFiles && semUploadMode() === 'direct') {
+            await _doDirectUpload(metadata, files);
+            return;
+        }
         let result;
         if (hasFiles) {
             // Use multipart upload
@@ -597,7 +653,6 @@ function resetSemForm() {
     document.getElementById('edx-details').classList.add('hidden');
     document.getElementById('edx-image-files').value = '';
     document.getElementById('edx-spectrum-file').value = '';
-    document.getElementById('btn-parse-spectrum').disabled = true;
     document.getElementById('edx-spectrum-status').textContent = '';
 
     // Comment
