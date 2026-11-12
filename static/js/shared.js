@@ -18,6 +18,39 @@ async function api(url, method = 'GET', body = null) {
     return data;
 }
 
+// ========== Printer selection ==========
+
+// Populates a <select> with the printers crucible-api has ever seen a status heartbeat
+// from (routes/shared.py::list_printers()), labeled with live online/offline state.
+// Shared by every page with a barcode-printer picker, instead of a hardcoded list.
+async function populatePrinterSelect(selectId) {
+    const select = document.getElementById(selectId);
+    if (!select) return;
+    const previous = select.value;
+    select.innerHTML = '<option value="">Loading printers…</option>';
+    try {
+        const data = await api('/print/api/printers');
+        const printers = [...data.printers].sort((a, b) => a.printer_id.localeCompare(b.printer_id));
+
+        if (!printers.length) {
+            select.innerHTML = '<option value="">No printers found</option>';
+            return;
+        }
+
+        select.innerHTML = '';
+        for (const p of printers) {
+            const opt = document.createElement('option');
+            opt.value = p.printer_id;
+            opt.textContent = `${p.printer_id} — ${p.online ? 'online' : 'offline'}`;
+            select.appendChild(opt);
+        }
+        if (printers.some(p => p.printer_id === previous)) select.value = previous;
+    } catch (e) {
+        select.innerHTML = '<option value="">Failed to load printers</option>';
+        showAlert('error', `Could not load printers: ${e.message}`);
+    }
+}
+
 // ========== Alert System ==========
 
 function showAlert(type, message) {

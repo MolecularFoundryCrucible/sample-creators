@@ -64,7 +64,7 @@ def _to_row(sample):
 
 @print_bp.route("/")
 def page():
-    return render_template("print.html", print_config=PRINT_CONFIG)
+    return render_template("print.html")
 
 
 @print_bp.route("/api/printers", methods=["GET"])

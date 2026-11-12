@@ -5,7 +5,6 @@ from zoneinfo import ZoneInfo
 from flask import Blueprint, jsonify, render_template, request, session
 
 from crucible import Dataset, Sample
-from config import PRINT_CONFIG
 from routes.shared import cruc_client
 
 
@@ -15,7 +14,7 @@ LA_TZ = ZoneInfo("America/Los_Angeles")
 
 @electrolyte_bp.route("/")
 def page():
-    return render_template("electrolyte.html", print_config=PRINT_CONFIG)
+    return render_template("electrolyte.html")
 
 
 def _existing_samples(name, project):
