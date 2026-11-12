@@ -160,7 +160,7 @@ B30_SEM_CONFIG = {
     # "legacy": files go through this app (32 MB request limit). "direct": the browser uploads
     # straight to storage and FEI TIFFs / Bruker EDX files are ingested by their own ingestors.
     # A page URL with ?upload=direct or ?upload=legacy overrides this.
-    "upload_mode": "legacy",
+    "upload_mode": "direct",
     # Fields shown on the upload form. To add/remove fields, edit this list.
     # Each entry: {"key": used in Crucible metadata, "label": shown to user, "type": html input type}
     "dataset_fields": [
