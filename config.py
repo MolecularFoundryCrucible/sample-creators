@@ -211,4 +211,7 @@ TOOLS = [
     {"key": "synthesis", "division": "b67", "endpoint": "synthesis.page",
      "nav_label": "Synthesis Upload", "card_title": "Synthesis Upload",
      "card_description": "Enter solid precursors, stock solutions and precursor solutions in a spreadsheet grid; parent samples are linked by name."},
+    {"key": "fabrication", "division": "b67", "endpoint": "fabrication.page",
+     "nav_label": "Fabrication Traveler", "card_title": "Fabrication Traveler",
+     "card_description": "Per-wafer process traveler (QCMF): record each step, cut chiplets and chips, attach files, print labels."},
 ]

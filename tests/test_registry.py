@@ -51,6 +51,7 @@ class DivisionPagesTests(unittest.TestCase):
     def test_b67_lists_synthesis_upload(self):
         html = self.client.get("/division/b67").get_data(as_text=True).split('<main class="container">', 1)[1]
         self.assertIn('href="/synthesis/"', html)
+        self.assertIn('href="/fabrication/"', html)
 
     def test_division_page_lists_its_tools(self):
         html = self.client.get("/division/b30").get_data(as_text=True)

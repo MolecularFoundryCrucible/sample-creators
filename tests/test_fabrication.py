@@ -53,6 +53,13 @@ class TravelerEndToEndTests(unittest.TestCase):
         self.assertEqual(r.status_code, 403)
         self.assertIn("detail", r.get_json())
 
+    def test_pages_mount_the_island_with_the_wafer_from_the_url(self):
+        html = self.api.get("/fabrication/").get_data(as_text=True)
+        self.assertIn('id="traveler-root"', html)
+        self.assertIn('data-wafer-id=""', html)
+        html = self.api.get("/fabrication/wafer/S0000000000000000000000001").get_data(as_text=True)
+        self.assertIn('data-wafer-id="S0000000000000000000000001"', html)
+
     def test_validation_errors_are_422_with_detail(self):
         r = self.api.post("/fabrication/api/wafers", json={"project": P})
         self.assertEqual(r.status_code, 422)
@@ -96,6 +103,7 @@ class TravelerEndToEndTests(unittest.TestCase):
               rows={"ipa": {"comment": "used fresh IPA"}}).status_code == 200)
         check("RT became 20 C", fields(labels["Step 2"], "boe_dip")["temp_c"]["default"] == 20)
         check("base metal stored as spec", trav["spec"]["base_metal"] == "Al")
+        check("traveler names its project (for wafer links)", trav["project"] == P)
 
         check("template default stored and served", trav["template_default"] == "standard"
               and "standard" in trav["template_defaults"])
