@@ -675,3 +675,9 @@ input[readonly] {
 }
 
 .typeahead-item:hover { background: #edf2f7; }
+
+/* ========== Synthesis upload (full-width grid) ========== */
+.synthesis-login {
+    max-width: 520px;
+    margin-bottom: 16px;
+}

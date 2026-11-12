@@ -167,6 +167,8 @@ async function loadUserState() {
 }
 
 function populateUserInfo(user) {
+    // React islands (synthesis, traveler) follow the login through this event.
+    window.dispatchEvent(new CustomEvent('crucible:user', { detail: user }));
     document.getElementById('email').value = user.login_reference || user.email || user.username || '';
     document.getElementById('username').value = user.user_name;
 
@@ -187,6 +189,7 @@ function populateUserInfo(user) {
 }
 
 function clearUserInfo() {
+    window.dispatchEvent(new CustomEvent('crucible:user', { detail: null }));
     document.getElementById('email').value = '';
     document.getElementById('username').value = '';
     document.getElementById('project').innerHTML = '';

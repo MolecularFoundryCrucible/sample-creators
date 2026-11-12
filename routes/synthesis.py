@@ -8,7 +8,7 @@ import logging
 
 import numpy as np
 import pandas as pd
-from flask import Blueprint, jsonify
+from flask import Blueprint, jsonify, render_template
 from rdkit import Chem
 
 from crucible import Dataset
@@ -290,6 +290,11 @@ def upload_all_sample_synthesis_info(orcid, project, records, category, synthesi
     else:
         status_msg = "No samples to upload"
     return status_msg, summary
+
+
+@synthesis_bp.route("/")
+def page():
+    return render_template("synthesis.html")
 
 
 @synthesis_bp.route("/api/fields", methods=["GET"])
