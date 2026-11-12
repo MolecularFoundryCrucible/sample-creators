@@ -280,8 +280,9 @@ def parse_ts(ts):
 
     try:
         dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        # Producers (e.g. the SEM/EDX ingestors) write instrument-local times without an offset.
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=LA_TZ)
         return dt
     except Exception:
         return datetime.min.replace(tzinfo=timezone.utc)

@@ -31,8 +31,9 @@ def _parse_ts(ts):
         return datetime.min.replace(tzinfo=timezone.utc)
     try:
         dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        # Producers (e.g. the SEM/EDX ingestors) write instrument-local times without an offset.
         if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
+            dt = dt.replace(tzinfo=LA_TZ)
         return dt
     except Exception:
         return datetime.min.replace(tzinfo=timezone.utc)
@@ -253,80 +254,6 @@ def extract_tiff_metadata():
 
     fields = _parse_fei_metadata(metadata)
     return jsonify({"found": bool(fields), "fields": fields}), 200
-
-
-# ---------- EDX spectrum ----------
-
-@b30_sem_bp.route("/api/parse-edx-spectrum", methods=["POST"])
-def parse_edx_spectrum():
-    """
-    Receive an EDX spectrum XLSX file, extract metadata from the header rows,
-    and return metadata fields + spectrum data as CSV.
-    """
-    f = request.files.get("file")
-    if not f:
-        return jsonify({"error": "No file provided"}), 400
-
-    filename = f.filename or ""
-    if not filename.lower().endswith((".xlsx", ".xls")):
-        return jsonify({"error": "File must be an Excel file (.xlsx or .xls)"}), 400
-
-    file_bytes = f.read()
-
-    try:
-        import openpyxl
-    except ImportError:
-        return jsonify({"error": "openpyxl is not installed. Run: pip install openpyxl"}), 500
-
-    try:
-        wb = openpyxl.load_workbook(io.BytesIO(file_bytes), data_only=True)
-        ws = wb.active
-
-        metadata = {}
-        spectrum_start_row = None
-
-        # Scan header rows for known metadata keys
-        for row_idx, row in enumerate(ws.iter_rows(values_only=True), start=1):
-            if row is None or all(v is None for v in row):
-                continue
-
-            # Look for key-value pairs in first two columns
-            key_cell = str(row[0] or "").strip()
-            val_cell = row[1] if len(row) > 1 else None
-
-            key_lower = key_cell.lower()
-
-            if any(k in key_lower for k in ("kv", "acc", "voltage", "hv", "energy")):
-                if val_cell is not None:
-                    try:
-                        metadata["primary_energy_keV"] = str(float(val_cell))
-                    except (TypeError, ValueError):
-                        metadata["primary_energy_keV"] = str(val_cell)
-
-            # Detect start of spectrum data (numeric keV/counts columns)
-            if key_lower in ("kev", "energy (kev)", "channel") or (
-                val_cell is not None and isinstance(val_cell, (int, float)) and isinstance(key_cell, str) and key_lower.replace('.', '', 1).isdigit()
-            ):
-                spectrum_start_row = row_idx
-                break
-
-        # Build CSV of spectrum data from spectrum_start_row onwards
-        sio = io.StringIO()
-        writer = csv.writer(sio)
-        if spectrum_start_row is not None:
-            for row in ws.iter_rows(min_row=spectrum_start_row, values_only=True):
-                if row and any(v is not None for v in row):
-                    writer.writerow([v if v is not None else "" for v in row])
-        spectrum_csv = sio.getvalue()
-
-        return jsonify({
-            "metadata": metadata,
-            "spectrum_csv": spectrum_csv,
-        }), 200
-
-    except Exception as e:
-        current_app.logger.error(f"[b30_sem] EDX parse error: {e}")
-        return jsonify({"error": f"Failed to parse file: {e}"}), 500
 
 
 # ---------- Sample lookup (barcode scan) ----------

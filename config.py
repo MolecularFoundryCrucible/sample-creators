@@ -157,6 +157,10 @@ B30_SEM_CONFIG = {
     "instrument_mfid": "0tkadnh6g9zys00089c7g5ycmg",  # b30 - FEI SEM (prod MFID)
     "measurement": "Scanning electron microscope",
     "printer_name": "crucible-printer/b30-122",
+    # "legacy": files go through this app (32 MB request limit). "direct": the browser uploads
+    # straight to storage and FEI TIFFs / Bruker EDX files are ingested by their own ingestors.
+    # A page URL with ?upload=direct or ?upload=legacy overrides this.
+    "upload_mode": "legacy",
     # Fields shown on the upload form. To add/remove fields, edit this list.
     # Each entry: {"key": used in Crucible metadata, "label": shown to user, "type": html input type}
     "dataset_fields": [
