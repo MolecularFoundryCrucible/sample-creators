@@ -17,6 +17,8 @@ from routes.schema_forms import schema_forms_bp
 
 from routes.print_only import print_bp
 from routes.uploads import uploads_bp
+from routes.synthesis import synthesis_bp
+from routes.fabrication import fabrication_bp
 
 class PrefixMiddleware:
     """Set SCRIPT_NAME so Flask generates correct URLs behind a reverse proxy."""
@@ -58,6 +60,8 @@ def create_app():
     app.register_blueprint(schema_forms_bp, url_prefix="/schema-forms")
     app.register_blueprint(print_bp, url_prefix="/print")
     app.register_blueprint(uploads_bp, url_prefix="/api/uploads")
+    app.register_blueprint(synthesis_bp, url_prefix="/synthesis")
+    app.register_blueprint(fabrication_bp, url_prefix="/fabrication")
 
     # The sputter app used to live at a single URL, before it was split per tool.
     @app.route("/b30-sputter/")

@@ -10,4 +10,7 @@ dependencies = [
     "pillow>=11.0.0",
     "python-dotenv>=1.2.2",
     "nano-crucible>=3.3.0",
+    "pydantic>=2",
+    "rdkit>=2026.9.2",
+    "numpy>=2.4.4",
 ]
