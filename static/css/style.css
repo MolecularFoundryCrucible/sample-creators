@@ -42,6 +42,38 @@ body {
     color: white;
 }
 
+.nav-dropdown {
+    position: relative;
+}
+
+.nav-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    z-index: 100;
+    min-width: 200px;
+    padding: 6px 0;
+    background: #1a365d;
+    border-radius: 0 0 6px 6px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+.nav-dropdown:hover .nav-dropdown-menu,
+.nav-dropdown:focus-within .nav-dropdown-menu {
+    display: block;
+}
+
+.nav-dropdown-menu a {
+    display: block;
+    padding: 6px 14px;
+    white-space: nowrap;
+}
+
+.nav-dropdown-menu a:hover {
+    background: #2a4a7f;
+}
+
 .nav-user {
     margin-left: auto;
     font-size: 14px;
@@ -89,6 +121,23 @@ h1 {
 .card p {
     color: #666;
     font-size: 14px;
+}
+
+.card p.card-meta {
+    margin-top: 10px;
+    color: #2b6cb0;
+    font-size: 13px;
+}
+
+.breadcrumb {
+    margin-bottom: 8px;
+    font-size: 14px;
+    color: #666;
+}
+
+.breadcrumb a {
+    color: #2b6cb0;
+    text-decoration: none;
 }
 
 /* ========== Two-Column Layout ========== */

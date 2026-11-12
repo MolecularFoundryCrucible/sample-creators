@@ -11,15 +11,16 @@
         <div class="nav-brand">Sample Creation Apps</div>
         <div class="nav-links">
             <a href="{{ url_for('index') }}">Home</a>
-            <a href="{{ url_for('giwaxs.page') }}">GIWAXS Bar</a>
-            <a href="{{ url_for('rga.page') }}">RGA Carrier</a>
-            {% for tool_key, tool in sputter_tools.items() %}
-            <a href="{{ url_for(sputter_blueprint_name(tool_key) ~ '.page') }}">{{ tool.nav_label }}</a>
+            {% for division in nav_divisions %}
+            <div class="nav-dropdown">
+                <a href="{{ url_for('division', key=division.key) }}">{{ division.label }} &#9662;</a>
+                <div class="nav-dropdown-menu">
+                    {% for tool in division.tools %}
+                    <a href="{{ url_for(tool.endpoint) }}">{{ tool.nav_label }}</a>
+                    {% endfor %}
+                </div>
+            </div>
             {% endfor %}
-            <a href="{{ url_for('b30_ebeam.page') }}">B30 E-beam</a>
-            <a href="{{ url_for('electrolyte.page') }}">Electrolytes</a>
-            <a href="{{ url_for('schema_forms.page') }}">Schema Forms</a>
-            <a href="{{ url_for('print.page') }}">Print Barcodes</a>
         </div>
         <div class="nav-user" id="nav-user-info"></div>
     </nav>
