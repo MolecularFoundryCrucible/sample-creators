@@ -13,3 +13,6 @@ data/
 log/
 .env
 .DS_Store
+
+# Frontend build
+node_modules/

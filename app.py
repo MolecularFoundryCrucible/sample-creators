@@ -1,4 +1,6 @@
 from flask import Flask, render_template, redirect, url_for
+from markupsafe import Markup, escape
+import json
 import os
 import secrets
 
@@ -13,6 +15,7 @@ from routes.electrolyte import electrolyte_bp
 from routes.schema_forms import schema_forms_bp
 
 from routes.print_only import print_bp
+from routes.uploads import uploads_bp
 
 class PrefixMiddleware:
     """Set SCRIPT_NAME so Flask generates correct URLs behind a reverse proxy."""
@@ -53,6 +56,7 @@ def create_app():
     app.register_blueprint(electrolyte_bp, url_prefix="/electrolyte")
     app.register_blueprint(schema_forms_bp, url_prefix="/schema-forms")
     app.register_blueprint(print_bp, url_prefix="/print")
+    app.register_blueprint(uploads_bp, url_prefix="/api/uploads")
 
     # The sputter app used to live at a single URL, before it was split per tool.
     @app.route("/b30-sputter/")
@@ -62,6 +66,35 @@ def create_app():
     @app.context_processor
     def inject_sputter_tools():
         return {"sputter_tools": SPUTTER_TOOLS, "sputter_blueprint_name": blueprint_name}
+
+    manifest_cache = {"key": None, "entries": {}}
+
+    def vite_manifest():
+        """Vite's build manifest, reloaded when a rebuild changes it."""
+        path = os.path.join(app.static_folder, "dist", ".vite", "manifest.json")
+        try:
+            key = (path, os.path.getmtime(path))
+        except OSError:
+            return {}
+        if key != manifest_cache["key"]:
+            with open(path) as f:
+                manifest_cache["entries"] = json.load(f)
+            manifest_cache["key"] = key
+        return manifest_cache["entries"]
+
+    @app.context_processor
+    def inject_vite_entry():
+        def vite_entry(name):
+            """<script>/<link> tags for a Vite entry from frontend/vite.config.ts."""
+            chunk = next((c for c in vite_manifest().values() if c.get("isEntry") and c.get("name") == name), None)
+            if chunk is None:
+                app.logger.warning("Vite entry %r not built; run `npm run build` in frontend/", name)
+                return Markup(f"<!-- vite entry {escape(name)} missing -->")
+            asset = lambda path: url_for("static", filename=f"dist/{path}")
+            tags = [f'<link rel="stylesheet" href="{asset(css)}">' for css in chunk.get("css", [])]
+            tags.append(f'<script type="module" src="{asset(chunk["file"])}"></script>')
+            return Markup("\n".join(tags))
+        return {"vite_entry": vite_entry}
 
     @app.url_defaults
     def add_static_version(endpoint, values):
