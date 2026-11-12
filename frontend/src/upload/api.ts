@@ -28,9 +28,12 @@ export type SignedPart = {
   headers: Record<string, string>
 }
 
+// base.html declares `const BASE_URL` in a classic script. A top-level const is visible to
+// later scripts by name but is not a property of window/globalThis, so look it up by name.
+declare const BASE_URL: unknown
+
 function baseUrl(): string {
-  const base = (globalThis as { BASE_URL?: unknown }).BASE_URL
-  return typeof base === "string" ? base : ""
+  return typeof BASE_URL === "string" ? BASE_URL : ""
 }
 
 async function call<T>(
