@@ -10,7 +10,7 @@ from flask import Blueprint, request, jsonify, session
 
 from config import PRINT_CONFIG
 from crucible import CrucibleClient
-cruc_client = CrucibleClient(api_url = 'https://crucible.lbl.gov/api/v3',
+cruc_client = CrucibleClient(api_url=os.environ.get('CRUCIBLE_API_URL', 'https://crucible.lbl.gov/api/v3'),
                              api_key=os.environ.get('CRUCIBLE_API_KEY', ''))
 
 

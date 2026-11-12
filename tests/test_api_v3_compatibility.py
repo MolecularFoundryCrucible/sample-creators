@@ -7,6 +7,7 @@ os.environ.setdefault("CRUCIBLE_API_KEY", "test-api-key")
 
 from app import create_app
 from config import B30_EBEAM_CONFIG, B30_SEM_CONFIG, SPUTTER_TOOLS
+from routes.b30_sem import _parse_fei_metadata
 from routes.b30_sputter import _get_filtered_dataset_summaries
 
 DATASET_MFID = "0tkn2knjast3h0008nyq9zps2c"
@@ -169,6 +170,15 @@ class ApiV3PayloadTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assertEqual(add_file.call_args.args[0], DATASET_MFID)
+        # add_file() names the stored file after the path's basename.
+        self.assertEqual(os.path.basename(add_file.call_args.args[1]), "image.png")
+        self.assertEqual(response.get_json()["uploaded_files"], ["image.png"])
+
+    def test_sem_autofill_converts_chamber_pressure_to_torr(self):
+        fields = _parse_fei_metadata({"Vacuum": {"UserMode": "Low vacuum", "ChPressure": "100"}})
+        self.assertAlmostEqual(float(fields["chamber_pressure_Torr"]), 0.750062)
+        self.assertEqual(fields["vacuum_level"], "Low")
+        self.assertNotIn("chamber_pressure_Torr", _parse_fei_metadata({"Vacuum": {"ChPressure": "n/a"}}))
 
     def test_deposition_sample_uses_sample_model_and_owner(self):
         self.set_user()

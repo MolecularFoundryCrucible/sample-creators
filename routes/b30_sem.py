@@ -17,6 +17,7 @@ b30_sem_bp = Blueprint("b30_sem", __name__)
 
 PRINTER_NAME = B30_SEM_CONFIG.get("printer_name", "crucible-printer/b30-122")
 LA_TZ = ZoneInfo("America/Los_Angeles")
+PA_TO_TORR = 0.00750062
 
 _INCREMENTAL_CACHE = {}
 _INCREMENTAL_CACHE_LOCK = Lock()
@@ -177,9 +178,13 @@ def _parse_fei_metadata(metadata: dict) -> dict:
     if current is not None:
         result["emission_current_A"] = str(current)
 
+    # FEI writes ChPressure in pascals; the form field is in Torr.
     pressure = _find_fei_value(metadata, ("Vacuum", "ChPressure"))
     if pressure is not None:
-        result["chamber_pressure_Torr"] = str(pressure)
+        try:
+            result["chamber_pressure_Torr"] = str(float(pressure) * PA_TO_TORR)
+        except (TypeError, ValueError):
+            pass
 
     return result
 
@@ -510,18 +515,19 @@ def upload_dataset():
         )
 
         for _kind, fobj in all_file_objs:
-            # Write to a temp file so cruc_client.files can read it from disk
-            suffix = os.path.splitext(fobj.filename)[1]
-            with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-                fobj.save(tmp)
-                tmp_path = tmp.name
-            try:
-                cruc_client.datasets.add_file(dataset_mfid, tmp_path)
-                uploaded_files.append(fobj.filename)
-            except Exception as e:
-                current_app.logger.warning(f"[b30_sem] File upload failed for {fobj.filename}: {e}")
-            finally:
-                os.unlink(tmp_path)
+            # add_file() stores the file under its on-disk basename, so save it under the
+            # original name in its own temp dir (one per file, so equal names can't collide).
+            filename = os.path.basename(fobj.filename.replace("\\", "/"))
+            if not filename:
+                continue
+            with tempfile.TemporaryDirectory() as tmp_dir:
+                tmp_path = os.path.join(tmp_dir, filename)
+                fobj.save(tmp_path)
+                try:
+                    cruc_client.datasets.add_file(dataset_mfid, tmp_path)
+                    uploaded_files.append(filename)
+                except Exception as e:
+                    current_app.logger.warning(f"[b30_sem] File upload failed for {filename}: {e}")
 
     except Exception as e:
         return jsonify({"error": str(e)}), 500
