@@ -1,5 +1,5 @@
 from flask import Blueprint, request, jsonify, session, render_template, current_app
-from routes.shared import cruc_client
+from routes.shared import cruc_client, instrument_mfid
 from routes.deposition_common import (
     LA_TZ,
     build_scientific_metadata,
@@ -282,10 +282,10 @@ def _dataset_to_row(details):
         "_timestamp": details.get("timestamp") or "",
     }
 
-def _get_filtered_dataset_summaries(project_id, instrument_name, calibration_sample, view):
+def _get_filtered_dataset_summaries(project_id, instrument_mfid, calibration_sample, view):
     all_ds = cruc_client.datasets.list(
         project_id=project_id,
-        instrument_name=instrument_name,
+        instrument_mfid=instrument_mfid,
         include_links=bool(calibration_sample),
         limit=2000,
     )
@@ -313,12 +313,12 @@ def _get_filtered_dataset_summaries(project_id, instrument_name, calibration_sam
 
 def _rows_for_view(project_id, view):
     """Logbook rows for this page's tool only."""
-    instrument_name = _tool()["instrument_name"]
+    tool_instrument = instrument_mfid(_tool()["instrument_mfid"])
     calibration_sample = _calibration_sample()
     return incremental_refresh_rows(
-        cache_key=(project_id, instrument_name, calibration_sample, view),
+        cache_key=(project_id, tool_instrument, calibration_sample, view),
         fetch_summaries=lambda: _get_filtered_dataset_summaries(
-            project_id, instrument_name, calibration_sample, view
+            project_id, tool_instrument, calibration_sample, view
         ),
         build_row=_dataset_to_row,
     )
@@ -410,7 +410,7 @@ def create_dataset():
             data_type=tool["dataset_type"],
             owner=user["orcid"],
             project_id=user["selected_project"],
-            instrument_name=tool["instrument_name"],
+            instrument_mfid=instrument_mfid(tool["instrument_mfid"]),
             measurement=tool["measurement"],
             timestamp=get_tz_isoformat(),
         )

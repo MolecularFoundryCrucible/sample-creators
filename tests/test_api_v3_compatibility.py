@@ -40,7 +40,8 @@ class ApiV3PayloadTests(unittest.TestCase):
 
     def assert_v3_dataset(self, payload, expected_data_type, expected_instrument):
         self.assertEqual(payload["data_type"], expected_data_type)
-        self.assertEqual(payload["instrument_name"], expected_instrument)
+        self.assertEqual(payload["instrument_mfid"], expected_instrument)
+        self.assertNotIn("instrument_name", payload)
         self.assertEqual(payload["owner"], self.user["orcid"])
         self.assertNotIn("dataset_type", payload)
         self.assertNotIn("owner_orcid", payload)
@@ -68,7 +69,7 @@ class ApiV3PayloadTests(unittest.TestCase):
         self.assert_v3_dataset(
             self.dataset_post_payload(request),
             tool["dataset_type"],
-            tool["instrument_name"],
+            tool["instrument_mfid"],
         )
 
     def test_sputter_calibration_filter_uses_top_level_dataset_links(self):
@@ -93,7 +94,7 @@ class ApiV3PayloadTests(unittest.TestCase):
         with patch("routes.b30_sputter.cruc_client.datasets.list", return_value=datasets) as list_datasets:
             result = _get_filtered_dataset_summaries(
                 "test-project",
-                "b30 - aja sputter tool",
+                "0tfn1vtxesrdn000waaft9ntrg",
                 calibration_sample,
                 "Calibration only",
             )
@@ -101,7 +102,7 @@ class ApiV3PayloadTests(unittest.TestCase):
         self.assertEqual([dataset["unique_id"] for dataset in result], ["calibration-dataset"])
         list_datasets.assert_called_once_with(
             project_id="test-project",
-            instrument_name="b30 - aja sputter tool",
+            instrument_mfid="0tfn1vtxesrdn000waaft9ntrg",
             include_links=True,
             limit=2000,
         )
@@ -120,7 +121,7 @@ class ApiV3PayloadTests(unittest.TestCase):
         self.assert_v3_dataset(
             self.dataset_post_payload(request),
             B30_EBEAM_CONFIG["dataset_type"],
-            B30_EBEAM_CONFIG["instrument_name"],
+            B30_EBEAM_CONFIG["instrument_mfid"],
         )
 
     def test_sem_dataset_uses_v3_fields_and_canonical_link_arguments(self):
@@ -140,7 +141,7 @@ class ApiV3PayloadTests(unittest.TestCase):
         self.assert_v3_dataset(
             self.dataset_post_payload(request),
             B30_SEM_CONFIG["dataset_type"],
-            B30_SEM_CONFIG["instrument_name"],
+            B30_SEM_CONFIG["instrument_mfid"],
         )
         add_sample.assert_called_once_with(
             dataset_mfid=DATASET_MFID,

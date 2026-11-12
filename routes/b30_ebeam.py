@@ -27,11 +27,11 @@ from routes.deposition_common import (
     register_sample_routes,
     row_matches_target,
 )
-from routes.shared import cruc_client
+from routes.shared import cruc_client, instrument_mfid
 
 b30_ebeam_bp = Blueprint("b30_ebeam", __name__)
 
-INSTRUMENT_NAME = B30_EBEAM_CONFIG["instrument_name"]
+INSTRUMENT_MFID = instrument_mfid(B30_EBEAM_CONFIG["instrument_mfid"])
 PRINTER_NAME = B30_EBEAM_CONFIG.get("printer_name", "crucible-printer/b30-113")
 
 LOGBOOK_COLS = [
@@ -68,7 +68,7 @@ def _dataset_to_row(details):
 def _fetch_summaries(project_id):
     datasets = cruc_client.datasets.list(
         project_id=project_id,
-        instrument_name=INSTRUMENT_NAME,
+        instrument_mfid=INSTRUMENT_MFID,
         limit=2000,
     )
     return sorted(datasets, key=lambda d: parse_ts(d.get("timestamp")), reverse=True)
@@ -149,7 +149,7 @@ def upload_dataset():
             data_type=B30_EBEAM_CONFIG["dataset_type"],
             owner=user["orcid"],
             project_id=user["selected_project"],
-            instrument_name=INSTRUMENT_NAME,
+            instrument_mfid=INSTRUMENT_MFID,
             measurement=B30_EBEAM_CONFIG["measurement"],
             timestamp=get_tz_isoformat(),
         )
