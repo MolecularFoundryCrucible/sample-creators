@@ -1,8 +1,9 @@
-from flask import Flask, render_template, redirect, url_for
+from flask import Flask, abort, render_template, redirect, url_for
 import os
 import secrets
 
-from config import SPUTTER_TOOLS
+from config import DIVISIONS, SPUTTER_TOOLS, TOOLS
+from tool_registry import divisions_with_tools, expand_tools, validate_registry
 from routes.shared import shared_bp
 from routes.giwaxs import giwaxs_bp
 from routes.rga import rga_bp
@@ -59,9 +60,14 @@ def create_app():
     def b30_sputter_legacy():
         return redirect(url_for(f"{blueprint_name('aja')}.page"))
 
+    tools = expand_tools(TOOLS, SPUTTER_TOOLS, blueprint_name)
+    validate_registry(DIVISIONS, tools, set(app.view_functions))
+    divisions = divisions_with_tools(DIVISIONS, tools)
+    divisions_by_key = {d["key"]: d for d in divisions}
+
     @app.context_processor
-    def inject_sputter_tools():
-        return {"sputter_tools": SPUTTER_TOOLS, "sputter_blueprint_name": blueprint_name}
+    def inject_divisions():
+        return {"nav_divisions": divisions}
 
     @app.url_defaults
     def add_static_version(endpoint, values):
@@ -77,7 +83,14 @@ def create_app():
 
     @app.route("/")
     def index():
-        return render_template("index.html")
+        return render_template("index.html", divisions=divisions)
+
+    @app.route("/division/<key>")
+    def division(key):
+        selected = divisions_by_key.get(key)
+        if selected is None:
+            abort(404)
+        return render_template("division.html", division=selected)
 
     prefix = os.environ.get("SCRIPT_NAME", "")
     if prefix:

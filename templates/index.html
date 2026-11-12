@@ -1,42 +1,15 @@
 {% extends "base.html" %}
-{% block title %}10K Apps - Home{% endblock %}
+{% block title %}Sample Management Apps{% endblock %}
 
 {% block content %}
 <h1>Sample Management Apps</h1>
 <div class="card-grid">
-    <a href="{{ url_for('giwaxs.page') }}" class="card">
-        <h2>GIWAXS Bar Creator</h2>
-        <p>Create GIWAXS bars, assign thin films to 11 bar positions, and upload to Crucible + ALS Sample Tracker.</p>
-    </a>
-    <a href="{{ url_for('rga.page') }}" class="card">
-        <h2>RGA Carrier Creator</h2>
-        <p>Create RGA carriers, assign thin films to 36 positions (6x6 grid), generate CSV, and upload to databases.</p>
-    </a>
-    {% for tool_key, tool in sputter_tools.items() %}
-    <a href="{{ url_for(sputter_blueprint_name(tool_key) ~ '.page') }}" class="card">
-        <h2>{{ tool.nav_label }} Data Entry</h2>
-        <p>{{ tool.card_description }}</p>
+    {% for division in divisions %}
+    <a href="{{ url_for('division', key=division.key) }}" class="card">
+        <h2>{{ division.label }}</h2>
+        <p>{{ division.description }}</p>
+        <p class="card-meta">{{ division.tools | map(attribute='nav_label') | join(' · ') }}</p>
     </a>
     {% endfor %}
-    <a href="{{ url_for('b30_ebeam.page') }}" class="card">
-        <h2>B30 E-beam Data Entry</h2>
-        <p>Look up or create samples by barcode and upload e-beam evaporation parameters to Crucible.</p>
-    </a>
-    <a href="{{ url_for('electrolyte.page') }}" class="card">
-        <h2>Electrolyte Sample Creator</h2>
-        <p>Create electrolyte samples with ingredients, preparation date, concentration, and pH.</p>
-    </a>
-    <a href="{{ url_for('schema_forms.page') }}" class="card">
-        <h2>Schema Data Entry</h2>
-        <p>Pick a data type schema (or build one), fill in the generated form, link or create a sample, and create a dataset.</p>
-    </a>
-    <a href="{{ url_for('print.page') }}" class="card">
-        <h2>Print Barcodes</h2>
-        <p>Search Crucible for existing samples, or paste a list of names and MFIDs, and print barcode labels in bulk.</p>
-    </a>
-    <a href="{{ url_for('b30_sem.page') }}" class="card">
-        <h2>B30 SEM Data Entry</h2>
-        <p>Look up or create samples by barcode and upload SEM/EDX images to Crucible.</p>
-    </a>
 </div>
 {% endblock %}
