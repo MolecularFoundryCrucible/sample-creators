@@ -12,6 +12,7 @@ from routes.rga import rga_bp
 from routes.b30_sputter import b30_sputter_bp, blueprint_name
 from routes.b30_ebeam import b30_ebeam_bp
 from routes.b30_sem import b30_sem_bp
+from routes.b30_raman import b30_raman_bp
 from routes.electrolyte import electrolyte_bp
 from routes.schema_forms import schema_forms_bp
 
@@ -55,6 +56,7 @@ def create_app():
             name=blueprint_name(tool_key),
         )
     app.register_blueprint(b30_sem_bp, url_prefix="/b30-sem")
+    app.register_blueprint(b30_raman_bp, url_prefix="/b30-raman")
     app.register_blueprint(b30_ebeam_bp, url_prefix="/b30-ebeam")
     app.register_blueprint(electrolyte_bp, url_prefix="/electrolyte")
     app.register_blueprint(schema_forms_bp, url_prefix="/schema-forms")

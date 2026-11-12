@@ -118,7 +118,7 @@
                 <h2>SEM Parameters</h2>
                 <p class="help-text">Fill in the SEM parameters, or select a TIFF file above to auto-fill them.</p>
 
-                <div id="sem-param-grid" style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px 12px;">
+                <div id="param-grid" style="display:grid; grid-template-columns:repeat(2, minmax(0, 1fr)); gap:10px 12px;">
 
                     <!-- vacuum_level -->
                     <div class="form-group" style="margin-bottom:0;">
@@ -260,5 +260,7 @@
 
 {% block scripts %}
 {{ vite_entry('upload') }}
+{{ vite_entry('instrument') }}
+<script src="{{ url_for('static', filename='js/instrument_page.js') }}"></script>
 <script src="{{ url_for('static', filename='js/b30_sem.js') }}"></script>
 {% endblock %}

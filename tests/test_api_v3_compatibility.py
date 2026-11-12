@@ -131,8 +131,8 @@ class ApiV3PayloadTests(unittest.TestCase):
         })
         created = {"unique_id": DATASET_MFID}
 
-        with patch("routes.b30_sem.cruc_client.datasets._request", return_value=created) as request, \
-             patch("routes.b30_sem.cruc_client.datasets.add_sample") as add_sample:
+        with patch("routes.shared.cruc_client.datasets._request", return_value=created) as request, \
+             patch("routes.shared.cruc_client.datasets.add_sample") as add_sample:
             response = self.client.post("/b30-sem/api/upload-dataset", json={})
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
@@ -165,7 +165,7 @@ class ApiV3PayloadTests(unittest.TestCase):
         self.set_user()
         created = {"unique_id": "sample-1", "sample_name": "film"}
 
-        with patch("routes.b30_sem.cruc_client.samples.create", return_value=created) as create:
+        with patch("routes.shared.cruc_client.samples.create", return_value=created) as create:
             response = self.client.post("/b30-sem/api/create-sample", json={
                 "sample_name": "film",
                 "sample_type": "thin film",

@@ -31,6 +31,7 @@ export default defineConfig({
         upload: "src/upload/index.ts",
         synthesis: "src/manual-synthesis/synthesis-entry.jsx",
         traveler: "src/manual-synthesis/traveler-entry.jsx",
+        instrument: "src/parsers/index.ts",
       },
     },
   },
