@@ -19,6 +19,15 @@ def list_printers():
     return cruc_client._request("get", "/print/printers").get("printers", [])
 
 
+def add_scientific_metadata(resource_mfid, metadata):
+    """Set the scientific metadata of a resource that has none yet.
+
+    datasets.create(scientific_metadata=...) writes it with PATCH, which needs edit rights the
+    service account may lack on records it creates for users; POST only needs create rights.
+    """
+    return cruc_client._request("post", f"/resources/{resource_mfid}/metadata", json=metadata)
+
+
 def multipart_initiate(dataset_mfid, filename, size, idempotency_key):
     return cruc_client._request(
         "post", f"/datasets/{dataset_mfid}/upload/multipart/initiate",
