@@ -1,15 +1,17 @@
-FROM python:3.11-trixie
+# Build the browser bundles (frontend/ -> static/dist)
+FROM node:22-trixie-slim AS frontend
+WORKDIR /app/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/ ./
+RUN npm run build
 
-# Install Node.js for building Vite assets
-RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - && \
-    apt-get install -y nodejs && \
-    rm -rf /var/lib/apt/lists/*
+FROM python:3.13-trixie
 
-#UV
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /bin/
 
-# Copy the project into the image
 COPY . /app
+COPY --from=frontend /app/static/dist /app/static/dist
 
 # Disable development dependencies
 ENV UV_NO_DEV=1

@@ -1,3 +1,7 @@
+# One file for prod (trigger on main, defaults below) and staging (trigger on staging, which
+# overrides the substitutions: _SERVICE_NAME=sample-creators-staging,
+# _SCRIPT_NAME=/sample-creators-staging, _CRUCIBLE_API_URL=https://crucible.lbl.gov/testapi-staging,
+# _API_KEY_SECRET=<staging key secret>, _ALS_SAMPLE_TRACKER_ENABLED=false).
 steps:
   # Step 1: Build the Docker image
   - name: 'gcr.io/cloud-builders/docker'
@@ -21,11 +25,13 @@ steps:
       - '--platform'
       - 'managed'
       - '--port=5000'
+      # Reachable only through crucible.lbl.gov's proxy, never directly at *.run.app.
+      - '--ingress=internal'
       - '--set-env-vars'
-      - 'SCRIPT_NAME=/sample-creators'
+      - 'SCRIPT_NAME=${_SCRIPT_NAME},CRUCIBLE_API_URL=${_CRUCIBLE_API_URL},ALS_SAMPLE_TRACKER_ENABLED=${_ALS_SAMPLE_TRACKER_ENABLED}'
       - '--set-secrets'
       - >-
-        CRUCIBLE_API_KEY=crucible_admin_apikey:latest,
+        CRUCIBLE_API_KEY=${_API_KEY_SECRET}:latest,
         ALS_SAMPLE_TRACKER_PASSWORD=als-sample-tracker-apikey-prod:latest,
       - '--service-account'
       - 'sample-creators-cloudrun@mf-crucible.iam.gserviceaccount.com'
@@ -33,6 +39,10 @@ steps:
 
 substitutions:
   _SERVICE_NAME: 'sample-creators'
+  _SCRIPT_NAME: '/sample-creators'
+  _CRUCIBLE_API_URL: 'https://crucible.lbl.gov/api/v3'
+  _API_KEY_SECRET: 'crucible_admin_apikey'
+  _ALS_SAMPLE_TRACKER_ENABLED: 'true'
   _REGION: 'us-central1'
   _IMAGE_PATH: '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${REPO_NAME}/${BRANCH_NAME}'
   _SERVICE_URL: 'https://${_SERVICE_NAME}-${PROJECT_NUMBER}.us-central1.run.app'

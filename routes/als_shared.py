@@ -9,6 +9,8 @@ from beamline_data_toolkit.sample_tracker import SampleTrackerClient
 from config import ALS_SAMPLE_TRACKER_URL, ALS_SAMPLE_TRACKER_USER
 
 als_pw = os.environ.get('ALS_SAMPLE_TRACKER_PASSWORD', 'alsadmin')
+# There is only the production Sample Tracker, so non-production deployments turn it off.
+ALS_SAMPLE_TRACKER_ENABLED = os.environ.get('ALS_SAMPLE_TRACKER_ENABLED', 'true').lower() != 'false'
 
 
 class _LazySampleTrackerClient:
@@ -25,6 +27,9 @@ class _LazySampleTrackerClient:
         self._client = None
 
     def __getattr__(self, name):
+        if not ALS_SAMPLE_TRACKER_ENABLED:
+            raise RuntimeError("The ALS Sample Tracker is turned off in this environment "
+                               "(ALS_SAMPLE_TRACKER_ENABLED=false).")
         if self._client is None:
             self._client = SampleTrackerClient(
                 base_url=ALS_SAMPLE_TRACKER_URL,

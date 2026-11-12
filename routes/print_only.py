@@ -5,7 +5,8 @@ from zoneinfo import ZoneInfo
 from flask import Blueprint, request, jsonify, session, render_template, current_app
 
 from config import PRINT_CONFIG
-from routes.shared import cruc_client, publish_barcode, resolve_printer, list_printers, PrinterTimeoutError
+from routes.crucible_api import list_printers
+from routes.shared import cruc_client, publish_barcode, resolve_printer, PrinterTimeoutError
 
 print_bp = Blueprint("print", __name__)
 
