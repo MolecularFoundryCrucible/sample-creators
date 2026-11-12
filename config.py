@@ -208,4 +208,7 @@ TOOLS = [
     {"key": "print", "division": "b30", "endpoint": "print.page",
      "nav_label": "Print Barcodes", "card_title": "Print Barcodes",
      "card_description": "Search Crucible for existing samples, or paste a list of names and MFIDs, and print barcode labels in bulk."},
+    {"key": "synthesis", "division": "b67", "endpoint": "synthesis.page",
+     "nav_label": "Synthesis Upload", "card_title": "Synthesis Upload",
+     "card_description": "Enter solid precursors, stock solutions and precursor solutions in a spreadsheet grid; parent samples are linked by name."},
 ]

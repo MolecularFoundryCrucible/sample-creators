@@ -1,0 +1,587 @@
+/* Copied from manual-synthesis-ui frontend/src/styles/App.css at c25ae5c. Scoped under .ms-island at build time (vite.config.ts). */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: Helvetica, Arial, sans-serif;
+  background-color: #f5f5f5;
+  color: #333;
+  line-height: 1.6;
+}
+
+.app {
+  min-height: 100vh;
+  padding: 2rem;
+}
+
+.container {
+  max-width: 1400px;
+  margin: 0 auto;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+}
+
+/* ============================================================================
+   Login Component
+   ============================================================================ */
+
+.login-container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 60vh;
+}
+
+.login-box {
+  width: 100%;
+  max-width: 500px;
+  text-align: center;
+}
+
+.login-box h1 {
+  font-size: 2rem;
+  margin-bottom: 0.5rem;
+  color: #1a73e8;
+}
+
+.subtitle {
+  color: #666;
+  margin-bottom: 2rem;
+}
+
+.login-form {
+  margin-top: 2rem;
+}
+
+/* ============================================================================
+   Form Elements
+   ============================================================================ */
+
+.form-group {
+  margin-bottom: 1.5rem;
+  text-align: left;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  font-weight: 500;
+  color: #333;
+}
+
+.form-group input,
+.form-group select {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-family: Helvetica, Arial, sans-serif;
+}
+
+.form-group input:focus,
+.form-group select:focus {
+  outline: none;
+  border-color: #1a73e8;
+  box-shadow: 0 0 0 2px rgba(26, 115, 232, 0.1);
+}
+
+.form-group input:disabled,
+.form-group select:disabled {
+  background-color: #f5f5f5;
+  cursor: not-allowed;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-bottom: 2rem;
+}
+
+.form-section {
+  margin-top: 2rem;
+}
+
+/* ============================================================================
+   Buttons
+   ============================================================================ */
+
+.btn {
+  padding: 0.75rem 1.5rem;
+  border: none;
+  border-radius: 4px;
+  font-size: 1rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: Helvetica, Arial, sans-serif;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background-color: #1a73e8;
+  color: white;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background-color: #1557b0;
+}
+
+.btn-secondary {
+  background-color: #f1f3f4;
+  color: #333;
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background-color: #e8eaed;
+}
+
+.btn-large {
+  padding: 1rem 2rem;
+  font-size: 1.1rem;
+}
+
+.button-group {
+  display: flex;
+  gap: 1rem;
+  margin-top: 1.5rem;
+}
+
+/* ============================================================================
+   User Info
+   ============================================================================ */
+
+.user-info-box {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 4px;
+  margin-bottom: 2rem;
+  text-align: center;
+}
+
+/* ============================================================================
+   Data Table
+   ============================================================================ */
+
+.data-table-container {
+  margin-top: 1rem;
+}
+
+.table-controls {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-bottom: 1rem;
+  flex-wrap: wrap;
+}
+
+.table-info {
+  margin-left: auto;
+  color: #666;
+  font-size: 0.9rem;
+}
+
+.data-grid-wrapper {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.rdg {
+  font-family: Helvetica, Arial, sans-serif;
+}
+
+.rdg-cell {
+  padding: 0 8px;
+}
+
+/* ============================================================================
+   Messages
+   ============================================================================ */
+
+.error-message {
+  background-color: #fdecea;
+  border: 1px solid #f5c6cb;
+  color: #721c24;
+  padding: 1rem;
+  border-radius: 4px;
+  margin: 1rem 0;
+}
+
+.warning-message {
+  background-color: #fff3cd;
+  border: 1px solid #ffc107;
+  color: #856404;
+  padding: 1rem;
+  border-radius: 4px;
+  margin: 1rem 0;
+}
+
+.success-box {
+  background-color: #d4edda;
+  border: 1px solid #c3e6cb;
+  padding: 1.5rem;
+  border-radius: 4px;
+  margin: 1rem 0;
+}
+
+.summary-message {
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+/* ============================================================================
+   Batch Resolution
+   ============================================================================ */
+
+.batch-resolution {
+  max-width: 700px;
+  margin: 0 auto;
+}
+
+.batch-resolution h2 {
+  margin-bottom: 1rem;
+  color: #1a73e8;
+}
+
+.batch-resolution h3 {
+  margin-top: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.batch-form,
+.batch-selection {
+  margin-top: 1.5rem;
+}
+
+/* ============================================================================
+   Summary
+   ============================================================================ */
+
+.summary-container {
+  max-width: 800px;
+  margin: 0 auto;
+}
+
+.summary-container h2 {
+  margin-bottom: 1rem;
+  color: #1a73e8;
+}
+
+.summary-details {
+  margin-top: 2rem;
+}
+
+.summary-details h3 {
+  margin-bottom: 1rem;
+}
+
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.summary-item {
+  background-color: #f8f9fa;
+  padding: 1rem;
+  border-radius: 4px;
+}
+
+.summary-label {
+  display: block;
+  font-weight: 500;
+  color: #666;
+  font-size: 0.9rem;
+  margin-bottom: 0.25rem;
+}
+
+.summary-value {
+  display: block;
+  font-size: 1.2rem;
+  font-weight: 600;
+  color: #333;
+}
+
+.error-section {
+  margin-top: 1.5rem;
+  padding: 1rem;
+  background-color: #fdecea;
+  border: 1px solid #f5c6cb;
+  border-radius: 4px;
+}
+
+.error-section h4 {
+  color: #721c24;
+  margin-bottom: 0.5rem;
+}
+
+.error-list {
+  list-style-position: inside;
+  color: #721c24;
+}
+
+.error-list li {
+  margin-bottom: 0.25rem;
+}
+
+/* ============================================================================
+   Responsive Design
+   ============================================================================ */
+
+@media (max-width: 768px) {
+  .app {
+    padding: 1rem;
+  }
+
+  .container {
+    padding: 1rem;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+
+  .button-group {
+    flex-direction: column;
+  }
+
+  .btn {
+    width: 100%;
+  }
+
+  .table-info {
+    margin-left: 0;
+    width: 100%;
+  }
+}
+
+/* ============================================================================
+   Table Section
+   ============================================================================ */
+
+.table-section {
+  margin-top: 2rem;
+}
+
+.table-section h3 {
+  margin-bottom: 1rem;
+}
+
+/* ============================================================================
+   Validation Review
+   ============================================================================ */
+
+.validation-review {
+  margin-top: 1.5rem;
+}
+
+.validation-section {
+  margin-top: 1.5rem;
+}
+
+.validation-section h3 {
+  margin-bottom: 0.5rem;
+}
+
+.validation-section .error-list {
+  color: #856404;
+}
+
+.validation-note {
+  color: #5f6368;
+  font-size: 0.9rem;
+  margin: 0.5rem 0;
+}
+
+.validation-item {
+  border: 1px solid #dadce0;
+  border-radius: 4px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.validation-item-header {
+  font-weight: 500;
+  margin-bottom: 0.75rem;
+}
+
+.candidate-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.candidate-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  border: 1px solid #e8eaed;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.candidate-option:hover {
+  background-color: #f8f9fa;
+}
+
+.candidate-option input {
+  margin-top: 0.25rem;
+}
+
+.candidate-body {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.candidate-name {
+  font-weight: 500;
+}
+
+.candidate-meta {
+  color: #5f6368;
+  font-size: 0.85rem;
+}
+
+.candidate-id {
+  font-family: monospace;
+  font-size: 0.8rem;
+  color: #5f6368;
+}
+
+.candidate-desc {
+  flex-basis: 100%;
+  color: #5f6368;
+  font-size: 0.85rem;
+}
+
+.confirm-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  cursor: pointer;
+}
+
+/* ============================================================================
+   Fabrication Traveler
+   ============================================================================ */
+
+.mode-tabs { display: flex; gap: 0.5rem; margin-bottom: 1rem; border-bottom: 2px solid #e8eaed; }
+.mode-tab {
+  padding: 0.6rem 1.2rem; border: none; background: none; cursor: pointer; font-size: 1rem;
+  border-bottom: 3px solid transparent; margin-bottom: -2px; color: #555;
+}
+.mode-tab.active { border-bottom-color: #1a73e8; color: #1a73e8; font-weight: 600; }
+
+.muted { color: #777; font-size: 0.9em; }
+.btn-small { padding: 0.35rem 0.75rem; font-size: 0.85rem; }
+.link-button {
+  background: none; border: none; padding: 0; color: #1a73e8; cursor: pointer;
+  font-size: 1rem; text-decoration: underline;
+}
+.wafer-list { list-style: none; padding: 0; }
+.wafer-list li { padding: 0.35rem 0; border-bottom: 1px solid #f1f3f4; }
+
+.traveler-header { display: flex; align-items: center; gap: 1rem; flex-wrap: wrap; margin-bottom: 1rem; }
+.traveler-header h2, .traveler-header h3 { margin: 0; flex: 1; }
+.traveler-grid { display: grid; grid-template-columns: minmax(220px, 1fr) 3fr; gap: 2rem; }
+@media (max-width: 900px) { .traveler-grid { grid-template-columns: 1fr; } }
+.unit-tree, .unit-tree ul { list-style: none; padding-left: 1rem; margin: 0.25rem 0; }
+.unit-tree { padding-left: 0; }
+
+.step-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+.step-table th, .step-table td { text-align: left; padding: 0.4rem 0.5rem; border-bottom: 1px solid #e8eaed; }
+.step-table .applied-to { max-width: 14rem; color: #555; }
+.step-done td:nth-child(3) { color: #188038; font-weight: 600; }
+.step-skipped td { color: #999; }
+.step-next { background: #e8f0fe; }
+
+.modal-backdrop {
+  position: fixed; inset: 0; background: rgba(0, 0, 0, 0.4);
+  display: flex; align-items: flex-start; justify-content: center; overflow-y: auto; z-index: 100;
+}
+.modal-panel {
+  background: white; border-radius: 8px; padding: 1.5rem; margin: 3rem 1rem;
+  width: min(900px, 100%); box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
+}
+.substeps { margin: 0.75rem 0; }
+.substeps ol { margin: 0.5rem 0; padding-left: 1.5rem; font-size: 0.9rem; }
+.param-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 0 1rem; }
+.target-list { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; }
+.children-editor { margin: 0.75rem 0; }
+.children-editor input[type='number'] { width: 4rem; }
+.children-names { display: flex; flex-wrap: wrap; gap: 0.4rem; margin-top: 0.4rem; }
+
+
+.crucible-label { display: flex; flex-direction: column; gap: 0.5rem; margin-top: 1rem; }
+.crucible-label h4 { margin: 0; }
+
+.label-layout { display: grid; grid-template-columns: 1fr auto; gap: 1.5rem; }
+.label-fields { display: flex; flex-direction: column; gap: 0.15rem; max-height: 34rem; overflow-y: auto; }
+.label-preview {
+  width: 6cm; font-size: 12px; font-family: 'Times New Roman', serif; padding: 5px;
+  border: 2px solid black; background: white; overflow-wrap: break-word; overflow: hidden;
+}
+.label-preview p { margin: 0; }
+.label-qr { float: right; width: 1.6cm; height: 1.6cm; margin-left: 4px; }
+.label-notes { white-space: pre-wrap; }
+.label-notes-input { width: 6cm; margin-top: 0.5rem; box-sizing: border-box; }
+.target-list input[type='checkbox'],
+.label-fields input[type='checkbox'] { width: auto; margin: 0; }
+.target-list .confirm-checkbox, .label-fields .confirm-checkbox { margin-top: 0.25rem; }
+.children-names input,
+.children-editor input[type='number'],
+.crucible-label select {
+  padding: 0.4rem 0.5rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.9rem;
+}
+.children-names input { width: 17rem; }
+.label-notes-input { padding: 0.4rem; border: 1px solid #ddd; border-radius: 4px; }
+.modal-panel textarea { width: 100%; box-sizing: border-box; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; }
+.step-actions { display: flex; flex-wrap: wrap; gap: 0.3rem; justify-content: flex-end; }
+.substep-table-wrap { overflow-x: auto; }
+.substep-table { border-collapse: collapse; font-size: 0.85rem; width: 100%; }
+.substep-table th, .substep-table td { padding: 0.25rem; border-bottom: 1px solid #eee; text-align: left; }
+.substep-table td:first-child { white-space: nowrap; font-weight: 600; }
+.substep-table input { width: 100%; min-width: 6rem; padding: 0.3rem; border: 1px solid #ddd; border-radius: 4px; font-size: 0.85rem; box-sizing: border-box; }
+.file-list { margin: 0.25rem 0 0.5rem; padding-left: 1.2rem; }
+.form-group input.file-input { border: none; padding: 0.25rem 0; }
+.label-preview .process { border-bottom: 1px dashed black; margin-bottom: 5px; padding-bottom: 5px; }
+.label-preview .process:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.label-section-picker { margin-bottom: 0.4rem; }
+.label-fields .section-toggle { font-weight: 600; }
+.label-fields .field-toggle { margin-left: 1.4rem; font-size: 0.9rem; }
+.label-notes-input { display: block; }
+.label-note-field { display: block; margin-top: 0.4rem; width: 6cm; }
+.label-note-field .label-notes-input { margin-top: 0.15rem; }
+.step-rows { margin: 0.5rem 0 1rem; }
+.step-row { border-top: 1px solid #eee; padding: 0.5rem 0 0.25rem; }
+.step-row-title { font-weight: 600; margin-bottom: 0.25rem; }
+.step-row .param-grid .form-group { margin-bottom: 0.5rem; }
+.param-grid .form-group.wide { grid-column: 1 / -1; }
+/* Sub-step fields: labels stay on one line; a field widens to fit its label instead of wrapping. */
+.step-row .param-grid { display: flex; flex-wrap: wrap; gap: 0 1rem; }
+.step-row .param-grid .form-group { flex: 0 0 auto; width: max-content; min-width: 200px; max-width: 100%; }
+.step-row .param-grid .form-group label { white-space: nowrap; }
+.step-row .param-grid .form-group.wide { flex-basis: 100%; width: 100%; }
+.row-comment { margin: 0 0 0.35rem; }
+.comment-toggle {
+  background: none; border: none; padding: 0.15rem 0; cursor: pointer; color: #5f6368;
+  font-size: 0.85rem; text-align: left; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.comment-toggle:hover { color: #1a73e8; }
+.row-comment textarea { display: block; margin-top: 0.25rem; }

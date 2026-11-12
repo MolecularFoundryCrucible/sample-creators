@@ -102,6 +102,11 @@ class SynthesisUploadTests(unittest.TestCase):
         body = self.upload("Solid Precursor", [row(**{"Sample Name": "SP-1"})], confirm_duplicate_names=True).get_json()
         self.assertTrue(body["success"])
 
+    def test_page_mounts_the_react_island(self):
+        html = self.api.get("/synthesis/").get_data(as_text=True)
+        self.assertIn('id="synthesis-root"', html)
+        self.assertIn('onsubmit="loginUser(event)"', html)
+
     def test_owner_comes_from_the_session(self):
         r = self.upload("Solid Precursor", [row(**{"Sample Name": "SP-2"})], orcid="9999-9999")
         self.assertTrue(r.get_json()["success"])
