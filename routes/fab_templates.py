@@ -282,6 +282,7 @@ WAFER_SPEC_STEP = {
         text("base_metal", "Base metal"),
         text("batch_number", "Batch number"),
         text("gds_file", "GDS file name / link"),
+        text("mask_design", "Reviewed chip map"),
     ],
 }
 

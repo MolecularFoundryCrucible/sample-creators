@@ -74,3 +74,8 @@ def request_ingestion(file_mfid, requested=True, ingestion_class=None):
     if requested and ingestion_class:
         params["ingestion_class"] = ingestion_class
     return cruc_client._request("post", f"/files/{file_mfid}/ingest", retry=False, params=params)
+
+
+def list_ingestion_requests(dataset_mfid):
+    """Ingestion requests for one dataset, newest first."""
+    return cruc_client._request("get", "/ingestion_requests", params={"dataset_mfid": dataset_mfid, "limit": 100})

@@ -28,7 +28,8 @@
         </section>
 </div>
 
-<div id="traveler-root" class="ms-island" data-wafer-id="{{ wafer_id or '' }}"></div>
+<div id="traveler-root" class="ms-island" data-wafer-id="{{ wafer_id or '' }}" data-mask-id="{{ mask_id or '' }}"
+         data-initial-view="{{ 'masks' if mask_id is defined else 'wafers' }}"></div>
 {% endblock %}
 
 {% block scripts %}
