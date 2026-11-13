@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { recordStep, editStepRecord, getStepRecord } from '../../services/api';
 import { uploadFiles as uploadToStorage } from '../../../upload';
+import MapChildrenEditor from './MapChildrenEditor';
+import { childDetailsPayload } from '../../../chip-map/chip-map.ts';
 
 const ALLOWED_PARENTS = { create_chiplets: ['wafer'], create_chips: ['wafer', 'chiplet'] };
 const CHILD_SUFFIX = { create_chiplets: 'CL', create_chips: 'C' };
@@ -61,6 +63,7 @@ const StepForm = ({ step, record, traveler, project, userInfo, earlierPending = 
   const [children, setChildren] = useState(() =>
     Object.fromEntries(parentCandidates.map((u) => [u.unique_id, childNames(u.sample_name, CHILD_SUFFIX[action], 4)]))
   );
+  const [childDetails, setChildDetails] = useState({});
   const [newFiles, setNewFiles] = useState([]);
   const [attached, setAttached] = useState(null);
   const [error, setError] = useState('');
@@ -143,6 +146,8 @@ const StepForm = ({ step, record, traveler, project, userInfo, earlierPending = 
           new_children: action && status === 'done'
             ? Object.fromEntries(targets.map((t) => [t, children[t] || []]))
             : {},
+          child_details: action && status === 'done' && traveler.chip_map
+            ? childDetailsPayload(children, childDetails) : {},
         });
         datasetId = res.dataset_id;
         issues = res.errors;
@@ -270,7 +275,12 @@ const StepForm = ({ step, record, traveler, project, userInfo, earlierPending = 
           </div>
         )}
 
-        {action && targets.map((parentId) => {
+        {action && traveler.chip_map ? (
+          <MapChildrenEditor action={action} mapRecord={traveler.chip_map} plannedChiplets={traveler.planned_chiplets}
+                             wafer={wafer} units={units}
+                             targets={targets} children={children} setChildren={setChildren}
+                             setChildDetails={setChildDetails} />
+        ) : action && targets.map((parentId) => {
           const parent = units.find((u) => u.unique_id === parentId);
           const names = children[parentId] || [];
           return (

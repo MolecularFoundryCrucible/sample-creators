@@ -61,6 +61,9 @@ class FakeSamples(_Checked):
 
     def list(self, dataset_mfid=None, parent_mfid=None, limit=100, project_id=None, **kwargs):
         out = list(self.s["samples"].values())
+        if dataset_mfid:
+            kids = {s for s, d in self.s["sample_datasets"] if d == dataset_mfid}
+            out = [r for r in out if r["unique_id"] in kids]
         if parent_mfid:
             kids = {c for p, c in self.s["links"] if p == parent_mfid}
             out = [r for r in out if r["unique_id"] in kids]
@@ -104,16 +107,39 @@ class FakeDatasets(_Checked):
         return rec
 
     def list(self, sample_mfid=None, include_metadata=False, limit=100, **kwargs):
-        out = []
-        for s, d in self.s["sample_datasets"]:
-            if s == sample_mfid:
-                out.append(self.get(d, include_metadata=include_metadata))
+        if sample_mfid is None:
+            out = [self.get(d, include_metadata=include_metadata) for d in self.s["datasets"]]
+        else:
+            out = []
+            for s, d in self.s["sample_datasets"]:
+                if s == sample_mfid:
+                    out.append(self.get(d, include_metadata=include_metadata))
+        for key in ("project_id", "measurement"):
+            if key in kwargs:
+                out = [r for r in out if r.get(key) == kwargs[key]]
         return out
+
+    def link_sample(self, dataset_mfid, sample_mfid):
+        if (sample_mfid, dataset_mfid) not in self.s["sample_datasets"]:
+            self.s["sample_datasets"].append((sample_mfid, dataset_mfid))
+        return {}
+
+    def link(self, parent_mfid, child_mfid, relationship_type=None):
+        self.s["dataset_links"].append((parent_mfid, child_mfid))
+        return {}
+
+    def list_children(self, parent_mfid, limit=100, **kwargs):
+        children = [child for parent, child in self.s["dataset_links"] if parent == parent_mfid]
+        return [self.get(child, include_metadata=kwargs.get("include_metadata", False)) for child in children]
 
     def update_scientific_metadata(self, resource_mfid, metadata, overwrite=False):
         if not self.s["can_edit"]:
             raise _http_error(403)
-        self.s["datasets"][resource_mfid]["scientific_metadata"] = metadata
+        if overwrite:
+            self.s["datasets"][resource_mfid]["scientific_metadata"] = metadata
+        else:
+            current = self.s["datasets"][resource_mfid].get("scientific_metadata") or {}
+            self.s["datasets"][resource_mfid]["scientific_metadata"] = {**current, **metadata}
         return {}
 
     def add_file(self, dataset_mfid, file_path, ingestion_class=None, wait_for_ingestion_response=False,
@@ -148,7 +174,8 @@ def install(client):
     """Swap the client's resources for fakes. Returns (store, restore)."""
     saved = {name: client.__dict__.get(name) for name in ("samples", "datasets", "print", "_request")}
     store = {"samples": {}, "links": [], "datasets": {}, "sample_datasets": [], "files": {}, "prints": [],
-             "fail_link": set(), "can_edit": True, "print_result": {"status": "ok"}}
+             "fail_link": set(), "can_edit": True, "print_result": {"status": "ok"},
+             "dataset_links": [], "ingestion_requests": {}}
     client.samples = FakeSamples(store)
     client.datasets = FakeDatasets(store)
     client.print = FakePrint(store)
@@ -156,10 +183,13 @@ def install(client):
     def _request(method, path, **kwargs):
         if method == "post" and path.endswith("/metadata") and not kwargs.get("params"):
             uid = path.split("/")[2]
-            if store["datasets"][uid]["scientific_metadata"]:
+            records = store["datasets"] if uid in store["datasets"] else store["samples"]
+            if records[uid].get("scientific_metadata"):
                 raise _http_error(409)
-            store["datasets"][uid]["scientific_metadata"] = kwargs["json"]
+            records[uid]["scientific_metadata"] = kwargs["json"]
             return {}
+        if method == "get" and path == "/ingestion_requests":
+            return {"items": store["ingestion_requests"].get(kwargs.get("params", {}).get("dataset_mfid"), [])}
         if method == "get" and path == "/print/printers":
             return {"printers": [{"printer_id": "b30-113", "online": True}]}
         raise AssertionError(f"unexpected request {method} {path}")

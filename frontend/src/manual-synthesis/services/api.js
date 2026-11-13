@@ -28,6 +28,20 @@ export const listWafers = async (project) =>
 
 export const createWafer = async (body) => (await api.post('/fabrication/api/wafers', body)).data;
 
+export const listMaskDesigns = async (project) =>
+  (await api.get('/fabrication/api/masks', { params: { project } })).data;
+
+export const createMaskDesign = async (body) => (await api.post('/fabrication/api/masks', body)).data;
+
+export const getMaskDesign = async (maskId) =>
+  (await api.get(`/fabrication/api/masks/${encodeURIComponent(maskId)}`)).data;
+
+export const getChipMap = async (mapId) =>
+  (await api.get(`/fabrication/api/chip-maps/${encodeURIComponent(mapId)}`)).data;
+
+export const saveChipMap = async (maskId, body) =>
+  (await api.post(`/fabrication/api/masks/${encodeURIComponent(maskId)}/chip-maps`, body)).data;
+
 export const getTraveler = async (waferId) =>
   (await api.get(`/fabrication/api/wafers/${encodeURIComponent(waferId)}/traveler`)).data;
 

@@ -79,6 +79,11 @@ class SynthesisUploadResponse(BaseModel):
 # ---------- Fabrication traveler ----------
 
 
+class PlannedChiplet(BaseModel):
+    block: str
+    name: str
+
+
 class WaferCreateRequest(BaseModel):
     project: str
     template_id: str
@@ -87,6 +92,7 @@ class WaferCreateRequest(BaseModel):
     wafer_options: Dict[str, str]
     template_default: str = "standard"
     spec: Dict[str, Any] = {}
+    planned_chiplets: List[PlannedChiplet] = []
     step_date: Optional[str] = None
     orcid: Optional[str] = None
     operator: Optional[str] = None
@@ -107,6 +113,8 @@ class StepRecordRequest(BaseModel):
     comments: Optional[str] = None
     # For create_chiplets / create_chips steps: parent unique_id -> new child names.
     new_children: Dict[str, List[str]] = {}
+    # New child sample name -> map-derived scientific metadata.
+    child_details: Dict[str, Dict[str, Any]] = {}
     orcid: Optional[str] = None
     operator: Optional[str] = None
 
@@ -116,6 +124,8 @@ class StepEditRequest(BaseModel):
     rows: Dict[str, Dict[str, Any]] = {}
     # Only used when editing the wafer specification record.
     parameters: Dict[str, Any] = {}
+    # None preserves the existing plan; an empty list explicitly clears it.
+    planned_chiplets: Optional[List[PlannedChiplet]] = None
     comments: Optional[str] = None
     orcid: Optional[str] = None
     operator: Optional[str] = None
@@ -124,3 +134,28 @@ class StepEditRequest(BaseModel):
 class PrintLabelRequest(BaseModel):
     printer_id: str
     sample_id: str
+
+
+class MaskCreateRequest(BaseModel):
+    project: str
+    dataset_name: str
+
+
+class ChipMapBlock(BaseModel):
+    id: str
+    name: str
+
+
+class ChipMapChip(BaseModel):
+    id: str
+    block: str
+    label: str
+    outline: List[float]
+    layer: Optional[str] = None
+
+
+class ChipMapCreateRequest(BaseModel):
+    units: Literal["mm"] = "mm"
+    blocks: List[ChipMapBlock]
+    chips: List[ChipMapChip]
+    expected_version: int = 0

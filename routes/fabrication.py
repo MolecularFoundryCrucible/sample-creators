@@ -5,6 +5,7 @@ are uploaded by the browser straight to storage through /api/uploads (with inges
 as not requested), so there is no file upload route here.
 """
 import logging
+import math
 from concurrent.futures import ThreadPoolExecutor
 
 from flask import Blueprint, jsonify, render_template, request
@@ -12,6 +13,7 @@ from flask import Blueprint, jsonify, render_template, request
 from crucible import Dataset
 from crucible.utils import get_tz_isoformat
 from routes import crucible_api
+from routes.chip_maps import clean_chiplet_plan, load_chip_map, lock_chip_map
 from routes.fab_templates import DEFAULT_TEMPLATE_DEFAULT, FAB_TEMPLATES, get_step, step_applies
 from routes.shared import PrinterTimeoutError, cruc_client, publish_barcode
 from routes.synthesis_common import (ApiError, add_sample, current_user, explorer_url, parse_body,
@@ -85,12 +87,16 @@ def clean_rows(step, values):
 
 
 def unit_summary(sample, parent_id, project):
+    # Map-derived fields let Step 19 put each chip under the chiplet cut from its block.
+    meta = sample.get("scientific_metadata") or {}
+    chip_details = {k: meta[k] for k in ("chip_id", "block", "label", "outline_mm", "mask_design") if k in meta}
     return {
         "unique_id": sample["unique_id"],
         "sample_name": sample.get("sample_name"),
         "sample_type": sample.get("sample_type"),
         "parent_id": parent_id,
         "explorer_url": explorer_url(project, sample["unique_id"]),
+        "chip_details": chip_details or None,
     }
 
 
@@ -102,7 +108,7 @@ def get_tree(wafer):
     while frontier:
         next_frontier = []
         for parent_id in frontier:
-            for child in cruc_client.samples.list(parent_mfid=parent_id, limit=None):
+            for child in cruc_client.samples.list(parent_mfid=parent_id, include_metadata=True, limit=None):
                 if child.get("sample_type") in ("chiplet", "chip"):
                     units.append(unit_summary(child, parent_id, project))
                     next_frontier.append(child["unique_id"])
@@ -139,6 +145,7 @@ def collect_records(units, template_id):
                     "edited_by": meta.get("edited_by"),
                     "edited_at": meta.get("edited_at"),
                     "wafer_options": meta.get("wafer_options"),
+                    "planned_chiplets": meta.get("planned_chiplets"),
                     "template_default": meta.get("template_default"),
                     "unit_ids": [],
                 })
@@ -215,6 +222,12 @@ def page(wafer_id=None):
     return render_template("fabrication.html", wafer_id=wafer_id)
 
 
+@fabrication_bp.route("/masks/")
+@fabrication_bp.route("/masks/<mask_id>")
+def masks_page(mask_id=None):
+    return render_template("fabrication.html", mask_id=mask_id)
+
+
 @fabrication_bp.route("/api/templates", methods=["GET"])
 def list_templates():
     return jsonify({"templates": FAB_TEMPLATES})
@@ -250,6 +263,9 @@ def create_wafer():
     template_default = check_template_default(template, req.template_default)
     spec_step = template["wafer_spec"]
     spec = clean_parameters(spec_step, req.spec)
+    if spec.get("mask_design"):
+        load_chip_map(spec["mask_design"], project=req.project)
+    planned_chiplets = clean_chiplet_plan(req.planned_chiplets, spec.get("mask_design"), req.project)
     wafer_options = {k: req.wafer_options[k] for k in template["wafer_options"]}
 
     new_wafer = add_sample(orcid=user["orcid"], project=req.project, sample_name=name,
@@ -257,9 +273,16 @@ def create_wafer():
     wafer = {"unique_id": new_wafer["unique_id"], "sample_name": name}
     step_date = req.step_date or get_tz_isoformat()[:10]
     metadata = step_metadata(req.template_id, spec_step, wafer, "done", step_date, user["user_name"], None,
-                             parameters=spec, wafer_options=wafer_options, template_default=template_default)
+                             parameters=spec, wafer_options=wafer_options, template_default=template_default,
+                             planned_chiplets=planned_chiplets)
     dataset_id, link_errors = create_step_dataset(req.project, user["orcid"], req.template_id, spec_step,
                                                   wafer, metadata, [wafer["unique_id"]])
+    if spec.get("mask_design"):
+        try:
+            lock_chip_map(spec["mask_design"], wafer["unique_id"], name)
+        except Exception as err:
+            logger.error("Locking chip map %s failed: %s", spec["mask_design"], err)
+            link_errors.append(f"Chip map could not be marked as used: {err}")
     return jsonify({"wafer": {**wafer, "explorer_url": explorer_url(req.project, wafer["unique_id"])},
                     "dataset_id": dataset_id, "errors": link_errors})
 
@@ -274,6 +297,8 @@ def get_traveler(wafer_id):
 
     spec_record = next((r for r in records if r["step_id"] == "wafer_spec"), None)
     wafer_options = (spec_record or {}).get("wafer_options") or {}
+    spec = (spec_record or {}).get("parameters") or {}
+    chip_map = load_chip_map(spec["mask_design"]) if spec.get("mask_design") else None
 
     steps = []
     for step in template["steps"]:
@@ -294,11 +319,101 @@ def get_traveler(wafer_id):
         "template_default": (spec_record or {}).get("template_default") or DEFAULT_TEMPLATE_DEFAULT,
         "wafer": units[0],
         "wafer_options": wafer_options,
-        "spec": (spec_record or {}).get("parameters") or {},
+        "spec": spec,
+        "planned_chiplets": (spec_record or {}).get("planned_chiplets"),
+        "chip_map": chip_map,
         "spec_record": spec_record,
         "units": units,
         "steps": steps,
     })
+
+
+def clean_child_details(planned, details, wafer_map_id, project, unit_by_id, action, units):
+    """Bind every map-derived child to the wafer's exact map and physical parent block."""
+    if not wafer_map_id:
+        if details:
+            raise ApiError(400, "This wafer has no reviewed chip map")
+        return {}
+    chip_map = load_chip_map(wafer_map_id, project=project)["chip_map"]
+    blocks = {b["id"]: b for b in chip_map["blocks"]}
+    blocks.update({b["name"]: b for b in blocks.values()})
+    chips = {c["id"]: c for c in chip_map["chips"]}
+    missing = set(details) ^ {name for _, name in planned}
+    if missing:
+        raise ApiError(400, f"Map-derived children need exactly one metadata entry: {sorted(missing)}")
+
+    cleaned = {}
+    for parent_id, name in planned:
+        fields = details[name]
+        if not isinstance(fields, dict):
+            raise ApiError(400, f"Chip details for {name} must be an object")
+        required = ({"chip_id", "block", "label", "outline_mm", "mask_design"}
+                    if action == "create_chips" else {"block", "outline_mm", "mask_design"})
+        unknown = set(fields) - required
+        missing_fields = required - set(fields)
+        if unknown:
+            raise ApiError(400, f"Unknown chip detail fields for {name}: {sorted(unknown)}")
+        if missing_fields:
+            raise ApiError(400, f"Missing chip detail fields for {name}: {sorted(missing_fields)}")
+        if fields.get("mask_design") != wafer_map_id:
+            raise ApiError(400, f"{name}: child details must use the wafer's reviewed chip map")
+        supplied_block = fields.get("block")
+        block = blocks.get(supplied_block) if isinstance(supplied_block, str) else None
+        if block is None:
+            raise ApiError(400, f"Unknown block for {name}")
+        outline = fields.get("outline_mm")
+        if (not isinstance(outline, list) or len(outline) != 4
+                or any(isinstance(v, bool) or not isinstance(v, (int, float)) or not math.isfinite(v)
+                       for v in outline)
+                or outline[2] <= outline[0] or outline[3] <= outline[1]):
+            raise ApiError(400, f"Invalid outline_mm for {name}")
+
+        parent = unit_by_id[parent_id]
+        parent_details = parent.get("chip_details")
+        if parent["sample_type"] == "chiplet" and parent_details:
+            parent_block = blocks.get(parent_details.get("block"))
+            if parent_details.get("mask_design") != wafer_map_id or not parent_block:
+                raise ApiError(400, f"{parent['sample_name']} uses a different or invalid chip map")
+            if parent_block["id"] != block["id"]:
+                raise ApiError(400, f"{name}: chip block does not match parent {parent['sample_name']}")
+
+        if action == "create_chiplets":
+            members = [c["outline"] for c in chip_map["chips"] if c["block"] == block["id"]]
+            if not members:
+                raise ApiError(400, f"{name}: the chiplet's block has no chips")
+            expected_outline = [min(o[0] for o in members), min(o[1] for o in members),
+                                max(o[2] for o in members), max(o[3] for o in members)]
+            if outline != expected_outline:
+                raise ApiError(400, f"{name}: chiplet outline must cover all chips in {block['id']}")
+            cleaned[name] = {"block": block["id"], "outline_mm": expected_outline,
+                             "mask_design": wafer_map_id}
+        else:
+            chip_id = fields.get("chip_id")
+            chip = chips.get(chip_id) if isinstance(chip_id, str) else None
+            if chip is None:
+                raise ApiError(400, f"Unknown chip_id '{chip_id}' for {name}")
+            if chip["block"] != block["id"]:
+                raise ApiError(400, f"Chip {chip_id} does not belong to block {block['id']}")
+            if outline != chip["outline"] or fields.get("label") != chip["label"]:
+                raise ApiError(400, f"{name}: chip metadata must match the reviewed map")
+            cleaned[name] = {"chip_id": chip_id, "block": block["id"], "label": chip["label"],
+                             "outline_mm": list(chip["outline"]), "mask_design": wafer_map_id}
+
+    # Prevent duplicate blocks beneath one wafer or re-cutting an existing chip through a raw request.
+    seen = set()
+    existing_chips = {u["chip_details"].get("chip_id") for u in units
+                      if u["sample_type"] == "chip" and u.get("chip_details")
+                      and u["chip_details"].get("mask_design") == wafer_map_id}
+    for parent_id, name in planned:
+        detail = cleaned[name]
+        if action == "create_chips" and detail["chip_id"] in existing_chips:
+            raise ApiError(409, f"Chip {detail['chip_id']} has already been cut")
+        identity = ((parent_id, detail["block"]) if action == "create_chiplets"
+                    else detail["chip_id"])
+        if identity in seen:
+            raise ApiError(400, f"Duplicate map selection for {name}")
+        seen.add(identity)
+    return cleaned
 
 
 @fabrication_bp.route("/api/steps", methods=["POST"])
@@ -352,6 +467,14 @@ def record_step():
                     planned.append((parent_id, name.strip()))
         if not planned:
             raise ApiError(400, f"Enter at least one {child_type} name")
+        planned_names = {n for _, n in planned}
+        unknown_details = set(req.child_details) - planned_names
+        if unknown_details:
+            raise ApiError(400, f"Chip details supplied for unknown children: {sorted(unknown_details)}")
+        child_details = clean_child_details(
+            planned, req.child_details, ((spec_record or {}).get("parameters") or {}).get("mask_design"),
+            req.project, unit_by_id, action, units,
+        )
         all_names = [n for _, n in planned]
         dupes = sorted({n for n in all_names if all_names.count(n) > 1})
         if dupes:
@@ -365,6 +488,8 @@ def record_step():
                 child = add_sample(orcid=user["orcid"], project=req.project, sample_name=name,
                                    description=f"{child_type} of {unit_by_id[parent_id]['sample_name']}",
                                    sample_type=child_type)
+                if name in child_details:
+                    crucible_api.add_scientific_metadata(child["unique_id"], child_details[name])
                 cruc_client.samples.link(parent_id, child["unique_id"])
                 created.append({"unique_id": child["unique_id"], "sample_name": name,
                                 "sample_type": child_type, "parent_id": parent_id,
@@ -461,10 +586,23 @@ def edit_step_record(dataset_id):
     }
     if step["id"] == "wafer_spec":
         updated["parameters"] = clean_parameters(step, req.parameters)
+        old_map = (meta.get("parameters") or {}).get("mask_design")
+        new_map = updated["parameters"].get("mask_design")
+        existing_plan = meta.get("planned_chiplets")
+        if new_map != old_map and existing_plan and req.planned_chiplets is None:
+            raise ApiError(400, "Changing the chip map requires reviewing or clearing the planned chiplets")
+        supplied_plan = req.planned_chiplets if req.planned_chiplets is not None else (
+            (existing_plan or {}).get("chiplets") or [])
+        updated["planned_chiplets"] = clean_chiplet_plan(
+            supplied_plan, new_map, load_wafer(meta["wafer_id"]).get("project_id"))
     elif meta.get("status") == "done":
         updated["rows"], updated["values"] = clean_rows(step, req.rows)
+    if step["id"] == "wafer_spec" and updated["parameters"].get("mask_design"):
+        load_chip_map(updated["parameters"]["mask_design"], project=load_wafer(meta["wafer_id"]).get("project_id"))
     try:
         cruc_client.datasets.update_scientific_metadata(dataset_id, updated, overwrite=True)
+        if step["id"] == "wafer_spec" and updated["parameters"].get("mask_design"):
+            lock_chip_map(updated["parameters"]["mask_design"], meta["wafer_id"], meta["wafer_name"])
     except Exception as err:
         if http_status(err) == 403:
             raise ApiError(403, "Editing needs edit permission for the app's service account "
