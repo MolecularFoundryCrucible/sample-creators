@@ -130,7 +130,9 @@ class FakeDatasets(_Checked):
 
     def list_children(self, parent_mfid, limit=100, **kwargs):
         children = [child for parent, child in self.s["dataset_links"] if parent == parent_mfid]
-        return [self.get(child, include_metadata=kwargs.get("include_metadata", False)) for child in children]
+        # The v3 child-list response is DatasetRead and does not honor the client's
+        # include_metadata option. Match that omission; map code must fetch details.
+        return [self.get(child) for child in children]
 
     def update_scientific_metadata(self, resource_mfid, metadata, overwrite=False):
         if not self.s["can_edit"]:
