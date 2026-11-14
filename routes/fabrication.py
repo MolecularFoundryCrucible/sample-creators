@@ -108,8 +108,11 @@ def get_tree(wafer):
     while frontier:
         next_frontier = []
         for parent_id in frontier:
-            for child in cruc_client.samples.list(parent_mfid=parent_id, include_metadata=True, limit=None):
+            # The nested child listing has no metadata option; fetching it separately
+            # preserves map provenance for chiplets and chips in the traveler.
+            for child in cruc_client.samples.list(parent_mfid=parent_id, limit=None):
                 if child.get("sample_type") in ("chiplet", "chip"):
+                    child = cruc_client.samples.get(child["unique_id"], include_metadata=True)
                     units.append(unit_summary(child, parent_id, project))
                     next_frontier.append(child["unique_id"])
         frontier = next_frontier
