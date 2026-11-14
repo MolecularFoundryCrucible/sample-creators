@@ -72,6 +72,10 @@ class FakeSamples(_Checked):
         for key in ("sample_name", "sample_type"):
             if key in kwargs:
                 out = [r for r in out if r[key] == kwargs[key]]
+        if parent_mfid and not dataset_mfid:
+            # Production's nested child listing ignores include_metadata and is shallow.
+            # Match that contract: map-derived children need a single-resource detail read.
+            out = [{k: v for k, v in r.items() if k != "scientific_metadata"} for r in out]
         return [dict(r) for r in out]
 
     def link(self, parent_mfid, child_mfid, relationship_type=None):
