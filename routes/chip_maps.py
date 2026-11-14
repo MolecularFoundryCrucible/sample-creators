@@ -47,9 +47,13 @@ def load_mask(mask_id):
 
 def map_versions(mask_id):
     versions = []
-    for ds in cruc_client.datasets.list_children(mask_id, include_metadata=True, limit=None):
-        if ds.get("measurement") != CHIP_MAP_MEASUREMENT:
+    # The API's nested child listing has no metadata option despite the client accepting
+    # one: its DatasetRead response omits scientific_metadata. Fetch matching children
+    # individually so reviewed maps are not discarded just because the listing omitted it.
+    for child in cruc_client.datasets.list_children(mask_id, limit=None):
+        if child.get("measurement") != CHIP_MAP_MEASUREMENT:
             continue
+        ds = cruc_client.datasets.get(child["unique_id"], include_metadata=True)
         meta = ds.get("scientific_metadata") or {}
         if not isinstance(meta.get("version"), int) or not meta.get("chips"):
             continue

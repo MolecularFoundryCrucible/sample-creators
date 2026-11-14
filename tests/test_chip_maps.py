@@ -60,7 +60,7 @@ class ChipMapTests(unittest.TestCase):
             "target_ids": targets, "status": "done", "step_date": "2026-11-12", "rows": {},
             "new_children": new_children, "child_details": details})
 
-    def test_upload_status_and_reviewed_versions(self):
+    def test_reviewed_versions_when_child_list_omits_metadata(self):
         self.assertEqual(self.api.get(f"/fabrication/api/masks?project={P}").get_json()["masks"][0]["geometry_ready"], False)
         self.geometry_ready()
         detail = self.api.get(f"/fabrication/api/masks/{self.mask_id}").get_json()
