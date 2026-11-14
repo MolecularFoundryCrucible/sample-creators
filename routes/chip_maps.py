@@ -217,6 +217,7 @@ def get_mask(mask_id):
     mask = load_mask(mask_id)
     versions = map_versions(mask_id)
     return jsonify({
+        "project": mask.get("project_id"),
         "mask": dataset_summary(mask),
         "geometry": (mask.get("scientific_metadata") or {}).get("gds_geometry"),
         "ingestion": ingestion_status(mask_id),

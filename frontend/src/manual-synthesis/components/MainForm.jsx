@@ -1,5 +1,5 @@
-// Copied from manual-synthesis-ui frontend/src/components/MainForm.jsx at c25ae5c. Changes: project select id renamed (clashed with the page login panel) and it starts from the project chosen in the login panel.
-import { useState, useEffect } from 'react';
+// Copied from manual-synthesis-ui frontend/src/components/MainForm.jsx at c25ae5c. Project selection is consolidated into the page's top login panel.
+import { useState, useEffect, useRef } from 'react';
 import DataTable from './DataTable';
 import ValidationReview from './ValidationReview';
 import { getSynthesisFields, uploadSynthesisData } from '../services/api';
@@ -8,7 +8,7 @@ const selectionKey = (row, field) => `${row}::${field}`;
 
 const MainForm = ({ userInfo, onUploadSuccess }) => {
   const [synthesisCategories, setSynthesisCategories] = useState({});
-  const [selectedProject, setSelectedProject] = useState(userInfo.selectedProject || '');
+  const selectedProject = userInfo.selectedProject || userInfo.projects?.[0] || '';
   const [selectedCategory, setSelectedCategory] = useState('');
   const [selectedSynthesisType, setSelectedSynthesisType] = useState('');
   const [tableData, setTableData] = useState([]);
@@ -17,6 +17,15 @@ const MainForm = ({ userInfo, onUploadSuccess }) => {
   const [validation, setValidation] = useState(null);
   const [parentSelections, setParentSelections] = useState({});
   const [confirmDuplicates, setConfirmDuplicates] = useState(false);
+
+  const prevProject = useRef(selectedProject);
+  useEffect(() => {
+    if (prevProject.current !== selectedProject) {
+      prevProject.current = selectedProject;
+      clearValidation();
+      setError('');
+    }
+  }, [selectedProject]);
 
   useEffect(() => {
     const fetchFields = async () => {
@@ -142,68 +151,54 @@ const MainForm = ({ userInfo, onUploadSuccess }) => {
 
   return (
     <div className="main-form">
-      <div className="user-info-box">
-        <strong>Current User:</strong> {userInfo.name} | <strong>Email:</strong> {userInfo.email} | <strong>ORCID:</strong> {userInfo.orcid}
-      </div>
-
       <div className="form-section">
-        <div className="form-row">
-          <div className="form-group">
-            <label htmlFor="synthesis-project">Project *</label>
-            <select
-              id="synthesis-project"
-              value={selectedProject}
-              onChange={(e) => {
-                setSelectedProject(e.target.value);
-                clearValidation();
-              }}
-              disabled={loading || validation !== null}
-            >
-              <option value="">-- Select a project --</option>
-              {userInfo.projects.map((project) => (
-                <option key={project} value={project}>
-                  {project}
-                </option>
-              ))}
-            </select>
+        {error && !showTable && (
+          <div className="error-message">
+            {error}
           </div>
+        )}
 
-          <div className="form-group">
-            <label htmlFor="category">Synthesis Category *</label>
-            <select
-              id="category"
-              value={selectedCategory}
-              onChange={handleCategoryChange}
-              disabled={loading || validation !== null}
-            >
-              <option value="">-- Select a category --</option>
-              {Object.keys(synthesisCategories).map((category) => (
-                <option key={category} value={category}>
-                  {category}
-                </option>
-              ))}
-            </select>
-          </div>
+        {!selectedProject ? (
+          <p className="muted">Select a project above to enter synthesis data.</p>
+        ) : (
+          <>
+            <div className="form-row">
+              <div className="form-group">
+                <label htmlFor="category">Synthesis Category *</label>
+                <select
+                  id="category"
+                  value={selectedCategory}
+                  onChange={handleCategoryChange}
+                  disabled={loading || validation !== null}
+                >
+                  <option value="">-- Select a category --</option>
+                  {Object.keys(synthesisCategories).map((category) => (
+                    <option key={category} value={category}>
+                      {category}
+                    </option>
+                  ))}
+                </select>
+              </div>
 
-          <div className="form-group">
-            <label htmlFor="synthesisType">Synthesis Type *</label>
-            <select
-              id="synthesisType"
-              value={selectedSynthesisType}
-              onChange={handleSynthesisTypeChange}
-              disabled={loading || validation !== null || !selectedCategory}
-            >
-              <option value="">-- Select synthesis type --</option>
-              {Object.keys(currentCategoryFields).map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
+              <div className="form-group">
+                <label htmlFor="synthesisType">Synthesis Type *</label>
+                <select
+                  id="synthesisType"
+                  value={selectedSynthesisType}
+                  onChange={handleSynthesisTypeChange}
+                  disabled={loading || validation !== null || !selectedCategory}
+                >
+                  <option value="">-- Select synthesis type --</option>
+                  {Object.keys(currentCategoryFields).map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            </div>
 
-        {showTable && (
+            {showTable && (
           <>
             {/* Kept mounted while reviewing so the entered rows survive going back. */}
             <div className="table-section" hidden={validation !== null}>
@@ -253,6 +248,8 @@ const MainForm = ({ userInfo, onUploadSuccess }) => {
                 </button>
               </div>
             )}
+          </>
+        )}
           </>
         )}
       </div>

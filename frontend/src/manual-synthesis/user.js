@@ -17,18 +17,42 @@ function toUserInfo(user) {
   };
 }
 
+export function syncSelectedProject(project) {
+  if (!project || typeof window === 'undefined') return;
+  if (typeof window.setProject === 'function') {
+    window.setProject(project).catch(() => {});
+  }
+}
+
 export function useCurrentUser() {
-  const [user, setUser] = useState(undefined); // undefined = still loading
+  const [user, setUser] = useState(() => (
+    typeof window !== 'undefined' && window.__crucibleUser !== undefined
+      ? toUserInfo(window.__crucibleUser)
+      : undefined
+  )); // undefined = still loading
 
   useEffect(() => {
     let cancelled = false;
-    fetch(`${prefix}/api/user`, { credentials: 'same-origin' })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((u) => { if (!cancelled) setUser(toUserInfo(u)); })
-      .catch(() => { if (!cancelled) setUser(null); });
-
-    const onChange = (event) => setUser(toUserInfo(event.detail));
+    let receivedEvent = false;
+    const onChange = (event) => {
+      receivedEvent = true;
+      setUser(toUserInfo(event.detail));
+    };
     window.addEventListener('crucible:user', onChange);
+
+    if (window.__crucibleUser !== undefined) {
+      setUser(toUserInfo(window.__crucibleUser));
+    } else {
+      const pending = window.__crucibleUserPromise
+        ? window.__crucibleUserPromise
+        : fetch(`${prefix}/api/user`, { credentials: 'same-origin' })
+            .then((r) => (r.ok ? r.json() : null))
+            .catch(() => null);
+      pending.then((u) => {
+        if (!cancelled && !receivedEvent) setUser(toUserInfo(u));
+      });
+    }
+
     return () => {
       cancelled = true;
       window.removeEventListener('crucible:user', onChange);

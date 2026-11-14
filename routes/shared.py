@@ -159,9 +159,12 @@ def get_user():
 
 @shared_bp.route("/api/user/project", methods=["POST"])
 def set_project():
-    data = request.get_json()
-    project = data.get("project", "")
+    data = request.get_json() or {}
+    project = str(data.get("project") or "")
     if "user" in session:
+        if project and "projects" in session["user"] and project not in session["user"]["projects"]:
+            return jsonify({"error": "Not a member of project"}), 403
         session["user"]["selected_project"] = project
         session.modified = True
+        return jsonify({"ok": True, "user": session["user"]})
     return jsonify({"ok": True})

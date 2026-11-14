@@ -1,6 +1,6 @@
 // Synthesis upload page (React island). Replaces manual-synthesis-ui's App.jsx for this view:
 // login comes from the page, and the summary's "log out" uses the page's logout.
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import ReactDOM from 'react-dom/client';
 import MainForm from './components/MainForm';
 import Summary from './components/Summary';
@@ -10,6 +10,10 @@ import './styles/App.css';
 function SynthesisApp() {
   const user = useCurrentUser();
   const [summary, setSummary] = useState(null);
+
+  useEffect(() => {
+    setSummary(null);
+  }, [user?.orcid]);
 
   if (user === undefined) return <p className="muted">Loading…</p>;
   if (!user) return <p className="muted">Log in to upload synthesis data.</p>;

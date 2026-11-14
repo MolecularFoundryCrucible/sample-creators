@@ -1,7 +1,8 @@
-// Copied from manual-synthesis-ui frontend/src/components/fab/FabTraveler.jsx at c25ae5c. Changes: starts from the
-// login panel's project; each wafer has its own URL (/fabrication/wafer/<id>), opened on load and kept in sync.
-import { useState, useEffect, useCallback } from 'react';
+// Copied from manual-synthesis-ui frontend/src/components/fab/FabTraveler.jsx at c25ae5c. Changes: project selection
+// is consolidated into the page's top login panel; each wafer has its own URL (/fabrication/wafer/<id>), opened on load and kept in sync.
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getFabTemplates, listWafers, createWafer, getTraveler, listMaskDesigns } from '../../services/api';
+import { syncSelectedProject } from '../../user';
 
 // eslint-disable-next-line no-undef
 const travelerBase = `${typeof BASE_URL === 'string' ? BASE_URL : ''}/fabrication/`;
@@ -17,8 +18,15 @@ const today = () => new Date().toISOString().split('T')[0];
 const humanize = (key) => key.replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 
 const FabTraveler = ({ userInfo, initialWaferId, initialMaskId, initialMaskView = false }) => {
+  const propProject = userInfo.selectedProject || userInfo.projects?.[0] || '';
   const [templates, setTemplates] = useState({});
-  const [project, setProject] = useState(userInfo.selectedProject || '');
+  const [project, setProject] = useState(propProject);
+  const lastPropProject = useRef(propProject);
+  const userInfoRef = useRef(userInfo);
+  useEffect(() => {
+    userInfoRef.current = userInfo;
+  });
+
   const [wafers, setWafers] = useState([]);
   const [masks, setMasks] = useState([]);
   const [selectedWafer, setSelectedWafer] = useState(null);
@@ -33,6 +41,16 @@ const FabTraveler = ({ userInfo, initialWaferId, initialMaskId, initialMaskView 
   const [plannedChiplets, setPlannedChiplets] = useState([]);
   const [showInlineMaskDesigner, setShowInlineMaskDesigner] = useState(false);
   const [inlineMaskId, setInlineMaskId] = useState(null);
+
+  useEffect(() => {
+    if (propProject === lastPropProject.current) return;
+    lastPropProject.current = propProject;
+    setSelectedWafer(null);
+    setSelectedMask(null);
+    setShowNew(false);
+    setError('');
+    setProject(propProject);
+  }, [propProject]);
 
   useEffect(() => {
     getFabTemplates()
@@ -56,16 +74,23 @@ const FabTraveler = ({ userInfo, initialWaferId, initialMaskId, initialMaskView 
     } else setMasks([]);
   }, [project, refreshWafers]);
 
+  const syncResourceProject = useCallback((proj) => {
+    if (!proj) return;
+    lastPropProject.current = proj;
+    setProject(proj);
+    if (proj !== userInfoRef.current?.selectedProject) syncSelectedProject(proj);
+  }, []);
+
   // A wafer URL opens that wafer's traveler in its own project.
   useEffect(() => {
     if (!initialWaferId) return;
     getTraveler(initialWaferId)
       .then((t) => {
-        setProject(t.project);
+        syncResourceProject(t.project);
         setSelectedWafer(initialWaferId);
       })
       .catch((err) => setError(errorText(err, 'Failed to open this wafer')));
-  }, [initialWaferId]);
+  }, [initialWaferId, syncResourceProject]);
 
   // Keep the address bar on the open wafer, and follow the browser's back/forward buttons.
   useEffect(() => {
@@ -144,6 +169,7 @@ const FabTraveler = ({ userInfo, initialWaferId, initialMaskId, initialMaskView 
         waferId={selectedWafer}
         project={project}
         userInfo={userInfo}
+        onTravelerProject={syncResourceProject}
         onBack={() => {
           setSelectedWafer(null);
           refreshWafers(project);
@@ -156,24 +182,12 @@ const FabTraveler = ({ userInfo, initialWaferId, initialMaskId, initialMaskView 
 
   return (
     <div className="main-form">
-      <div className="user-info-box">
-        <strong>Current User:</strong> {userInfo.name} | <strong>ORCID:</strong> {userInfo.orcid}
-      </div>
-
       <div className="form-section">
-        <div className="form-row">
-          <div className="form-group">
-            <label htmlFor="fab-project">Project *</label>
-            <select id="fab-project" value={project} onChange={(e) => { setSelectedWafer(null); setSelectedMask(null); setProject(e.target.value); }}>
-              <option value="">-- Select a project --</option>
-              {userInfo.projects.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </select>
-          </div>
-        </div>
-
         {error && <div className="error-message">{error}</div>}
+
+        {!project && !(showMasks && selectedMask) && (
+          <p className="muted">Select a project above to view wafers and mask designs.</p>
+        )}
 
         {project && (
           <div className="mode-tabs">
@@ -184,9 +198,10 @@ const FabTraveler = ({ userInfo, initialWaferId, initialMaskId, initialMaskView 
           </div>
         )}
 
-        {project && showMasks && (
+        {(project || (showMasks && selectedMask)) && showMasks && (
           <MaskDesigns project={project} selectedMaskId={selectedMask} onSelectMask={setSelectedMask}
-                           onMasksChanged={async () => setMasks((await listMaskDesigns(project)).masks)} />
+                           onMaskProject={syncResourceProject}
+                           onMasksChanged={async () => { if (project) setMasks((await listMaskDesigns(project)).masks); }} />
         )}
 
         {project && !showMasks && !showNew && (
@@ -304,6 +319,7 @@ const FabTraveler = ({ userInfo, initialWaferId, initialMaskId, initialMaskView 
               <section className="embedded-mask-design">
                 <MaskDesigns embedded project={project} selectedMaskId={inlineMaskId} onSelectMask={setInlineMaskId}
                   onReviewedMap={useReviewedMap}
+                  onMaskProject={handleMaskProject}
                   onMasksChanged={async () => setMasks((await listMaskDesigns(project)).masks)} />
               </section>
             )}

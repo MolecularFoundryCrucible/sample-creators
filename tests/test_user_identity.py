@@ -46,6 +46,42 @@ class UserLoginTests(unittest.TestCase):
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         get_user.assert_called_once_with(self.user["email"])
 
+    def test_set_project_updates_session_and_validates_membership(self):
+        with patch("routes.shared.cruc_client.users.get", return_value=self.user), \
+             patch("routes.shared.cruc_client.projects.list", return_value=[{"project_id": "proj-a"}, {"project_id": "proj-b"}]):
+            res = self.client.post("/api/user/login", json={"user_ref": "firstlast"})
+            self.assertEqual(res.status_code, 200)
+
+        # Switch to valid project
+        res = self.client.post("/api/user/project", json={"project": "proj-b"})
+        self.assertEqual(res.status_code, 200)
+        data = res.get_json()
+        self.assertTrue(data.get("ok"))
+        self.assertEqual(data["user"]["selected_project"], "proj-b")
+
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["user"]["selected_project"], "proj-b")
+
+        # Switch to invalid project not in user's projects
+        res = self.client.post("/api/user/project", json={"project": "unauthorized-proj"})
+        self.assertEqual(res.status_code, 403)
+        self.assertIn("error", res.get_json())
+
+        # Session remains proj-b
+        with self.client.session_transaction() as sess:
+            self.assertEqual(sess["user"]["selected_project"], "proj-b")
+
+        # Setting empty string or when not logged in
+        res = self.client.post("/api/user/project", json={"project": ""})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.get_json()["user"]["selected_project"], "")
+
+        # Unauthenticated request
+        anon_client = self.app.test_client()
+        res = anon_client.post("/api/user/project", json={"project": "proj-a"})
+        self.assertEqual(res.status_code, 200)
+        self.assertEqual(res.get_json(), {"ok": True})
+
     def test_login_forms_submit_on_enter(self):
         for url in (
             "/b30-sem/",

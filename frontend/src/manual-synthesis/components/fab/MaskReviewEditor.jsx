@@ -17,7 +17,7 @@ export const ingestionIsWaiting = (geometry, ingestion) => !geometry && (
   !ingestion?.length || ingestion.some((r) => !terminal.has(String(r.status || '').trim().toLowerCase().replace(/[\s-]+/g, '_')))
 );
 
-const MaskReviewEditor = ({ maskId, onSaved }) => {
+const MaskReviewEditor = ({ maskId, onSaved, onMaskLoaded }) => {
   const [data, setData] = useState(null);
   const [map, setMap] = useState({ units: 'mm', blocks: [], chips: [] });
   const [groups, setGroups] = useState([]);
@@ -31,6 +31,7 @@ const MaskReviewEditor = ({ maskId, onSaved }) => {
   const initial = suggestChipMap(data?.geometry || { shapes: [], labels: [], unresolved_labels: [] });
   const load = async (versionId) => {
     const result = await getMaskDesign(maskId);
+    onMaskLoaded?.(result);
     setData(result);
     const versions = result.versions || [];
     const version = versions.find((v) => v.dataset_id === versionId) || versions[0] || null;
@@ -50,6 +51,7 @@ const MaskReviewEditor = ({ maskId, onSaved }) => {
       try {
         const result = await getMaskDesign(maskId);
         if (cancelled) return;
+        onMaskLoaded?.(result);
         setData((previous) => {
           // Polling while a review is open must not overwrite edits. Full state is only initialized once.
           if (!previous || (!previous.geometry && result.geometry)) {

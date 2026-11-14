@@ -8,7 +8,7 @@ const errorText = (err, fallback) => {
   return typeof detail === 'string' ? detail : fallback;
 };
 
-const MaskDesigns = ({ project, selectedMaskId, onSelectMask, onMasksChanged, onReviewedMap, embedded = false }) => {
+const MaskDesigns = ({ project, selectedMaskId, onSelectMask, onMasksChanged, onReviewedMap, onMaskProject, embedded = false }) => {
   const uploadForm = useRef(null);
   const [masks, setMasks] = useState([]);
   const [file, setFile] = useState(null);
@@ -64,9 +64,18 @@ const MaskDesigns = ({ project, selectedMaskId, onSelectMask, onMasksChanged, on
       {selectedMaskId ? (
         <>
           <button type="button" className="btn btn-secondary" onClick={() => onSelectMask(null)}>&larr; Mask designs</button>
-          <MaskReviewEditor key={selectedMaskId} maskId={selectedMaskId} onSaved={async (map) => {
-          await refresh(); await onMasksChanged?.(); onReviewedMap?.(map);
-        }} />
+          <MaskReviewEditor
+            key={selectedMaskId}
+            maskId={selectedMaskId}
+            onMaskLoaded={(result) => {
+              if (result?.project) onMaskProject?.(result.project);
+            }}
+            onSaved={async (map) => {
+              await refresh();
+              await onMasksChanged?.();
+              onReviewedMap?.(map);
+            }}
+          />
         </>
       ) : (
         <>

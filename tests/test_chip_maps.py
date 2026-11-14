@@ -64,6 +64,7 @@ class ChipMapTests(unittest.TestCase):
         self.assertEqual(self.api.get(f"/fabrication/api/masks?project={P}").get_json()["masks"][0]["geometry_ready"], False)
         self.geometry_ready()
         detail = self.api.get(f"/fabrication/api/masks/{self.mask_id}").get_json()
+        self.assertEqual(detail["project"], P)
         self.assertEqual(detail["geometry"]["source"]["file"], "WFR_99.gds")
         self.assertEqual(detail["ingestion"][0]["status"], "complete")
 

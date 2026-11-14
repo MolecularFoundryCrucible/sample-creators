@@ -1,5 +1,5 @@
 // Copied from manual-synthesis-ui frontend/src/components/fab/TravelerView.jsx at c25ae5c.
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { getTraveler } from '../../services/api';
 import StepForm from './StepForm';
 import ProcessLabel from './ProcessLabel';
@@ -7,16 +7,22 @@ import CrucibleLabel from './CrucibleLabel';
 
 const STATUS_LABEL = { done: 'Done', skipped: 'Skipped', pending: 'Pending' };
 
-const TravelerView = ({ waferId, project, userInfo, onBack }) => {
+const TravelerView = ({ waferId, project, userInfo, onTravelerProject, onBack }) => {
   const [traveler, setTraveler] = useState(null);
   const [error, setError] = useState('');
   const [activeStepId, setActiveStepId] = useState(null);
   const [activeRecord, setActiveRecord] = useState(null);
   const [showProcessLabel, setShowProcessLabel] = useState(false);
+  const onTravelerProjectRef = useRef(onTravelerProject);
+  useEffect(() => {
+    onTravelerProjectRef.current = onTravelerProject;
+  });
 
   const load = useCallback(async () => {
     try {
-      setTraveler(await getTraveler(waferId));
+      const t = await getTraveler(waferId);
+      setTraveler(t);
+      if (t?.project) onTravelerProjectRef.current?.(t.project);
       setError('');
     } catch (err) {
       setError(err.response?.data?.detail || 'Failed to load traveler');
@@ -127,7 +133,7 @@ const TravelerView = ({ waferId, project, userInfo, onBack }) => {
           step={activeStep}
           record={activeRecord}
           traveler={traveler}
-          project={project}
+          project={traveler.project || project}
           userInfo={userInfo}
           earlierPending={steps
             .slice(0, steps.indexOf(activeStep))

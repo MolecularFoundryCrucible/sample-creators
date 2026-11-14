@@ -119,6 +119,9 @@ function closeModal() {
 
 // ========== User Login/Logout ==========
 
+let currentUserState = null;
+let userStateEpoch = 0;
+
 // ========== Login/Logout Reset Hooks ==========
 
 // Pages register callbacks here to reset their own form state. Several layers can be
@@ -138,6 +141,7 @@ async function loginUser(event) {
     }
     try {
         const user = await api('/api/user/login', 'POST', { user_ref: userReference });
+        userStateEpoch++;
         populateUserInfo(user);
         showAlert('success', `Logged in as ${user.user_name}`);
     } catch (e) {
@@ -148,6 +152,7 @@ async function loginUser(event) {
 async function logoutUser() {
     try {
         await api('/api/user/logout', 'POST');
+        userStateEpoch++;
         clearUserInfo();
         showAlert('success', 'Logged out');
     } catch (e) {
@@ -157,16 +162,29 @@ async function logoutUser() {
     }
 }
 
-async function loadUserState() {
-    try {
-        const user = await api('/api/user');
-        populateUserInfo(user);
-    } catch {
-        // Not logged in, that's fine
-    }
+function loadUserState() {
+    const epoch = userStateEpoch;
+    const p = (async () => {
+        try {
+            const user = await api('/api/user');
+            if (epoch === userStateEpoch) populateUserInfo(user);
+            return currentUserState;
+        } catch {
+            // Not logged in, that's fine
+            if (epoch === userStateEpoch) {
+                currentUserState = null;
+                window.__crucibleUser = null;
+            }
+            return currentUserState;
+        }
+    })();
+    window.__crucibleUserPromise = p;
+    return p;
 }
 
 function populateUserInfo(user) {
+    currentUserState = user;
+    window.__crucibleUser = user;
     // React islands (synthesis, traveler) follow the login through this event.
     window.dispatchEvent(new CustomEvent('crucible:user', { detail: user }));
     document.getElementById('email').value = user.login_reference || user.email || user.username || '';
@@ -189,6 +207,8 @@ function populateUserInfo(user) {
 }
 
 function clearUserInfo() {
+    currentUserState = null;
+    window.__crucibleUser = null;
     window.dispatchEvent(new CustomEvent('crucible:user', { detail: null }));
     document.getElementById('email').value = '';
     document.getElementById('username').value = '';
@@ -203,11 +223,36 @@ function clearUserInfo() {
     sampleTypeOptions = [];
 }
 
-async function setProject() {
-    const project = document.getElementById('project').value;
-    await api('/api/user/project', 'POST', { project });
-    await loadSampleTypes();
+async function setProject(nextProject) {
+    const projectSelect = document.getElementById('project');
+    const previous = currentUserState?.selected_project || '';
+    const project = typeof nextProject === 'string' ? nextProject : (projectSelect ? projectSelect.value : '');
+    const epoch = ++userStateEpoch;
+    if (projectSelect && projectSelect.value !== project) {
+        projectSelect.value = project;
+    }
+    try {
+        const res = await api('/api/user/project', 'POST', { project });
+        if (epoch !== userStateEpoch) return;
+        if (projectSelect && Array.from(projectSelect.options).some(o => o.value === project)) {
+            projectSelect.value = project;
+        }
+        const updatedUser = res?.user || (currentUserState ? { ...currentUserState, selected_project: project } : null);
+        if (updatedUser) {
+            currentUserState = updatedUser;
+            window.__crucibleUser = updatedUser;
+            window.dispatchEvent(new CustomEvent('crucible:user', { detail: updatedUser }));
+        }
+        await loadSampleTypes();
+    } catch (e) {
+        if (projectSelect && Array.from(projectSelect.options).some(o => o.value === previous)) {
+            projectSelect.value = previous;
+        }
+        if (typeof nextProject === 'string') throw e;
+        showAlert('error', e.message);
+    }
 }
+window.setProject = setProject;
 
 // ========== Generic Field Reset ==========
 
