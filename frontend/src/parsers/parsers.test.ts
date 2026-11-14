@@ -15,8 +15,10 @@ describe("readNgsFields", () => {
   const files = have(RAMAN) ? readdirSync(RAMAN).filter((f) => f.endsWith(".ngs")) : []
 
   it.skipIf(!files.length)("reads the acquisition settings of every real LabRAM spectrum", async () => {
-    expect(files.length).toBe(7)
-    for (const name of files) {
+    const cfo = files.filter((f) => f.startsWith("CFO"))
+    const cuga = files.filter((f) => f.startsWith("CuGa"))
+    expect(cfo.length).toBe(7)
+    for (const name of cfo) {
       const fields = await readNgsFields(await openAsBlob(join(RAMAN, name)))
       expect(fields, name).toEqual({
         laser_wavelength_nm: 532.06,
@@ -27,6 +29,23 @@ describe("readNgsFields", () => {
         raman_shift_range: [150, 1500],
       })
     }
+    for (const [name, exposure_time_s] of [
+      ["CuGaSSe2_A2-22C_OD1_24.ngs", 30],
+      ["CuGaSe2-P715_OD2_37.ngs", 60],
+    ] as const) {
+      expect(cuga).toContain(name)
+      const fields = await readNgsFields(await openAsBlob(join(RAMAN, name)))
+      expect(fields, name).toEqual({
+        laser_wavelength_nm: 632.81,
+        exposure_time_s,
+        accumulation: "1",
+        grating: "1800",
+        objective: "x50",
+        raman_shift_range: [1, 1024],
+      })
+    }
+    expect(cuga.length).toBe(2)
+    expect(cfo.length + cuga.length).toBe(files.length)
   })
 
   it.skipIf(!files.length)("keeps the table values when the spectrum block is cut off", async () => {

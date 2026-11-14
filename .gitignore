@@ -16,3 +16,7 @@ log/
 
 # Frontend build
 node_modules/
+static/dist/
+
+# Local GDS / chip-map inputs
+chipmap_inputs/
