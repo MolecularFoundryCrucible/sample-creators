@@ -40,7 +40,7 @@ steps:
 substitutions:
   _SERVICE_NAME: 'sample-creators'
   _SCRIPT_NAME: '/sample-creators'
-  _CRUCIBLE_API_URL: 'https://crucible.lbl.gov/api/v3'
+  _CRUCIBLE_API_URL: 'https://crucible.lbl.gov/api/v4'
   _API_KEY_SECRET: 'crucible_sa_sample_creators_apikey'
   _ALS_SAMPLE_TRACKER_ENABLED: 'true'
   _REGION: 'us-central1'

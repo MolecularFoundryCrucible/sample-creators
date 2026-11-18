@@ -1,0 +1,155 @@
+{% extends "base.html" %}
+{% block title %}SpinBot Photobox Carrier Uploader{% endblock %}
+
+{% block content %}
+<h1>SpinBot Photobox Carrier Uploader</h1>
+
+<div class="tab-bar" style="display:flex; gap:8px; margin-bottom:12px;">
+  <button class="btn tab-btn active" type="button" data-tab="tab-entry" onclick="switchTab('tab-entry')">Entry</button>
+  <button class="btn tab-btn" type="button" data-tab="tab-recent" onclick="switchTab('tab-recent')">Logbook</button>
+</div>
+
+<!-- TAB 1: Data Entry -->
+<div id="tab-entry" class="tab-panel">
+    <div class="two-column">
+        <div class="left-panel">
+            <!-- User Login -->
+            <section class="section" id="section-login">
+                <h2>User Login</h2>
+                <div class="form-group">
+                    <label>Email or username</label>
+                    <form class="input-row" onsubmit="loginUser(event)">
+                        <input type="text" id="email" placeholder="user-email@lbl.gov or username" autocomplete="username">
+                        <button type="submit" class="btn btn-primary">Login</button>
+                    </form>
+                </div>
+                <div class="form-group">
+                    <label>User</label>
+                    <input type="text" id="username" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Project</label>
+                    <select id="project" onchange="setProject()"></select>
+                </div>
+                <button class="btn btn-secondary" onclick="logoutUser()">Logout</button>
+            </section>
+
+            <!-- Carrier Section -->
+            <section class="section">
+                <h2>Carrier</h2>
+                <div class="form-group">
+                    <label>Carrier UUID or Name</label>
+                    <div class="input-row">
+                        <input type="text" id="pb-carrier-input" placeholder="Carrier UUID or name (e.g. CAR000001)">
+                        <button class="btn btn-primary" type="button" onclick="pbLookupCarrier()">Lookup</button>
+                        <button class="btn btn-secondary" type="button" onclick="pbQueueNewCarrier()">New Carrier</button>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Selected Carrier</label>
+                    <div id="pb-carrier-display" style="font-weight: bold; font-family: monospace; color: #333;">—</div>
+                </div>
+
+                <div class="form-group" style="margin-top: 8px;">
+                    <label>Printer</label>
+                    <div class="input-row">
+                        <select id="pb-printer"></select>
+                        <button class="btn btn-secondary" type="button" onclick="pbPrintCarrier()">Print Barcode</button>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-top: 16px;">
+                    <label>Carrier Photo File <span style="color:red;">*</span></label>
+                    <input type="file" id="pb-photo-file" accept="image/*,.tif,.tiff,.jpg,.jpeg,.png">
+                </div>
+
+                <div class="form-group">
+                    <label>Keywords</label>
+                    <input type="text" id="pb-keywords" placeholder="Comma-separated keywords (optional)">
+                </div>
+
+                <div class="form-group">
+                    <label>Comments</label>
+                    <textarea id="pb-comments" rows="2" placeholder="Optional comments"></textarea>
+                </div>
+            </section>
+        </div>
+
+        <div class="right-panel">
+            <!-- Tray Grids -->
+            <section class="section">
+                <h2>Carrier Tray Grids</h2>
+
+                <div style="display: flex; gap: 16px; margin-bottom: 16px;">
+                    <!-- Tray 1 -->
+                    <div style="flex: 1; border: 1px solid #ddd; border-radius: 4px; padding: 10px;">
+                        <h3>Tray 1 (Slots A1–B4)</h3>
+                        <div class="input-row" style="margin-bottom: 8px;">
+                            <input type="text" id="pb-tray1-uuid" placeholder="Tray 1 UUID">
+                            <button class="btn btn-primary btn-sm" type="button" onclick="pbResolveTray(1)">Resolve</button>
+                        </div>
+                        <div id="pb-tray1-grid" style="font-size: 0.9em; max-height: 240px; overflow-y: auto;">
+                            <span class="info-text">Enter Tray 1 UUID to resolve slots.</span>
+                        </div>
+                    </div>
+
+                    <!-- Tray 2 -->
+                    <div style="flex: 1; border: 1px solid #ddd; border-radius: 4px; padding: 10px;">
+                        <h3>Tray 2 (Slots C1–D4)</h3>
+                        <div class="input-row" style="margin-bottom: 8px;">
+                            <input type="text" id="pb-tray2-uuid" placeholder="Tray 2 UUID">
+                            <button class="btn btn-primary btn-sm" type="button" onclick="pbResolveTray(2)">Resolve</button>
+                        </div>
+                        <div id="pb-tray2-grid" style="font-size: 0.9em; max-height: 240px; overflow-y: auto;">
+                            <span class="info-text">Enter Tray 2 UUID to resolve slots.</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div style="margin-top: 20px;">
+                    <button class="btn btn-primary" id="btn-pb-upload" style="width: 100%; font-size: 1.1em; padding: 10px;" onclick="pbUpload()">
+                        Upload Carrier Photo & Run Segmentation
+                    </button>
+                    <div id="pb-upload-status" class="info-text" style="margin-top: 8px;"></div>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+
+<!-- TAB 2: Logbook -->
+<div id="tab-recent" class="tab-panel hidden">
+  <section class="section">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <h2>Recent Datasets</h2>
+      <div>
+        <button class="btn btn-secondary" onclick="loadRecentDatasets()">Refresh</button>
+        <a class="btn btn-secondary" id="export-csv-btn" href="{{ url_for('spinbot_photobox.export_recent_datasets_csv') }}">Export CSV</a>
+      </div>
+    </div>
+    <div style="overflow:auto; margin-top:10px;">
+      <table id="recent-table" class="preview-table" style="width: 100%;">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>User</th>
+            <th>Dataset Name</th>
+            <th>Measurement</th>
+            <th>Comment</th>
+          </tr>
+        </thead>
+        <tbody id="recent-table-body">
+          <tr><td colspan="5">Click Refresh to load datasets.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{{ vite_entry('upload') }}
+<script src="{{ url_for('static', filename='js/spinbot_photobox.js') }}"></script>
+{% endblock %}

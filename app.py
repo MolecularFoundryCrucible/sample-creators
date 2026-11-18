@@ -4,23 +4,11 @@ import json
 import os
 import secrets
 
-from config import DIVISIONS, SPUTTER_TOOLS, TOOLS
-from tool_registry import divisions_with_tools, expand_tools, validate_registry
+from config import DIVISIONS
+from tool_registry import divisions_with_tools, validate_registry
 from routes.shared import shared_bp
-from routes.giwaxs import giwaxs_bp
-from routes.rga import rga_bp
-from routes.b30_sputter import b30_sputter_bp, blueprint_name
-from routes.b30_ebeam import b30_ebeam_bp
-from routes.b30_sem import b30_sem_bp
-from routes.b30_raman import b30_raman_bp
-from routes.electrolyte import electrolyte_bp
-from routes.schema_forms import schema_forms_bp
-
-from routes.print_only import print_bp
 from routes.uploads import uploads_bp
-from routes.synthesis import synthesis_bp
-from routes.fabrication import fabrication_bp
-from routes.chip_maps import chip_maps_bp
+from tools.registry import register_all_tools
 
 class PrefixMiddleware:
     """Set SCRIPT_NAME so Flask generates correct URLs behind a reverse proxy."""
@@ -47,32 +35,9 @@ def create_app():
     app.url_map.strict_slashes = False
 
     app.register_blueprint(shared_bp)
-    app.register_blueprint(giwaxs_bp, url_prefix="/giwaxs")
-    app.register_blueprint(rga_bp, url_prefix="/rga")
-    # One page per sputter tool, all served by the same blueprint.
-    for tool_key, tool in SPUTTER_TOOLS.items():
-        app.register_blueprint(
-            b30_sputter_bp,
-            url_prefix=tool["url_prefix"],
-            name=blueprint_name(tool_key),
-        )
-    app.register_blueprint(b30_sem_bp, url_prefix="/b30-sem")
-    app.register_blueprint(b30_raman_bp, url_prefix="/b30-raman")
-    app.register_blueprint(b30_ebeam_bp, url_prefix="/b30-ebeam")
-    app.register_blueprint(electrolyte_bp, url_prefix="/electrolyte")
-    app.register_blueprint(schema_forms_bp, url_prefix="/schema-forms")
-    app.register_blueprint(print_bp, url_prefix="/print")
     app.register_blueprint(uploads_bp, url_prefix="/api/uploads")
-    app.register_blueprint(synthesis_bp, url_prefix="/synthesis")
-    app.register_blueprint(fabrication_bp, url_prefix="/fabrication")
-    app.register_blueprint(chip_maps_bp, url_prefix="/fabrication")
 
-    # The sputter app used to live at a single URL, before it was split per tool.
-    @app.route("/b30-sputter/")
-    def b30_sputter_legacy():
-        return redirect(url_for(f"{blueprint_name('aja')}.page"))
-
-    tools = expand_tools(TOOLS, SPUTTER_TOOLS, blueprint_name)
+    tools = register_all_tools(app)
     validate_registry(DIVISIONS, tools, set(app.view_functions))
     divisions = divisions_with_tools(DIVISIONS, tools)
     divisions_by_key = {d["key"]: d for d in divisions}

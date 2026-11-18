@@ -1,6 +1,6 @@
-"""In-memory stand-in for the Crucible client (nano-crucible 4.0.0 contract).
+"""In-memory stand-in for the Crucible client (nano-crucible 4.0.1 contract).
 
-Every call is checked against the real nano-crucible 4.0.0 method signature,
+Every call is checked against the real nano-crucible 4.0.1 method signature,
 removed-method / removed-parameter decorators, and model/update guards so legacy
 v3 calls fail here with RemovedError / TypeError / DeprecationWarning just like
 they do in production.
@@ -15,6 +15,7 @@ from crucible.client import CrucibleClient
 from crucible.errors import CrucibleAPIError, RemovedError
 from crucible.models import Dataset, Sample
 from crucible.resources.datasets import DatasetOperations
+from crucible.resources.files import FileOperations
 from crucible.resources.printer import PrintOperations
 from crucible.resources.projects import ProjectOperations
 from crucible.resources.samples import SampleOperations
@@ -88,6 +89,8 @@ class FakeSamples(_Checked):
         self.s = store
 
     def create(self, sample=None, scientific_metadata=None, parents=None, children=None, **kwargs):
+        if isinstance(sample, dict):
+            sample = Sample.model_validate(sample)
         if sample is None or not isinstance(sample, Sample):
             if sample is not None:
                 raise TypeError(
@@ -287,6 +290,8 @@ class FakeDatasets(_Checked):
         if files_to_upload is not None:
             raise RemovedError(removed_message(
                 "The 'files_to_upload' keyword of datasets.create()", "use 'files' instead."))
+        if isinstance(dataset, dict):
+            dataset = Dataset.model_validate(dataset)
         if not isinstance(dataset, Dataset):
             raise TypeError(f"Expected a Dataset model, got {type(dataset).__name__}.")
         if dataset.owner_orcid is not None:
@@ -473,6 +478,47 @@ class FakeDatasets(_Checked):
     def get_download_links(self, dataset_mfid, disposition=None):
         return {f["mfid"]: f"https://storage.example/{f['filename']}" for f in self.s["files"].get(dataset_mfid, [])}
 
+    def add_keyword(self, dataset_mfid, keyword):
+        if dataset_mfid not in self.s["datasets"]:
+            raise _http_error(404)
+        kws = self.s["datasets"][dataset_mfid].setdefault("keywords", [])
+        if keyword not in kws:
+            kws.append(keyword)
+        return {"dataset_mfid": dataset_mfid, "keyword": keyword}
+
+    def postprocess(self, dataset_mfid, pipeline, parameters=None, idempotency_key=None):
+        if dataset_mfid not in self.s["datasets"]:
+            raise _http_error(404)
+        entry = {
+            "id": next(_ids),
+            "dataset_mfid": dataset_mfid,
+            "pipeline": pipeline,
+            "parameters": parameters,
+            "idempotency_key": idempotency_key,
+            "status": "requested",
+        }
+        self.s["postprocessing"].append(entry)
+        return dict(entry)
+
+
+class FakeFiles(_Checked):
+    _real = FileOperations
+
+    def __init__(self, store):
+        self.s = store
+
+    def list(self, limit=100, sha256_hash=None, offset=0, cursor=None):
+        out = []
+        for ds_mfid, ds_files in self.s["files"].items():
+            for f in ds_files:
+                item = {"dataset_mfid": ds_mfid, **f}
+                if sha256_hash is not None and item.get("sha256_hash") != sha256_hash:
+                    continue
+                out.append(item)
+        if offset:
+            out = out[offset:]
+        return out[:limit] if isinstance(limit, int) else out
+
 
 class FakeUsers(_Checked):
     _real = UserOperations
@@ -555,16 +601,17 @@ class FakePrint(_Checked):
 
 def install(client):
     """Swap the client's resources for fakes. Returns (store, restore)."""
-    names = ("samples", "datasets", "users", "projects", "print", "_request")
+    names = ("samples", "datasets", "files", "users", "projects", "print", "_request")
     saved = {name: client.__dict__.get(name) for name in names}
     store = {
         "samples": {}, "links": [], "datasets": {}, "sample_datasets": [], "files": {},
         "prints": [], "fail_link": set(), "can_edit": True, "print_result": {"status": "ok"},
         "dataset_links": [], "ingestion_requests": {}, "file_ingestions": [],
-        "users": {}, "projects": {}, "user_projects": {},
+        "users": {}, "projects": {}, "user_projects": {}, "postprocessing": [],
     }
     client.samples = FakeSamples(store)
     client.datasets = FakeDatasets(store)
+    client.files = FakeFiles(store)
     client.users = FakeUsers(store)
     client.projects = FakeProjects(store)
     client.print = FakePrint(store)

@@ -195,47 +195,32 @@ B30_RAMAN_CONFIG = {
     ],
 }
 
+# B30 XPS CONFIG (Kratos Axis Ultra / Vision .kal spectra)
+# Field keys and number/string types match crucible-ingestion's KratosXpsIngestor, which fills
+# in anything left empty; values entered here win over ingested ones.
+B30_XPS_CONFIG = {
+    "dataset_label": "XPS",  # dataset names: <timestamp>_XPS_on_<sample>
+    "dataset_type": "XPS Spectrum",
+    "instrument_mfid": "0tqx1eq8b5t8h000y3zm23mwmw",  # B30 XPS (prod MFID)
+    "measurement": "XPS",
+    "printer_name": "crucible-printer/b30-122",
+    "ingestion_class": "KratosXpsIngestor",
+    "dataset_fields": [
+        {"key": "anode_material", "label": "Anode material", "type": "text"},
+        {"key": "photon_energy_eV", "label": "Photon energy (eV)", "type": "number", "as_number": True},
+        {"key": "anode_voltage_V", "label": "Anode voltage (V)", "type": "number", "as_number": True},
+        {"key": "emission_current_A", "label": "Emission current (A)", "type": "number", "as_number": True},
+        {"key": "stage_position_name", "label": "Stage position", "type": "text"},
+        {"key": "technique", "label": "Technique", "type": "text"},
+        {"key": "comment", "label": "Comment", "type": "text"},
+    ],
+}
+
 # HOME PAGE AND NAVIGATION
 # The home page lists divisions; each division page lists its tools. The nav is built from
 # the same data. A division without tools is hidden. create_app() validates this at startup.
 DIVISIONS = [
     {"key": "als", "label": "ALS", "description": "Advanced Light Source beamline samples: GIWAXS bars and RGA carriers."},
-    {"key": "b30", "label": "B30", "description": "Building 30 deposition, microscopy, electrolyte and data entry tools."},
-    {"key": "b67", "label": "B67", "description": "Building 67 synthesis and fabrication tools."},
-]
-
-# Order within a division is the order here. {"sputter_tools": True} expands in place to one
-# entry per SPUTTER_TOOLS item, so new sputter tools appear without touching this list.
-TOOLS = [
-    {"key": "giwaxs", "division": "als", "endpoint": "giwaxs.page",
-     "nav_label": "GIWAXS Bar", "card_title": "GIWAXS Bar Creator",
-     "card_description": "Create GIWAXS bars, assign thin films to 11 bar positions, and upload to Crucible + ALS Sample Tracker."},
-    {"key": "rga", "division": "als", "endpoint": "rga.page",
-     "nav_label": "RGA Carrier", "card_title": "RGA Carrier Creator",
-     "card_description": "Create RGA carriers, assign thin films to 36 positions (6x6 grid), generate CSV, and upload to databases."},
-    {"sputter_tools": True, "division": "b30"},
-    {"key": "b30_ebeam", "division": "b30", "endpoint": "b30_ebeam.page",
-     "nav_label": "B30 E-beam", "card_title": "B30 E-beam Data Entry",
-     "card_description": "Look up or create samples by barcode and upload e-beam evaporation parameters to Crucible."},
-    {"key": "b30_sem", "division": "b30", "endpoint": "b30_sem.page",
-     "nav_label": "B30 SEM", "card_title": "B30 SEM Data Entry",
-     "card_description": "Look up or create samples by barcode and upload SEM/EDX images to Crucible."},
-    {"key": "b30_raman", "division": "b30", "endpoint": "b30_raman.page",
-     "nav_label": "B30 Raman", "card_title": "B30 Raman Data Entry",
-     "card_description": "Look up or create samples by barcode and upload Horiba LabRAM spectra (.ngs) to Crucible."},
-    {"key": "electrolyte", "division": "b30", "endpoint": "electrolyte.page",
-     "nav_label": "Electrolytes", "card_title": "Electrolyte Sample Creator",
-     "card_description": "Create electrolyte samples with ingredients, preparation date, concentration, and pH."},
-    {"key": "schema_forms", "division": "b30", "endpoint": "schema_forms.page",
-     "nav_label": "Schema Forms", "card_title": "Schema Data Entry",
-     "card_description": "Pick a data type schema (or build one), fill in the generated form, link or create a sample, and create a dataset."},
-    {"key": "print", "division": "b30", "endpoint": "print.page",
-     "nav_label": "Print Barcodes", "card_title": "Print Barcodes",
-     "card_description": "Search Crucible for existing samples, or paste a list of names and MFIDs, and print barcode labels in bulk."},
-    {"key": "synthesis", "division": "b67", "endpoint": "synthesis.page",
-     "nav_label": "Synthesis Upload", "card_title": "Synthesis Upload",
-     "card_description": "Enter solid precursors, stock solutions and precursor solutions in a spreadsheet grid; parent samples are linked by name."},
-    {"key": "fabrication", "division": "b67", "endpoint": "fabrication.page",
-     "nav_label": "Fabrication Traveler", "card_title": "Fabrication Traveler",
-     "card_description": "Per-wafer process traveler (QCMF): record each step, cut chiplets and chips, attach files, print labels."},
+    {"key": "b30", "label": "B30", "description": "Building 30 deposition, spectroscopy, microscopy, electrochemistry, electrolyte and data entry tools."},
+    {"key": "b67", "label": "B67", "description": "Building 67 synthesis, fabrication, microscopy and SpinBot tools."},
 ]
