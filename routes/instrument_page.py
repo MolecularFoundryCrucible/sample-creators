@@ -189,7 +189,7 @@ def register_instrument_routes(bp, *, config, session_key, dataset_to_row, logbo
             )
             new_dataset = cruc_client.datasets.create(ds, scientific_metadata=scientific_metadata)
             dataset_mfid = new_dataset["dataset_mfid"]
-            cruc_client.datasets.add_sample(dataset_mfid=dataset_mfid, sample_mfid=state["sample_unique_id"])
+            cruc_client.datasets.link_sample(dataset_mfid=dataset_mfid, sample_mfid=state["sample_unique_id"])
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 

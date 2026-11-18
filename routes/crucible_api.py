@@ -1,4 +1,4 @@
-"""crucible-api calls that nano-crucible 3.3 has no public method for.
+"""crucible-api calls that nano-crucible 4.0 does not expose directly (or wraps differently).
 
 Everything here goes through the client's private `_request`, so it is the one module to
 revisit when nano-crucible adds wrappers or changes that method.

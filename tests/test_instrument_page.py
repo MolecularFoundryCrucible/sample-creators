@@ -49,7 +49,7 @@ class RamanPageTests(unittest.TestCase):
 
     def test_dataset_uses_raman_instrument_and_typed_fields(self):
         with patch("routes.shared.cruc_client.datasets.create", return_value={"dataset_mfid": DATASET}) as create, \
-             patch("routes.shared.cruc_client.datasets.add_sample") as add_sample:
+             patch("routes.shared.cruc_client.datasets.link_sample") as link_sample:
             r = self.client.post("/b30-raman/api/upload-dataset", json={
                 "laser_wavelength_nm": "532.06", "exposure_time_s": "60", "accumulation": "1 x 9",
                 "raman_shift_range_cm-1": [150, 1500], "comment": "c"})
@@ -62,7 +62,7 @@ class RamanPageTests(unittest.TestCase):
         self.assertEqual(create.call_args.kwargs["scientific_metadata"], {
             "laser_wavelength_nm": 532.06, "exposure_time_s": 60.0, "accumulation": "1 x 9",
             "raman_shift_range_cm-1": [150.0, 1500.0], "comment": "c"})
-        add_sample.assert_called_once_with(dataset_mfid=DATASET, sample_mfid="sample-1")
+        link_sample.assert_called_once_with(dataset_mfid=DATASET, sample_mfid="sample-1")
 
     def test_logbook_row(self):
         row = raman_row({"timestamp": "2026-06-18T11:02:18", "scientific_metadata": {

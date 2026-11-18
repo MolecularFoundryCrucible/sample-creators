@@ -208,7 +208,10 @@ def scan_carrier():
         carrier_info = cruc_client.samples.get(carrier_uuid)
         carrier_name = carrier_info["sample_name"]
 
-        samples = cruc_client.samples.list_children(carrier_uuid, sample_type="thin film")
+        samples = [
+            s for s in cruc_client.samples.list_children(carrier_uuid, limit=None)
+            if "sample_type" not in s or s.get("sample_type") == "thin film"
+        ]
         sorted_names = sorted(s["sample_name"] for s in samples)
 
         state = _get_rga_state()
@@ -290,7 +293,7 @@ def collect_preview():
             )
             sample_synds = [ds for ds in sample_ds if ds["measurement"] == "spin_run"]
             if sample_synds:
-                sample_syn_md = sample_synds[0]["scientific_metadata"]
+                sample_syn_md = sample_synds[0].get("scientific_metadata") or {}
             elif tf_name != "TF000000":
                 continue
 
@@ -345,8 +348,8 @@ def upload():
             tf_mfid = tf["tf_mfid"]
 
             cruc_client.samples.link(
-                parent_id=state["rga_mf_uuid"],
-                child_id=tf_mfid,
+                parent_mfid=state["rga_mf_uuid"],
+                child_mfid=tf_mfid,
             )
 
             new_sample_dto = SampleCreateDto(

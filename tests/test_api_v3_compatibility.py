@@ -40,7 +40,8 @@ class ApiV3PayloadTests(unittest.TestCase):
         self.assertEqual(payload["data_type"], expected_data_type)
         self.assertEqual(payload["instrument_mfid"], expected_instrument)
         self.assertNotIn("instrument_name", payload)
-        self.assertEqual(payload["owner"], self.user["orcid"])
+        self.assertEqual(payload["owner_ref"], self.user["orcid"])
+        self.assertNotIn("owner", payload)
         self.assertNotIn("dataset_type", payload)
         self.assertNotIn("owner_orcid", payload)
 
@@ -132,7 +133,7 @@ class ApiV3PayloadTests(unittest.TestCase):
         created = {"unique_id": DATASET_MFID}
 
         with patch("routes.shared.cruc_client.datasets._request", return_value=created) as request, \
-             patch("routes.shared.cruc_client.datasets.add_sample") as add_sample:
+             patch("routes.shared.cruc_client.datasets.link_sample") as link_sample:
             response = self.client.post("/b30-sem/api/upload-dataset", json={})
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
@@ -141,7 +142,7 @@ class ApiV3PayloadTests(unittest.TestCase):
             B30_SEM_CONFIG["dataset_type"],
             B30_SEM_CONFIG["instrument_mfid"],
         )
-        add_sample.assert_called_once_with(
+        link_sample.assert_called_once_with(
             dataset_mfid=DATASET_MFID,
             sample_mfid="sample-1",
         )
@@ -199,6 +200,77 @@ class ApiV3PayloadTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
         self.assert_v3_sample(create.call_args.args[0], "RGA000001", "rga carrier")
+
+    def test_sample_create_posts_owner_ref_wire_payload(self):
+        self.set_user()
+        created = {"unique_id": "0tkn2knjast3h0008nyq9zps2s", "sample_name": "film"}
+
+        with patch("routes.shared.cruc_client.samples._request", return_value=created) as request:
+            response = self.client.post("/b30-sem/api/create-sample", json={
+                "sample_name": "film",
+                "sample_type": "thin film",
+            })
+
+        self.assertEqual(response.status_code, 200, response.get_data(as_text=True))
+        self.assertEqual(request.call_args.args[:2], ("post", "/samples"))
+        payload = request.call_args.kwargs["json"]
+        self.assertEqual(payload["owner_ref"], self.user["orcid"])
+        self.assertNotIn("owner", payload)
+        self.assertNotIn("owner_orcid", payload)
+
+    def test_electrolyte_create_uses_link_sample_and_owner_ref(self):
+        self.set_user()
+        created_sample = {"unique_id": "0tkn2knjast3h0008nyq9zps2s", "sample_name": "EL-1"}
+        created_ds = {"unique_id": DATASET_MFID, "dataset_name": "EL-1 electrolyte preparation 2026-10-15"}
+
+        with patch("routes.electrolyte.cruc_client.samples.list", return_value=[]), \
+             patch("routes.electrolyte.cruc_client.samples.create", return_value=created_sample), \
+             patch("routes.electrolyte.cruc_client.datasets._request", return_value=created_ds) as ds_req, \
+             patch("routes.electrolyte.cruc_client.datasets.link_sample") as link_sample:
+            response = self.client.post("/electrolyte/api/create", json={
+                "name": "EL-1",
+                "preparation_date": "2026-10-15",
+                "concentration": "1.0 M",
+                "ph": 7.0,
+                "ingredients": [{"type": "LiPF6", "amount": "1.0 M"}],
+            })
+
+        self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
+        payload = self.dataset_post_payload(ds_req)
+        self.assertEqual(payload["owner_ref"], self.user["orcid"])
+        self.assertNotIn("owner", payload)
+        link_sample.assert_called_once_with(
+            dataset_mfid=DATASET_MFID,
+            sample_mfid="0tkn2knjast3h0008nyq9zps2s",
+        )
+
+    def test_schema_forms_create_dataset_uses_link_sample_and_owner_ref(self):
+        self.set_user()
+        schema_ds = {
+            "unique_id": "schema-1",
+            "dataset_name": "Custom XRD",
+            "scientific_metadata": {"fields": [{"name": "angle", "type": "number", "required": True}]},
+        }
+        created_ds = {"unique_id": DATASET_MFID, "dataset_name": "Run 1"}
+
+        with patch("routes.schema_forms.cruc_client.datasets.list", return_value=[schema_ds]), \
+             patch("routes.schema_forms.cruc_client.datasets._request", return_value=created_ds) as ds_req, \
+             patch("routes.schema_forms.cruc_client.datasets.link_sample") as link_sample:
+            response = self.client.post("/schema-forms/api/datasets", json={
+                "schema_id": "schema-1",
+                "sample_id": "sample-1",
+                "dataset_name": "Run 1",
+                "values": {"angle": 32.5},
+            })
+
+        self.assertEqual(response.status_code, 201, response.get_data(as_text=True))
+        payload = self.dataset_post_payload(ds_req)
+        self.assertEqual(payload["owner_ref"], self.user["orcid"])
+        self.assertNotIn("owner", payload)
+        link_sample.assert_called_once_with(
+            dataset_mfid=DATASET_MFID,
+            sample_mfid="sample-1",
+        )
 
 
 if __name__ == "__main__":

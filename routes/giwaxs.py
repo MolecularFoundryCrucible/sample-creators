@@ -219,7 +219,10 @@ def scan_tray():
         tray_info = cruc_client.samples.get(tray_uuid)
         tray_name = tray_info["sample_name"]
 
-        samples = cruc_client.samples.list_children(tray_uuid, sample_type="thin film")
+        samples = [
+            s for s in cruc_client.samples.list_children(tray_uuid, limit=None)
+            if "sample_type" not in s or s.get("sample_type") == "thin film"
+        ]
         sorted_names = sorted(s["sample_name"] for s in samples)
 
         state = _get_giwaxs_state()
@@ -302,7 +305,7 @@ def collect_preview():
             )
             sample_synds = [ds for ds in sample_ds if ds["measurement"] == "spin_run"]
             if sample_synds:
-                sample_syn_md = sample_synds[0]["scientific_metadata"]
+                sample_syn_md = sample_synds[0].get("scientific_metadata") or {}
 
         mm = ((i - 1) * state["wafer_width"]) + state["offset_mm"]
         scan_params = dict(GIWAXS_CONFIG["default_sample_parameters"])
@@ -362,8 +365,8 @@ def upload():
             tf_mfid = tf["tf_mfid"]
 
             cruc_client.samples.link(
-                parent_id=state["bar_mf_uuid"],
-                child_id=tf_mfid,
+                parent_mfid=state["bar_mf_uuid"],
+                child_mfid=tf_mfid,
             )
 
             new_sample_dto = SampleCreateDto(

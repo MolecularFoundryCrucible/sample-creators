@@ -73,5 +73,67 @@ class PrintersEndpointTests(unittest.TestCase):
         self.assertEqual(res.get_json(), response)
 
 
+class PrintSearchTests(unittest.TestCase):
+    def setUp(self):
+        try:
+            from tests import fake_crucible
+        except ImportError:
+            import fake_crucible
+        from crucible import Sample
+        from routes.shared import cruc_client
+
+        self.store, restore = fake_crucible.install(cruc_client)
+        self.addCleanup(restore)
+        for name, stype in (("AB", "wafer"), ("ABC-01", "thin film"), ("ABC-02", "wafer")):
+            cruc_client.samples.create(Sample(
+                sample_name=name,
+                sample_type=stype,
+                project_id="proj-1",
+                owner="0000-0001-2345-6789",
+            ))
+
+        app = create_app()
+        app.config.update(TESTING=True, SECRET_KEY="test")
+        self.client = app.test_client()
+        with self.client.session_transaction() as sess:
+            sess["user"] = {
+                "orcid": "0000-0001-2345-6789",
+                "projects": ["proj-1"],
+                "selected_project": "proj-1",
+            }
+
+    def test_short_fuzzy_queries_return_400_without_calling_search(self):
+        for short_name in ("A", "AB", "  AB  "):
+            with self.subTest(sample_name=short_name), \
+                 patch("routes.print_only.cruc_client.samples.search") as search:
+                res = self.client.post("/print/api/search", json={"sample_name": short_name})
+            self.assertEqual(res.status_code, 400, res.get_data(as_text=True))
+            self.assertIn("at least 3 characters", res.get_json()["error"])
+            search.assert_not_called()
+
+    def test_short_exact_query_uses_samples_list_and_succeeds(self):
+        res = self.client.post("/print/api/search", json={"sample_name": "AB", "exact": True})
+        self.assertEqual(res.status_code, 200, res.get_data(as_text=True))
+        body = res.get_json()
+        self.assertFalse(body["fuzzy"])
+        self.assertEqual(body["count"], 1)
+        self.assertEqual(body["rows"][0]["sample_name"], "AB")
+
+    def test_empty_query_lists_all_project_samples(self):
+        res = self.client.post("/print/api/search", json={"sample_name": ""})
+        self.assertEqual(res.status_code, 200, res.get_data(as_text=True))
+        body = res.get_json()
+        self.assertFalse(body["fuzzy"])
+        self.assertEqual(body["count"], 3)
+
+    def test_three_char_fuzzy_query_filters_by_sample_type(self):
+        res = self.client.post("/print/api/search", json={"sample_name": "ABC", "sample_type": "thin film"})
+        self.assertEqual(res.status_code, 200, res.get_data(as_text=True))
+        body = res.get_json()
+        self.assertTrue(body["fuzzy"])
+        self.assertEqual(body["count"], 1)
+        self.assertEqual(body["rows"][0]["sample_name"], "ABC-01")
+
+
 if __name__ == "__main__":
     unittest.main()

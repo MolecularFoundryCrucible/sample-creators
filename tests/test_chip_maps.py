@@ -4,7 +4,10 @@ import unittest
 
 os.environ.setdefault("CRUCIBLE_API_KEY", "test-api-key")
 
-import fake_crucible  # noqa: E402
+try:
+    from tests import fake_crucible  # noqa: E402
+except ImportError:
+    import fake_crucible  # noqa: E402
 from app import create_app  # noqa: E402
 from routes.shared import cruc_client  # noqa: E402
 

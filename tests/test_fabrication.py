@@ -9,7 +9,10 @@ import unittest
 
 os.environ.setdefault("CRUCIBLE_API_KEY", "test-api-key")
 
-import fake_crucible  # noqa: E402
+try:
+    from tests import fake_crucible  # noqa: E402
+except ImportError:
+    import fake_crucible  # noqa: E402
 from app import create_app  # noqa: E402
 from routes import fab_templates  # noqa: E402
 from routes.shared import cruc_client  # noqa: E402
@@ -74,6 +77,7 @@ class TravelerEndToEndTests(unittest.TestCase):
                                                      "spec": {"batch_number": "B7", "base_metal": "Al"}})
         check("wafer created", r.status_code == 200)
         wid = r.get_json()["wafer"]["unique_id"]
+        check("wafer hub url", r.get_json()["wafer"]["explorer_url"] == f"https://crucible.lbl.gov/hub/samples/{wid}")
         check("wafer owner comes from the session", store["samples"][wid]["sample_name"] == "QCMF_WFR_99")
         check("duplicate wafer name -> 409", api.post("/fabrication/api/wafers", json={
             "project": P, "template_id": T, "wafer_name": "QCMF_WFR_99", "wafer_options": {"wafer_type": "qubit"}}).status_code == 409)
@@ -81,6 +85,7 @@ class TravelerEndToEndTests(unittest.TestCase):
             "project": P, "template_id": T, "wafer_name": "X", "wafer_options": {"wafer_type": "prod"}}).status_code == 400)
 
         trav = api.get(f"/fabrication/api/wafers/{wid}/traveler").get_json()
+        check("traveler wafer hub url", trav["wafer"]["explorer_url"] == f"https://crucible.lbl.gov/hub/samples/{wid}")
         labels = {s["label"]: s for s in trav["steps"]}
         check("qubit variants only", "Step 1A" in labels and "Step 1B" not in labels and "Step 10B" not in labels)
         check("3A/3B/8A/8B/9 all available and optional",
@@ -174,6 +179,10 @@ class TravelerEndToEndTests(unittest.TestCase):
         # Chiplets, dicing, multi-target steps
         r = step(wid, "cut_chiplets", [wid], new_children={wid: ["WFR99_CL01", "WFR99_CL02"]})
         check("chiplets created", r.status_code == 200 and len(r.get_json()["created"]) == 2)
+        check("chiplet hub urls", all(
+            c["explorer_url"] == f"https://crucible.lbl.gov/hub/samples/{c['unique_id']}"
+            for c in r.get_json()["created"]
+        ))
         cl = [c["unique_id"] for c in r.get_json()["created"]]
         check("re-cut wafer -> 400", step(wid, "cut_chiplets", [wid], new_children={wid: ["CLX"]}).status_code == 400)
         check("dup child names -> 400", step(wid, "dicing", cl, new_children={cl[0]: ["A", "A"]}).status_code == 400)
@@ -182,9 +191,17 @@ class TravelerEndToEndTests(unittest.TestCase):
               and {(c, r.get_json()["dataset_id"]) for c in cl} <= set(store["sample_datasets"]))
         r = step(wid, "dicing", cl, new_children={cl[0]: ["CL01_C01", "CL01_C02"], cl[1]: ["CL02_C01"]})
         check("chips created under chiplets", r.status_code == 200 and len(r.get_json()["created"]) == 3)
+        check("chip hub urls", all(
+            c["explorer_url"] == f"https://crucible.lbl.gov/hub/samples/{c['unique_id']}"
+            for c in r.get_json()["created"]
+        ))
 
         trav = api.get(f"/fabrication/api/wafers/{wid}/traveler").get_json()
         check("3-level tree", sorted(u["sample_type"] for u in trav["units"]) == ["chip"] * 3 + ["chiplet"] * 2 + ["wafer"])
+        check("all traveler units use hub urls", all(
+            u["explorer_url"] == f"https://crucible.lbl.gov/hub/samples/{u['unique_id']}"
+            for u in trav["units"]
+        ))
         st = {s["id"]: s for s in trav["steps"]}
         check("statuses + edits visible", st["rca_clean"]["status"] == "done" and st["wafer_trench"]["status"] == "skipped"
               and st["development"]["status"] == "pending" and st["rca_clean"]["records"][0]["edited_by"] == "Tim")
