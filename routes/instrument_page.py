@@ -145,6 +145,11 @@ def register_instrument_routes(bp, *, config, session_key, dataset_to_row, logbo
             "description": description,
         })
 
+    @bp.route("/api/clear-sample", methods=["POST"])
+    def clear_sample():
+        remember_sample("", "", "", "")
+        return jsonify({"ok": True})
+
     @bp.route("/api/print-barcode", methods=["POST"])
     def print_barcode():
         data = request.get_json(silent=True) or {}
@@ -161,21 +166,34 @@ def register_instrument_routes(bp, *, config, session_key, dataset_to_row, logbo
 
     @bp.route("/api/upload-dataset", methods=["POST"])
     def upload_dataset():
-        """Create the dataset from the form fields and link the sample.
+        """Create the dataset from the form fields and link the sample (when present).
 
         The browser then uploads the files straight to storage and requests ingestion.
         """
         user = session.get("user")
         if not user:
             return jsonify({"error": "Not logged in"}), 401
+        raw_data = request.get_json(silent=True) or {}
         state = get_state()
-        if not state.get("sample_unique_id"):
-            return jsonify({"error": "No sample selected. Scan a barcode first."}), 400
+        no_sample = bool(raw_data.get("_no_sample"))
+        sample_id = "" if no_sample else (state.get("sample_unique_id") or "").strip()
+        if not sample_id and not (no_sample and config.get("sample_optional", False)):
+            msg = (
+                "No sample selected. Click Lookup or Create first, or clear the barcode field to upload without a sample."
+                if config.get("sample_optional", False)
+                else "No sample selected. Scan a barcode first."
+            )
+            return jsonify({"error": msg}), 400
 
-        scientific_metadata = form_metadata(config["dataset_fields"], request.get_json(silent=True) or {})
-        sample_name = (state.get("sample_name") or "").strip() or "unknown-sample"
+        scientific_metadata = form_metadata(config["dataset_fields"], raw_data)
         date_str = datetime.now(LA_TZ).strftime("%Y%m%d_%H%M%S")
-        dataset_name = f"{date_str}_{config['dataset_label']}_on_{sample_name}"
+        if sample_id:
+            sample_name = (state.get("sample_name") or "").strip() or "unknown-sample"
+            dataset_name = f"{date_str}_{config['dataset_label']}_on_{sample_name}"
+        else:
+            sample_name = ""
+            file_stem = (raw_data.get("_file_stem") or "").strip() if isinstance(raw_data.get("_file_stem"), str) else ""
+            dataset_name = f"{date_str}_{config['dataset_label']}_{file_stem}" if file_stem else f"{date_str}_{config['dataset_label']}"
 
         try:
             ds = Dataset(
@@ -189,11 +207,12 @@ def register_instrument_routes(bp, *, config, session_key, dataset_to_row, logbo
             )
             new_dataset = cruc_client.datasets.create(ds, scientific_metadata=scientific_metadata)
             dataset_mfid = new_dataset["dataset_mfid"]
-            cruc_client.datasets.link_sample(dataset_mfid=dataset_mfid, sample_mfid=state["sample_unique_id"])
+            if sample_id:
+                cruc_client.datasets.link_sample(dataset_mfid=dataset_mfid, sample_mfid=sample_id)
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-        return jsonify({"dataset_name": dataset_name, "dataset_id": dataset_mfid, "sample_name": state["sample_name"]})
+        return jsonify({"dataset_name": dataset_name, "dataset_id": dataset_mfid, "sample_name": sample_name})
 
     @bp.route("/api/recent-datasets", methods=["GET"])
     def recent_datasets():

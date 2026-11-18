@@ -136,6 +136,7 @@ function clearSample() {
     clearSampleFields();
     showSamplePanel('create');
     setSampleStatus('', '');
+    api(instrumentApi('clear-sample'), 'POST', {}).catch(() => {});
 }
 
 async function printSampleBarcode() {
@@ -205,21 +206,21 @@ function collectFormMetadata() {
 
 function uploadDataset() {
     const barcode = document.getElementById('sample_barcode').value.trim();
-    if (!barcode) {
+    if (!barcode && !INSTRUMENT_PAGE.sampleOptional) {
         showAlert('error', 'No sample selected. Scan a barcode first.');
         return;
     }
     const metadata = collectFormMetadata();
-    const sampleName = document.getElementById('sample_name').value || barcode;
+    const sampleName = barcode ? (document.getElementById('sample_name').value || barcode) : '';
     showModal('Confirm Upload', buildUploadPreview(sampleName, metadata), async () => {
-        await doUpload(metadata);
+        await doUpload(metadata, !barcode);
     });
 }
 
 function buildUploadPreview(sampleName, metadata) {
     const rows = Object.entries(metadata).map(([k, v]) => [k, Array.isArray(v) ? v.join(' – ') : v]);
     rows.push(...INSTRUMENT_PAGE.filesPreview());
-    let html = `<p><strong>Sample:</strong> ${escapeHtml(sampleName)}</p>`;
+    let html = `<p><strong>Sample:</strong> ${sampleName ? escapeHtml(sampleName) : '<em>None (unlinked)</em>'}</p>`;
     html += '<table class="preview-table"><thead><tr><th>Field</th><th>Value</th></tr></thead><tbody>';
     html += rows.length
         ? rows.map(([k, v]) => `<tr><td>${escapeHtml(k)}</td><td>${escapeHtml(String(v))}</td></tr>`).join('')
@@ -229,13 +230,20 @@ function buildUploadPreview(sampleName, metadata) {
 
 // The dataset is created here from the form; files then go from the browser straight to storage
 // (no size limit) and are ingested by the instrument's ingestors.
-async function doUpload(metadata) {
+async function doUpload(metadata, noSample = false) {
     const files = INSTRUMENT_PAGE.selectedFiles();
     try {
         if (files.length && !window.CrucibleUpload) {
             throw new Error('The upload module did not load. Reload the page and try again.');
         }
-        const dataset = await api(instrumentApi('upload-dataset'), 'POST', metadata);
+        const payload = { ...metadata };
+        if (noSample) {
+            payload._no_sample = true;
+            if (files.length === 1) {
+                payload._file_stem = files[0].name.replace(/\.[^/.]+$/, '');
+            }
+        }
+        const dataset = await api(instrumentApi('upload-dataset'), 'POST', payload);
         if (!files.length) {
             showAlert('success', `Dataset uploaded: ${dataset.dataset_name} (${dataset.dataset_id})`);
             return;

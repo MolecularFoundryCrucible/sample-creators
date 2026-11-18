@@ -73,6 +73,87 @@ class XpsPageTests(unittest.TestCase):
         })
         link_sample.assert_called_once_with(dataset_mfid=DATASET, sample_mfid="sample-1")
 
+    def test_dataset_upload_without_sample_succeeds_and_skips_link(self):
+        with self.client.session_transaction() as sess:
+            sess["b30_xps"] = {
+                "sample_unique_id": "",
+                "sample_name": "",
+                "sample_type": "",
+                "sample_description": "",
+            }
+        with patch("routes.shared.cruc_client.datasets.create", return_value={"dataset_mfid": DATASET}) as create, \
+             patch("routes.shared.cruc_client.datasets.link_sample") as link_sample:
+            r = self.client.post("/b30-xps/api/upload-dataset", json={
+                "anode_material": "Al Mono",
+                "_no_sample": True,
+                "_file_stem": "Au_calibration",
+            })
+        self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
+        ds = create.call_args.args[0]
+        self.assertTrue(ds.dataset_name.endswith("_XPS_Au_calibration"), ds.dataset_name)
+        self.assertNotIn("_on_", ds.dataset_name)
+        link_sample.assert_not_called()
+        self.assertEqual(r.get_json()["sample_name"], "")
+
+    def test_no_sample_flag_ignores_stale_session_sample_and_clear_route_resets_state(self):
+        with patch("routes.shared.cruc_client.datasets.create", return_value={"dataset_mfid": DATASET}) as create, \
+             patch("routes.shared.cruc_client.datasets.link_sample") as link_sample:
+            r = self.client.post("/b30-xps/api/upload-dataset", json={
+                "anode_material": "Al Mono",
+                "_no_sample": True,
+            })
+        self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
+        self.assertTrue(create.call_args.args[0].dataset_name.endswith("_XPS"))
+        link_sample.assert_not_called()
+
+        clear_res = self.client.post("/b30-xps/api/clear-sample", json={})
+        self.assertEqual(clear_res.status_code, 200)
+        state_res = self.client.get("/b30-xps/api/state")
+        self.assertEqual(state_res.get_json()["sample_unique_id"], "")
+
+    def test_b30_raman_upload_without_sample_succeeds_and_skips_link(self):
+        with self.client.session_transaction() as sess:
+            sess["b30_raman"] = {
+                "sample_unique_id": "",
+                "sample_name": "",
+                "sample_type": "",
+                "sample_description": "",
+            }
+        with patch("routes.shared.cruc_client.datasets.create", return_value={"dataset_mfid": DATASET}) as create, \
+             patch("routes.shared.cruc_client.datasets.link_sample") as link_sample:
+            r = self.client.post("/b30-raman/api/upload-dataset", json={
+                "laser_wavelength_nm": "532",
+                "_no_sample": True,
+                "_file_stem": "Si_ref",
+            })
+        self.assertEqual(r.status_code, 200, r.get_data(as_text=True))
+        ds = create.call_args.args[0]
+        self.assertTrue(ds.dataset_name.endswith("_Raman_Si_ref"), ds.dataset_name)
+        self.assertNotIn("_on_", ds.dataset_name)
+        link_sample.assert_not_called()
+        self.assertEqual(r.get_json()["sample_name"], "")
+
+    def test_non_optional_instrument_still_requires_sample(self):
+        with self.client.session_transaction() as sess:
+            sess["b30_sem"] = {
+                "sample_unique_id": "",
+                "sample_name": "",
+                "sample_type": "",
+                "sample_description": "",
+            }
+        r = self.client.post("/b30-sem/api/upload-dataset", json={"comment": "test", "_no_sample": True})
+        self.assertEqual(r.status_code, 400)
+
+        with self.client.session_transaction() as sess:
+            sess["b30_xps"] = {
+                "sample_unique_id": "",
+                "sample_name": "",
+                "sample_type": "",
+                "sample_description": "",
+            }
+        unconfirmed = self.client.post("/b30-xps/api/upload-dataset", json={"comment": "typed barcode without lookup"})
+        self.assertEqual(unconfirmed.status_code, 400)
+
     def test_dataset_to_row_formats_all_columns(self):
         details = {
             "unique_id": "ds-001",

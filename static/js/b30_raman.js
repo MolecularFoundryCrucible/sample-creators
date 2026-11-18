@@ -3,6 +3,7 @@
 
 const INSTRUMENT_PAGE = {
     apiBase: '/b30-raman',
+    sampleOptional: true,
     logbookCols: ['Date', 'User', 'Laser (nm)', 'Exposure (s)', 'Accumulation', 'Grating',
                   'Objective', 'Range (1/cm)', 'Spectra', 'Comment'],
     csvFilename: 'b30_raman_recent_datasets.csv',
