@@ -152,10 +152,107 @@ class UploadRoutesTests(unittest.TestCase):
         from routes import crucible_api
         with patch("routes.shared.cruc_client._request", return_value={}) as request:
             crucible_api.request_ingestion(FILE, True, "FeiSemTifIngestor")
+            crucible_api.request_ingestion(FILE, True, None)
             crucible_api.request_ingestion(FILE, False, "Ignored")
+        self.assertEqual(request.call_args_list[0].args, ("post", f"/files/{FILE}/ingest"))
         self.assertEqual(request.call_args_list[0].kwargs["params"], {"status": "requested", "ingestion_class": "FeiSemTifIngestor"})
-        self.assertEqual(request.call_args_list[1].kwargs["params"], {"status": "not_requested"})
-        self.assertFalse(request.call_args_list[0].kwargs["retry"])
+        self.assertEqual(request.call_args_list[1].kwargs["params"], {"status": "requested"})
+        self.assertEqual(request.call_args_list[2].kwargs["params"], {"status": "not_requested"})
+        for call in request.call_args_list:
+            self.assertFalse(call.kwargs["retry"])
+            self.assertNotIn("json", call.kwargs)
+
+
+class CrucibleApiWrapperContractTests(unittest.TestCase):
+    def test_all_nine_request_wrappers_match_v4_signature_and_wire_contracts(self):
+        import inspect
+        from crucible.client import CrucibleClient
+        from routes import crucible_api
+
+        sig = inspect.signature(CrucibleClient._request)
+        recorded = []
+
+        def fake_request(method, endpoint, *args, **kwargs):
+            sig.bind(None, method, endpoint, *args, **kwargs)
+            recorded.append((method, endpoint, args, kwargs))
+            if endpoint == "/print/printers":
+                return {"printers": [{"printer_id": "b30-113", "online": True}]}
+            return {"ok": True}
+
+        with patch("routes.shared.cruc_client._request", side_effect=fake_request):
+            self.assertEqual(crucible_api.list_printers(), [{"printer_id": "b30-113", "online": True}])
+            crucible_api.add_scientific_metadata(DATASET, {"temp_c": 20})
+            crucible_api.multipart_initiate(DATASET, "scan.tif", 512, "k" * 32)
+            crucible_api.multipart_sign_parts(DATASET, "up-1", [{"part_number": 1, "crc32c": CRC}])
+            crucible_api.multipart_status_page(DATASET, "up-1", 4)
+            crucible_api.multipart_complete(DATASET, "up-1", "a" * 64, CRC)
+            crucible_api.multipart_abort(DATASET, "up-1")
+            crucible_api.request_ingestion(FILE, True, "GdsChipMapIngestor")
+            crucible_api.list_ingestion_requests(DATASET)
+
+        self.assertEqual(len(recorded), 9)
+        self.assertEqual(recorded[0], ("get", "/print/printers", (), {}))
+        self.assertEqual(recorded[1], ("post", f"/resources/{DATASET}/metadata", (), {"json": {"temp_c": 20}}))
+        self.assertEqual(recorded[2], (
+            "post", f"/datasets/{DATASET}/upload/multipart/initiate", (),
+            {"retry": False, "json": {"filename": "scan.tif", "size": 512}, "headers": {"Idempotency-Key": "k" * 32}},
+        ))
+        self.assertEqual(recorded[3], (
+            "post", f"/datasets/{DATASET}/upload/multipart/up-1/parts", (),
+            {"retry": False, "log_body": False, "json": {"parts": [{"part_number": 1, "crc32c": CRC}]}},
+        ))
+        self.assertEqual(recorded[4], (
+            "get", f"/datasets/{DATASET}/upload/multipart/up-1", (),
+            {"log_body": False, "params": {"limit": crucible_api.STATUS_PAGE_LIMIT, "part_number_marker": 4}},
+        ))
+        self.assertEqual(recorded[5], (
+            "post", f"/datasets/{DATASET}/upload/multipart/complete", (),
+            {"retry": False, "timeout": (10, crucible_api.COMPLETE_TIMEOUT_S),
+             "json": {"upload_id": "up-1", "sha256_hash": "a" * 64, "crc32c": CRC}},
+        ))
+        self.assertEqual(recorded[6], ("delete", f"/datasets/{DATASET}/upload/multipart/up-1", (), {"retry": False}))
+        self.assertEqual(recorded[7], (
+            "post", f"/files/{FILE}/ingest", (),
+            {"retry": False, "params": {"status": "requested", "ingestion_class": "GdsChipMapIngestor"}},
+        ))
+        self.assertEqual(recorded[8], (
+            "get", "/ingestion_requests", (),
+            {"params": {"dataset_mfid": DATASET, "limit": 100}},
+        ))
+
+    def test_upload_ingest_endpoint_end_to_end_with_fake_crucible(self):
+        try:
+            from tests import fake_crucible
+        except ImportError:
+            import fake_crucible
+        from crucible import Dataset
+        from routes.shared import cruc_client
+
+        store, restore = fake_crucible.install(cruc_client)
+        self.addCleanup(restore)
+        uploads._access_cache.clear()
+        ds_id = cruc_client.datasets.create(
+            Dataset(dataset_name="Upload Test", project_id="proj-1")
+        )["dataset_mfid"]
+
+        app = create_app()
+        app.config.update(TESTING=True, SECRET_KEY="test")
+        client = app.test_client()
+        with client.session_transaction() as sess:
+            sess["user"] = {"orcid": "0000-0001-2345-6789", "projects": ["proj-1"], "selected_project": "proj-1"}
+
+        r1 = client.post("/api/uploads/ingest", json={
+            "dataset_mfid": ds_id, "file_mfid": FILE, "ingestion_class": "GdsChipMapIngestor"
+        })
+        self.assertEqual(r1.status_code, 200, r1.get_data(as_text=True))
+        r2 = client.post("/api/uploads/ingest", json={
+            "dataset_mfid": ds_id, "file_mfid": FILE, "requested": False, "ingestion_class": "Ignored"
+        })
+        self.assertEqual(r2.status_code, 200, r2.get_data(as_text=True))
+        self.assertEqual(store["file_ingestions"], [
+            {"id": store["file_ingestions"][0]["id"], "file_mfid": FILE, "status": "requested", "ingestion_class": "GdsChipMapIngestor"},
+            {"id": store["file_ingestions"][1]["id"], "file_mfid": FILE, "status": "not_requested"},
+        ])
 
 
 if __name__ == "__main__":

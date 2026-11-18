@@ -3,7 +3,10 @@ import unittest
 
 os.environ.setdefault("CRUCIBLE_API_KEY", "test-api-key")
 
-import fake_crucible  # noqa: E402
+try:
+    from tests import fake_crucible  # noqa: E402
+except ImportError:
+    import fake_crucible  # noqa: E402
 from crucible import Sample  # noqa: E402
 from app import create_app  # noqa: E402
 from routes.shared import cruc_client  # noqa: E402
@@ -54,6 +57,10 @@ class SynthesisUploadTests(unittest.TestCase):
         self.assertTrue(body["success"], body)
         self.assertEqual(body["summary"]["Samples Uploaded"], 1)
         created = body["summary"]["Created Samples"][0]["unique_id"]
+        self.assertEqual(
+            body["summary"]["Created Samples"][0]["explorer_url"],
+            f"https://crucible.lbl.gov/hub/samples/{created}",
+        )
         self.assertEqual(self.store["samples"][created]["sample_type"], "stock solution")
         self.assertIn((parent, created), self.store["links"])
         dataset_id = next(d for s, d in self.store["sample_datasets"] if s == created)

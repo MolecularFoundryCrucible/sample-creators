@@ -7,7 +7,7 @@ from flask import jsonify, request, session
 from pydantic import ValidationError
 
 from crucible import Sample
-from crucible.config import get_graph_explorer_url
+from crucible.config import get_hub_url
 from crucible.utils import get_tz_isoformat
 from routes.shared import cruc_client
 
@@ -47,7 +47,7 @@ def current_user(project=None):
 
 
 def explorer_url(project, unique_id):
-    return f"{get_graph_explorer_url().rstrip('/')}/{project}/samples/{unique_id}"
+    return f"{get_hub_url().rstrip('/')}/samples/{unique_id}"
 
 
 def add_sample(orcid, project, sample_name, description, sample_type=None):

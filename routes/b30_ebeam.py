@@ -76,7 +76,7 @@ def _fetch_summaries(project_id):
 
 def _all_rows(project_id):
     return incremental_refresh_rows(
-        cache_key=(project_id, INSTRUMENT_NAME),
+        cache_key=(project_id, INSTRUMENT_MFID),
         fetch_summaries=lambda: _fetch_summaries(project_id),
         build_row=_dataset_to_row,
     )

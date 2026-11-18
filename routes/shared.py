@@ -1,3 +1,4 @@
+import configparser
 import json
 import os
 import re
@@ -7,12 +8,111 @@ load_dotenv()
 
 logger = logging.getLogger(__name__)
 
+import requests
 from flask import Blueprint, request, jsonify, session
 
 from config import PRINT_CONFIG
 from crucible import CrucibleClient
-cruc_client = CrucibleClient(api_url=os.environ.get('CRUCIBLE_API_URL', 'https://crucible.lbl.gov/api/v3'),
-                             api_key=os.environ.get('CRUCIBLE_API_KEY', ''))
+from crucible.config import config as _cruc_config
+from crucible.errors import CrucibleAPIError, NotSignedInError
+from crucible.utils.identifiers import IdentifierNotFoundError
+
+DEFAULT_CRUCIBLE_API_URL = "https://crucible.lbl.gov/api/v3"
+
+
+def _read_ini_api_key():
+    path = _cruc_config.config_file_path
+    if not path.exists():
+        return None
+    parser = configparser.ConfigParser(interpolation=None)
+    parser.read(path)
+    if "crucible" in parser:
+        val = parser["crucible"].get("api_key", "").strip().strip('"').strip("'")
+        return val or None
+    return None
+
+
+class _DeferredCredential:
+    """Defers NotSignedInError until an unmocked HTTP request is prepared."""
+
+    kind = "deferred"
+    source: str | None = None
+
+    def __init__(self, client):
+        self._client = client
+
+    def bearer(self):
+        self._client._ensure_credential()
+        return self._client._credential.bearer()
+
+
+class _DeferredCrucibleClient(CrucibleClient):
+    """CrucibleClient that defers NotSignedInError from module import to HTTP request time."""
+
+    _UNCONFIGURED = "__unconfigured_crucible_client__"
+
+    def __init__(self, api_url=None, api_key=None):
+        if not (_cruc_config._data.get("api_key") or "").strip():
+            _cruc_config._data.pop("api_key", None)
+            _cruc_config._sources.pop("api_key", None)
+        if not (_cruc_config._data.get("api_url") or "").strip():
+            _cruc_config._data.pop("api_url", None)
+            _cruc_config._sources.pop("api_url", None)
+
+        env_url = (os.environ.get("CRUCIBLE_API_URL") or "").strip() or None
+        env_key = (os.environ.get("CRUCIBLE_API_KEY") or "").strip() or None
+        resolved_url = (api_url or "").strip() or env_url or _cruc_config.api_url or DEFAULT_CRUCIBLE_API_URL
+        resolved_key = (api_key or "").strip() if isinstance(api_key, str) else api_key
+        resolved_key = resolved_key or env_key or None
+        try:
+            super().__init__(api_url=resolved_url, api_key=resolved_key)
+        except NotSignedInError:
+            # If CRUCIBLE_API_KEY="" was set in env/.env, Config._load() skipped config.ini.
+            # Check config.ini only AFTER CrucibleClient(api_key=None) failed so OAuth wins first.
+            ini_key = _read_ini_api_key()
+            if ini_key:
+                super().__init__(api_url=resolved_url, api_key=ini_key)
+                return
+            super().__init__(api_url=resolved_url, api_key=self._UNCONFIGURED)
+            self._credential = _DeferredCredential(self)
+            self.api_key = None
+
+    def _ensure_credential(self):
+        if self._credential is not None and not isinstance(self._credential, _DeferredCredential):
+            return
+        from crucible.client import _resolve_credential
+
+        self._config.reload()
+        if not (self._config._data.get("api_key") or "").strip():
+            self._config._data.pop("api_key", None)
+            self._config._sources.pop("api_key", None)
+        if not (self._config._data.get("api_url") or "").strip():
+            self._config._data.pop("api_url", None)
+            self._config._sources.pop("api_url", None)
+
+        env_url = (os.environ.get("CRUCIBLE_API_URL") or "").strip() or None
+        target_url = env_url or (self.api_url or "").strip() or self._config.api_url or DEFAULT_CRUCIBLE_API_URL
+        env_key = (os.environ.get("CRUCIBLE_API_KEY") or "").strip() or None
+        try:
+            cred = _resolve_credential(self._config, target_url.rstrip("/"), env_key)
+        except NotSignedInError:
+            ini_key = _read_ini_api_key()
+            if not ini_key:
+                raise
+            cred = _resolve_credential(self._config, target_url.rstrip("/"), ini_key)
+        self.api_url = target_url.rstrip("/")
+        self._credential = cred
+        self.api_key = cred.key if cred.kind == "api_key" else None
+
+    def _request(self, method, endpoint, *args, **kwargs):
+        self._ensure_credential()
+        return super()._request(method, endpoint, *args, **kwargs)
+
+
+cruc_client = _DeferredCrucibleClient(
+    api_url=(os.environ.get("CRUCIBLE_API_URL") or "").strip() or None,
+    api_key=(os.environ.get("CRUCIBLE_API_KEY") or "").strip() or None,
+)
 
 # config.py names instruments by their prod MFID. An environment whose instruments were
 # registered separately (staging) maps prod MFIDs to its own, e.g. '{"<prod>": "<staging>"}'.
@@ -71,7 +171,7 @@ def publish_barcode(printer, mfid, name=""):
 
 def get_next_serial_sample(sample_prefix, sample_type, project):
     project_samples = cruc_client.samples.list(
-        project_id=project, sample_type=sample_type, limit=int(1e8)
+        project_id=project, sample_type=sample_type, limit=None
     )
     filtered = [x["sample_name"] for x in project_samples if x["sample_name"].startswith(sample_prefix)]
     nums = sorted(int(x.replace(sample_prefix, "")) for x in filtered)
@@ -105,7 +205,7 @@ def sample_types():
     project = user.get("selected_project", "")
     if not project:
         return jsonify([])
-    samples = cruc_client.samples.list(project_id=project, limit=int(1e8))
+    samples = cruc_client.samples.list(project_id=project, limit=None)
     return jsonify(sorted({s["sample_type"] for s in samples if s.get("sample_type")}))
 
 
@@ -118,14 +218,51 @@ def login():
 
     try:
         user_info = cruc_client.users.get(user_ref)
+    except NotSignedInError as e:
+        logger.error(f"Crucible client not signed in: {e}")
+        return jsonify({"error": str(e)}), 500
+    except (IdentifierNotFoundError, ValueError):
+        return jsonify({"error": "User not found"}), 404
+    except CrucibleAPIError as e:
+        if e.status == 404:
+            return jsonify({"error": "User not found"}), 404
+        logger.error(f"Crucible error while fetching user info ({e.status}): {e}")
+        return jsonify({"error": f"Crucible error ({e.status})"}), 502
+    except requests.HTTPError as e:
+        status = getattr(e.response, "status_code", None)
+        if status == 404:
+            return jsonify({"error": "User not found"}), 404
+        logger.error(f"HTTP error while fetching user info: {e}")
+        return jsonify({"error": f"Crucible error ({status or 502})"}), 502
+    except requests.RequestException as e:
+        logger.error(f"Upstream request failed while fetching user info: {e}")
+        return jsonify({"error": "Crucible upstream request failed"}), 502
     except Exception as e:
         logger.error(f"Error occurred while fetching user info: {e}")
         return jsonify({"error": "User not found"}), 404
 
-    user_unique_id = user_info.get("unique_id") or user_info.get("orcid")
-    user_name = format_user(user_info, user_unique_id or user_ref)
+    if not user_info:
+        return jsonify({"error": "User not found"}), 404
 
-    projects = cruc_client.projects.list(orcid=user_unique_id, limit=int(1e5))
+    user_unique_id = user_info.get("unique_id") or user_info.get("orcid") or user_ref
+    user_name = format_user(user_info, user_unique_id)
+
+    try:
+        projects = cruc_client.users.list_projects(user_unique_id, limit=None)
+    except NotSignedInError as e:
+        logger.error(f"Crucible client not signed in: {e}")
+        return jsonify({"error": str(e)}), 500
+    except CrucibleAPIError as e:
+        logger.error(f"Crucible error while fetching user projects ({e.status}): {e}")
+        return jsonify({"error": f"Crucible error ({e.status})"}), 502
+    except requests.HTTPError as e:
+        status = getattr(e.response, "status_code", None)
+        logger.error(f"HTTP error while fetching user projects: {e}")
+        return jsonify({"error": f"Crucible error ({status or 502})"}), 502
+    except requests.RequestException as e:
+        logger.error(f"Upstream request failed while fetching user projects: {e}")
+        return jsonify({"error": "Crucible upstream request failed"}), 502
+
     project_ids = sorted(x["project_id"] for x in projects)
 
     session["user"] = {

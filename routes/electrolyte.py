@@ -223,7 +223,7 @@ def create_electrolyte():
             ),
             scientific_metadata=preparation_metadata,
         )
-        cruc_client.datasets.add_sample(
+        cruc_client.datasets.link_sample(
             dataset_mfid=preparation["dataset_mfid"],
             sample_mfid=sample["unique_id"],
         )

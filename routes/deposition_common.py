@@ -241,7 +241,7 @@ def link_samples_to_dataset(dataset_mfid, run_samples, log_prefix):
     linked, failed = [], []
     for s in run_samples:
         try:
-            cruc_client.datasets.add_sample(
+            cruc_client.datasets.link_sample(
                 dataset_mfid=dataset_mfid,
                 sample_mfid=s["unique_id"],
             )

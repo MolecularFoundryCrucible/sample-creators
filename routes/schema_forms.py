@@ -291,7 +291,7 @@ def create_dataset():
             scientific_metadata=metadata,
         )
         if sample_id:
-            cruc_client.datasets.add_sample(
+            cruc_client.datasets.link_sample(
                 dataset_mfid=created["dataset_mfid"],
                 sample_mfid=sample_id,
             )

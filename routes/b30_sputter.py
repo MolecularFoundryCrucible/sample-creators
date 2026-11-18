@@ -131,17 +131,23 @@ def _build_rate_index_from_reference_sample(ref_sample):
     """
     index = {}
 
-    sample = cruc_client.samples.get(ref_sample)
-    datasets = sample.get("datasets", []) or []
+    datasets = cruc_client.datasets.list(
+        sample_mfid=ref_sample,
+        include_metadata=True,
+        limit=None,
+    ) or []
 
-    for link in datasets:
-        ds_id = link.get("unique_id") or link.get("id")
+    for ds in datasets:
+        ds_id = ds.get("unique_id") or ds.get("id")
         if not ds_id:
             continue
 
         try:
-            md = cruc_client.datasets.get_scientific_metadata(ds_id) or {}
-            sci = md.get("scientific_metadata", {}) or {}
+            if ds.get("scientific_metadata") is not None:
+                sci = ds.get("scientific_metadata") or {}
+            else:
+                md = cruc_client.datasets.get_scientific_metadata(ds_id) or {}
+                sci = md.get("scientific_metadata", {}) or {}
 
             key = _build_rate_key(
                 sci.get("09_target_material", ""),
@@ -156,8 +162,11 @@ def _build_rate_index_from_reference_sample(ref_sample):
             if rate_val in ("", None):
                 continue
 
-            ds_obj = cruc_client.datasets.get(ds_id) or {}
-            ts = ds_obj.get("timestamp", "")
+            if ds.get("timestamp") is not None:
+                ts = ds.get("timestamp") or ""
+            else:
+                ds_obj = cruc_client.datasets.get(ds_id) or {}
+                ts = ds_obj.get("timestamp", "") or ""
             ts_dt = parse_ts(ts)
 
             prev = index.get(key)
