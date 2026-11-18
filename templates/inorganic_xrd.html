@@ -1,0 +1,142 @@
+{% extends "base.html" %}
+{% block title %}Inorganic XRD Uploader{% endblock %}
+
+{% block content %}
+<h1>Inorganic XRD Uploader</h1>
+
+<div class="tab-bar" style="display:flex; gap:8px; margin-bottom:12px;">
+  <button class="btn tab-btn active" type="button" data-tab="tab-entry" onclick="switchTab('tab-entry')">Entry</button>
+  <button class="btn tab-btn" type="button" data-tab="tab-recent" onclick="switchTab('tab-recent')">Logbook</button>
+</div>
+
+<!-- TAB 1: Data Entry -->
+<div id="tab-entry" class="tab-panel">
+    <div class="two-column">
+        <div class="left-panel">
+            <!-- User Login -->
+            <section class="section" id="section-login">
+                <h2>User Login</h2>
+                <div class="form-group">
+                    <label>Email or username</label>
+                    <form class="input-row" onsubmit="loginUser(event)">
+                        <input type="text" id="email" placeholder="user-email@lbl.gov or username" autocomplete="username">
+                        <button type="submit" class="btn btn-primary">Login</button>
+                    </form>
+                </div>
+                <div class="form-group">
+                    <label>User</label>
+                    <input type="text" id="username" readonly>
+                </div>
+                <div class="form-group">
+                    <label>Project</label>
+                    <select id="project" onchange="setProject()"></select>
+                </div>
+                <button class="btn btn-secondary" onclick="logoutUser()">Logout</button>
+            </section>
+
+            <!-- Mode Selection -->
+            <section class="section">
+                <h2>XRD Mode</h2>
+                <div style="display:flex; gap:10px; margin-bottom:12px;">
+                    <label style="cursor:pointer;"><input type="radio" name="xrd-mode" value="single" checked onchange="xrdOnModeChange()"> Single Sample</label>
+                    <label style="cursor:pointer;"><input type="radio" name="xrd-mode" value="file" onchange="xrdOnModeChange()"> From File</label>
+                    <label style="cursor:pointer;"><input type="radio" name="xrd-mode" value="parent" onchange="xrdOnModeChange()"> From Parent</label>
+                </div>
+
+                <!-- Parent Sample field (only for 'parent' mode) -->
+                <div id="xrd-parent-section" class="hidden">
+                    <div class="form-group">
+                        <label>Parent Sample UUID</label>
+                        <div class="input-row">
+                            <input type="text" id="xrd-parent-uuid" placeholder="Parent sample UUID">
+                            <button class="btn btn-primary" type="button" onclick="xrdResolveParent()">Resolve</button>
+                        </div>
+                        <p class="help-text">Resolves all child thin films linked to this parent sample.</p>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label id="xrd-file-label">Select XRD File(s) (.txt)</label>
+                    <input type="file" id="xrd-file-input" accept=".txt" multiple onchange="xrdOnFileSelected()">
+                    <p class="help-text" id="xrd-file-help">Select 1 or more XRD data files.</p>
+                </div>
+
+                <div class="form-group">
+                    <label>Keywords</label>
+                    <input type="text" id="xrd-keywords" placeholder="Comma-separated keywords (optional)">
+                </div>
+
+                <div class="form-group">
+                    <label>Comments</label>
+                    <textarea id="xrd-comments" rows="2" placeholder="Optional comments"></textarea>
+                </div>
+            </section>
+        </div>
+
+        <div class="right-panel">
+            <!-- Sample Assignments Table -->
+            <section class="section">
+                <h2>Sample Assignments</h2>
+                <div id="xrd-empty-msg" class="info-text">Select file(s) on the left to load sample assignments.</div>
+
+                <div id="xrd-assignment-area" class="hidden" style="max-height: 480px; overflow-y: auto;">
+                    <table class="preview-table" style="width: 100%;">
+                        <thead>
+                            <tr>
+                                <th style="width: 60px;">Pos</th>
+                                <th>Name / File</th>
+                                <th>Sample UUID</th>
+                                <th style="width: 50px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="xrd-table-body"></tbody>
+                    </table>
+                </div>
+
+                <div style="margin-top: 16px;">
+                    <button class="btn btn-primary" id="btn-xrd-upload" style="width: 100%; font-size: 1.1em; padding: 10px;" onclick="xrdUpload()">
+                        Upload XRD Dataset(s)
+                    </button>
+                    <div id="xrd-upload-status" class="info-text" style="margin-top: 8px;"></div>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+
+<!-- TAB 2: Logbook -->
+<div id="tab-recent" class="tab-panel hidden">
+  <section class="section">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+      <h2>Recent Datasets</h2>
+      <div>
+        <button class="btn btn-secondary" onclick="loadRecentDatasets()">Refresh</button>
+        <a class="btn btn-secondary" id="export-csv-btn" href="{{ url_for('inorganic_xrd.export_recent_datasets_csv') }}">Export CSV</a>
+      </div>
+    </div>
+    <div style="overflow:auto; margin-top:10px;">
+      <table id="recent-table" class="preview-table" style="width: 100%;">
+        <thead>
+          <tr>
+            <th>Date</th>
+            <th>User</th>
+            <th>Dataset Name</th>
+            <th>Measurement</th>
+            <th>Comment</th>
+          </tr>
+        </thead>
+        <tbody id="recent-table-body">
+          <tr><td colspan="5">Click Refresh to load datasets.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+{{ vite_entry('upload') }}
+{{ vite_entry('instrument') }}
+<script src="{{ url_for('static', filename='js/inorganic_xrd.js') }}"></script>
+{% endblock %}

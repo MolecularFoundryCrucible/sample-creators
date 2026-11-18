@@ -16,8 +16,21 @@ from crucible import CrucibleClient
 from crucible.config import config as _cruc_config
 from crucible.errors import CrucibleAPIError, NotSignedInError
 from crucible.utils.identifiers import IdentifierNotFoundError
+try:
+    from crucible.auth.session import carry_sign_in
+except ImportError:
+    carry_sign_in = None
 
-DEFAULT_CRUCIBLE_API_URL = "https://crucible.lbl.gov/api/v3"
+DEFAULT_CRUCIBLE_API_URL = "https://crucible.lbl.gov/api/v4"
+
+
+def _maybe_carry_sign_in(target_url: str) -> None:
+    if (target_url or "").rstrip("/") == "https://crucible.lbl.gov/api/v4":
+        try:
+            if carry_sign_in is not None:
+                carry_sign_in("https://crucible.lbl.gov/api/v3", "https://crucible.lbl.gov/api/v4")
+        except Exception:
+            pass
 
 
 def _read_ini_api_key():
@@ -64,6 +77,7 @@ class _DeferredCrucibleClient(CrucibleClient):
         resolved_url = (api_url or "").strip() or env_url or _cruc_config.api_url or DEFAULT_CRUCIBLE_API_URL
         resolved_key = (api_key or "").strip() if isinstance(api_key, str) else api_key
         resolved_key = resolved_key or env_key or None
+        _maybe_carry_sign_in(resolved_url)
         try:
             super().__init__(api_url=resolved_url, api_key=resolved_key)
         except NotSignedInError:
@@ -93,6 +107,7 @@ class _DeferredCrucibleClient(CrucibleClient):
         env_url = (os.environ.get("CRUCIBLE_API_URL") or "").strip() or None
         target_url = env_url or (self.api_url or "").strip() or self._config.api_url or DEFAULT_CRUCIBLE_API_URL
         env_key = (os.environ.get("CRUCIBLE_API_KEY") or "").strip() or None
+        _maybe_carry_sign_in(target_url)
         try:
             cred = _resolve_credential(self._config, target_url.rstrip("/"), env_key)
         except NotSignedInError:

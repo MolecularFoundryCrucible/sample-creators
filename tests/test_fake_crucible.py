@@ -12,7 +12,7 @@ except ImportError:
 from crucible import Dataset, Sample  # noqa: E402
 from crucible.errors import CrucibleAPIError, RemovedError  # noqa: E402
 from crucible.utils.identifiers import IdentifierNotFoundError  # noqa: E402
-from routes.shared import cruc_client  # noqa: E402
+from routes.shared import cruc_client, DEFAULT_CRUCIBLE_API_URL  # noqa: E402
 
 
 class FakeCrucibleContractTests(unittest.TestCase):
@@ -136,6 +136,17 @@ class FakeCrucibleContractTests(unittest.TestCase):
         ))
         d_record = self.store["datasets"][d["dataset_mfid"]]
         self.assertEqual(d_record["owner"], {"unique_id": "unknown-user-id", "first_name": "", "last_name": ""})
+
+    def test_v4_0_1_dict_create_and_default_v4_url(self):
+        s = cruc_client.samples.create({"sample_name": "DictSample", "sample_type": "wafer", "project_id": "p1"})
+        self.assertIn("unique_id", s)
+        self.assertEqual(s["sample_name"], "DictSample")
+
+        d = cruc_client.datasets.create({"dataset_name": "DictDataset", "project_id": "p1", "instrument_mfid": "s0000000000000000000000001"})
+        self.assertIn("dataset_mfid", d)
+        self.assertEqual(d["created_record"]["dataset_name"], "DictDataset")
+
+        self.assertEqual(DEFAULT_CRUCIBLE_API_URL, "https://crucible.lbl.gov/api/v4")
 
 
 if __name__ == "__main__":
