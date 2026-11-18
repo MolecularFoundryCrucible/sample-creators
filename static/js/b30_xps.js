@@ -3,6 +3,7 @@
 
 const INSTRUMENT_PAGE = {
     apiBase: '/b30-xps',
+    sampleOptional: true,
     logbookCols: ['Date', 'User', 'Anode', 'Photon (eV)', 'Voltage (V)',
                   'Current (A)', 'Position', 'Spectra', 'Regions', 'Comment'],
     csvFilename: 'b30_xps_recent_datasets.csv',

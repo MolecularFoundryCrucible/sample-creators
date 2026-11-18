@@ -178,12 +178,13 @@ B30_SEM_CONFIG = {
 # Field keys and number/string types match crucible-ingestion's HoribaNgsIngestor, which fills
 # in anything left empty; values entered here win over ingested ones.
 B30_RAMAN_CONFIG = {
-    "dataset_label": "Raman",  # dataset names: <timestamp>_Raman_on_<sample>
+    "dataset_label": "Raman",  # dataset names: <timestamp>_Raman_on_<sample> (or <timestamp>_Raman_<file> without sample)
     "dataset_type": "Raman Spectrum",
     "instrument_mfid": "0tqp46b2ess53000qg1b1t4scm",  # B30 - Horiba Labram Raman (prod MFID)
     "measurement": "Raman spectroscopy",
     "printer_name": "crucible-printer/b30-122",
     "ingestion_class": "HoribaNgsIngestor",
+    "sample_optional": True,
     "dataset_fields": [
         {"key": "laser_wavelength_nm", "label": "Laser (nm)", "type": "number", "as_number": True},
         {"key": "exposure_time_s", "label": "Exposure (s)", "type": "number", "as_number": True},
@@ -199,12 +200,13 @@ B30_RAMAN_CONFIG = {
 # Field keys and number/string types match crucible-ingestion's KratosXpsIngestor, which fills
 # in anything left empty; values entered here win over ingested ones.
 B30_XPS_CONFIG = {
-    "dataset_label": "XPS",  # dataset names: <timestamp>_XPS_on_<sample>
+    "dataset_label": "XPS",  # dataset names: <timestamp>_XPS_on_<sample> (or <timestamp>_XPS_<file> without sample)
     "dataset_type": "XPS Spectrum",
     "instrument_mfid": "0tqx1eq8b5t8h000y3zm23mwmw",  # B30 XPS (prod MFID)
     "measurement": "XPS",
     "printer_name": "crucible-printer/b30-122",
     "ingestion_class": "KratosXpsIngestor",
+    "sample_optional": True,
     "dataset_fields": [
         {"key": "anode_material", "label": "Anode material", "type": "text"},
         {"key": "photon_energy_eV", "label": "Photon energy (eV)", "type": "number", "as_number": True},
