@@ -47,6 +47,8 @@ class DivisionPagesTests(unittest.TestCase):
         self.assertIn('href="/division/als"', html)
         self.assertIn('href="/division/b30"', html)
         self.assertIn('href="/division/b67"', html)
+        self.assertIn('href="/division/ncem"', html)
+        self.assertIn('<span class="card-badge">Test Mode</span>', html)
 
     def test_b67_lists_synthesis_upload(self):
         html = self.client.get("/division/b67").get_data(as_text=True).split('<main class="container">', 1)[1]
@@ -69,6 +71,23 @@ class DivisionPagesTests(unittest.TestCase):
                 "Nanofab - DFS-Microscope",
                 "Nanofab - Quantum",
                 "Imaging - HiP-Microscope",
+                "Imaging - m3-Microscope",
+            ],
+        )
+
+    def test_ncem_division_order_and_titles(self):
+        html = self.client.get("/division/ncem").get_data(as_text=True)
+        main_content = html.split('<main class="container">', 1)[1]
+        titles = re.findall(r'<h2[^>]*>(.*?)</h2>', main_content)
+        self.assertEqual(
+            titles,
+            [
+                "TEAM 0.5",
+                "TEAM I",
+                "ThemIS",
+                "TitanX",
+                "F200",
+                "Spectre",
             ],
         )
 

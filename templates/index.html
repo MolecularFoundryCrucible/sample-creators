@@ -6,7 +6,7 @@
 <div class="card-grid">
     {% for division in divisions %}
     <a href="{{ url_for('division', key=division.key) }}" class="card">
-        <h2>{{ division.label }}</h2>
+        <h2>{{ division.label }}{% if division.badge %} <span class="card-badge">{{ division.badge }}</span>{% endif %}</h2>
         <p>{{ division.description }}</p>
         <p class="card-meta">{{ division.tools | map(attribute='nav_label') | join(' · ') }}</p>
     </a>

@@ -31,6 +31,18 @@ import type { KalFormFields } from "./kratos_xps"
 import { parseXrdText, readXrdFile } from "./inorganic_xrd"
 import type { XrdSampleAssignment } from "./inorganic_xrd"
 import { computeBlobSha256 } from "./sha256"
+import {
+  filesToSessionInputs,
+  MAX_FILE_BYTES,
+  planTemSessionUploads,
+  TEM_ACCEPTABLE_EXTENSIONS,
+} from "./tem_session"
+import type {
+  PlanTemSessionOptions,
+  SessionFileInput,
+  TemSessionItem,
+  TemSessionPlan,
+} from "./tem_session"
 
 export {
   readBrukerPrimaryEnergy,
@@ -59,6 +71,10 @@ export {
   detectNirvanaIngestor,
   readNirvanaH5Positions,
   readH5EmbeddedInfo,
+  TEM_ACCEPTABLE_EXTENSIONS,
+  MAX_FILE_BYTES,
+  filesToSessionInputs,
+  planTemSessionUploads,
 }
 
 export type {
@@ -70,6 +86,10 @@ export type {
   NirvanaPosition,
   H5EmbeddedInfo,
   KalFormFields,
+  SessionFileInput,
+  PlanTemSessionOptions,
+  TemSessionItem,
+  TemSessionPlan,
 }
 
 const parserBundle = {
@@ -95,6 +115,10 @@ const parserBundle = {
   detectNirvanaIngestor,
   readNirvanaH5Positions,
   readH5EmbeddedInfo,
+  TEM_ACCEPTABLE_EXTENSIONS,
+  MAX_FILE_BYTES,
+  filesToSessionInputs,
+  planTemSessionUploads,
 }
 
 declare global {

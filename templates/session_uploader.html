@@ -1,0 +1,339 @@
+{% extends "base.html" %}
+{% block title %}{{ tool_config.card_title }}{% endblock %}
+
+{% block content %}
+<style>
+    .session-dropzone {
+        border: 2px dashed #a0aec0;
+        border-radius: 8px;
+        background: #f7fafc;
+        padding: 20px 16px;
+        text-align: center;
+        transition: border-color 0.15s, background-color 0.15s;
+    }
+    .session-dropzone.is-dragover {
+        border-color: #2b6cb0;
+        background: #ebf8ff;
+    }
+    .session-dropzone.is-disabled {
+        opacity: 0.6;
+        pointer-events: none;
+    }
+    .session-dropzone-actions {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 10px;
+        margin-top: 10px;
+        flex-wrap: wrap;
+    }
+    .session-manifest-card {
+        margin: 14px 0;
+        padding: 14px;
+        border: 1px solid #cbd5e0;
+        border-radius: 6px;
+        background: #f8fafc;
+    }
+    .session-manifest-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 10px;
+        flex-wrap: wrap;
+    }
+    .session-manifest-title {
+        font-weight: 700;
+        color: #1a365d;
+        font-size: 14px;
+        word-break: break-word;
+    }
+    .session-stat-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+        gap: 8px;
+    }
+    .session-stat {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 6px;
+        padding: 8px 10px;
+    }
+    .session-stat-label {
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #718096;
+        font-weight: 600;
+    }
+    .session-stat-value {
+        font-size: 16px;
+        font-weight: 700;
+        color: #1a365d;
+        margin-top: 2px;
+    }
+    .session-warnings {
+        margin-top: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+    }
+    .session-warning-box {
+        background: #feebc8;
+        color: #7b341e;
+        border: 1px solid #fbd38d;
+        border-radius: 6px;
+        padding: 8px 12px;
+        font-size: 13px;
+    }
+    .session-warning-box ul {
+        margin: 4px 0 0 18px;
+        max-height: 120px;
+        overflow-y: auto;
+    }
+    .session-parent-banner {
+        padding: 12px 14px;
+        border: 1px solid #9ae6b4;
+        border-left: 4px solid #38a169;
+        border-radius: 6px;
+        background: #f0fff4;
+        margin-bottom: 12px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+    }
+    .session-progress-bar-track {
+        width: 100%;
+        height: 10px;
+        background: #edf2f7;
+        border-radius: 999px;
+        overflow: hidden;
+        margin: 8px 0 12px;
+    }
+    .session-progress-bar-fill {
+        height: 100%;
+        width: 0%;
+        background: #2b6cb0;
+        transition: width 0.2s ease;
+    }
+    .status-badge {
+        display: inline-block;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 11px;
+        font-weight: 600;
+        white-space: nowrap;
+    }
+    .status-queued { background: #edf2f7; color: #4a5568; }
+    .status-hashing, .status-preparing { background: #bee3f8; color: #2a4365; }
+    .status-uploading { background: #c3dafe; color: #1e40af; }
+    .status-completed { background: #c6f6d5; color: #22543d; }
+    .status-failed { background: #fed7d7; color: #742a2a; }
+    .status-cancelled { background: #feebc8; color: #7b341e; }
+    .session-item-error {
+        display: block;
+        margin-top: 3px;
+        font-size: 11px;
+        color: #9b2c2c;
+        word-break: break-word;
+    }
+    .session-item-warn {
+        display: block;
+        margin-top: 2px;
+        font-size: 11px;
+        color: #975a16;
+    }
+    .session-item-path {
+        word-break: break-word;
+    }
+    .existing-session-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin: 10px 0;
+        max-height: 260px;
+        overflow-y: auto;
+    }
+    .existing-session-option {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px;
+        border: 1px solid #cbd5e0;
+        border-radius: 6px;
+        cursor: pointer;
+        background: #f8fafc;
+    }
+    .existing-session-option:hover {
+        background: #ebf8ff;
+        border-color: #90cdf4;
+    }
+    .existing-session-option input[type="radio"] {
+        width: auto;
+        margin-top: 3px;
+    }
+</style>
+
+<h1>{{ tool_config.card_title }}</h1>
+<p class="help-text" style="margin-top:-12px; margin-bottom:16px;">{{ tool_config.card_description }}</p>
+
+<div class="tab-bar" style="display:flex; gap:8px; margin-bottom:12px;">
+    <button class="btn tab-btn active" type="button" data-tab="tab-entry" onclick="switchTab('tab-entry')">Entry</button>
+    <button class="btn tab-btn" type="button" data-tab="tab-recent" onclick="switchTab('tab-recent')">Logbook</button>
+</div>
+
+<!-- TAB 1: Session Folder Upload -->
+<div id="tab-entry" class="tab-panel">
+    <div class="two-column">
+        {% include "partials/uploader_left_panel.html" %}
+
+        <div class="right-panel">
+
+            <!-- Session Folder Selection & Metadata -->
+            <section class="section" id="section-session-upload">
+                <h2>Session Folder &amp; Upload Settings</h2>
+
+                <div class="form-group">
+                    <label>Session Folder</label>
+                    <div id="session-dropzone" class="session-dropzone">
+                        <div style="font-weight:600; color:#2d3748;">Drag and drop a session folder here</div>
+                        <div class="help-text" style="margin:4px 0 0;">
+                            Subfolders and TEM sidecars (.emi, .rawtlt, .txt) are paired automatically.
+                        </div>
+                        <div class="session-dropzone-actions">
+                            <input type="file" id="session-folder-input" webkitdirectory directory multiple style="max-width:300px;">
+                        </div>
+                    </div>
+                    <div id="session-scan-status" class="info-text hidden" style="margin-top:6px;"></div>
+                    {% if tool_config.acceptable_file_types %}
+                    <p class="help-text" style="margin-top:6px;">
+                        Accepted file types: {{ tool_config.acceptable_file_types | join(', ') }}
+                    </p>
+                    {% endif %}
+                </div>
+
+                <!-- Pre-Upload Manifest Summary Card -->
+                <div id="session-manifest-card" class="session-manifest-card hidden">
+                    <div class="session-manifest-header">
+                        <div id="manifest-session-title" class="session-manifest-title"></div>
+                        <button type="button" class="btn btn-secondary" id="btn-session-clear" onclick="clearSessionFolder()">Clear Folder</button>
+                    </div>
+                    <div class="session-stat-grid">
+                        <div class="session-stat">
+                            <div class="session-stat-label">Child Datasets</div>
+                            <div id="manifest-child-count" class="session-stat-value">0</div>
+                        </div>
+                        <div class="session-stat">
+                            <div class="session-stat-label">Paired Sidecars</div>
+                            <div id="manifest-sidecar-count" class="session-stat-value">0</div>
+                        </div>
+                        <div class="session-stat">
+                            <div class="session-stat-label">Ignored Non-TEM</div>
+                            <div id="manifest-ignored-count" class="session-stat-value">0</div>
+                        </div>
+                        <div class="session-stat">
+                            <div class="session-stat-label">Total Upload Size</div>
+                            <div id="manifest-total-size" class="session-stat-value">0 B</div>
+                        </div>
+                    </div>
+                    <div id="session-manifest-warnings" class="session-warnings hidden"></div>
+                </div>
+
+                <div class="form-group">
+                    <label>Ingestor (Optional override)</label>
+                    <input type="text" id="session-ingestor" value="{{ tool_config.ingestor }}" placeholder="Leave blank for Crucible auto-detect ingestion">
+                </div>
+
+                <div class="form-group">
+                    <label>Keywords (comma-separated)</label>
+                    <input type="text" id="session-keywords" placeholder="e.g. TEM, tomography, diffraction">
+                </div>
+
+                <div class="form-group">
+                    <label>Comments</label>
+                    <textarea id="session-comments" rows="3" placeholder="Optional notes for this session and its child datasets" style="width:100%; padding:8px; border:1px solid #cbd5e0; border-radius:4px;"></textarea>
+                </div>
+
+                <div class="button-row" style="margin-top:16px; flex-wrap:wrap;">
+                    <button type="button" class="btn btn-primary" id="btn-session-upload" onclick="startSessionUpload()" style="font-size:15px; padding:10px 20px;">
+                        Upload Session
+                    </button>
+                    <button type="button" class="btn btn-secondary hidden" id="btn-session-cancel" onclick="cancelSessionUpload()" style="font-size:14px; padding:10px 16px;">
+                        Cancel Upload
+                    </button>
+                    <button type="button" class="btn btn-primary hidden" id="btn-session-retry" onclick="retryFailedSessionItems()" style="font-size:14px; padding:10px 16px;">
+                        Retry Failed Items
+                    </button>
+                </div>
+            </section>
+
+            <!-- Live Upload Progress -->
+            <section class="section hidden" id="section-session-progress">
+                <h2>Session Upload Progress</h2>
+                <div id="session-parent-banner" class="session-parent-banner hidden"></div>
+                <div id="session-overall-summary" class="info-text"></div>
+                <div class="session-progress-bar-track">
+                    <div id="session-overall-bar-fill" class="session-progress-bar-fill"></div>
+                </div>
+                <div style="overflow:auto; max-height:460px;">
+                    <table class="preview-table" style="width:100%;">
+                        <thead>
+                            <tr>
+                                <th>File</th>
+                                <th style="width:140px;">Sidecars</th>
+                                <th style="width:90px;">Size</th>
+                                <th style="width:160px;">Status</th>
+                                <th style="width:180px;">Dataset</th>
+                            </tr>
+                        </thead>
+                        <tbody id="session-items-tbody"></tbody>
+                    </table>
+                </div>
+            </section>
+
+        </div>
+    </div>
+</div>
+
+<!-- TAB 2: Recent Datasets Logbook -->
+<div id="tab-recent" class="tab-panel" style="display:none;">
+    <section class="section">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+            <h2>Recent {{ tool_config.nav_label }} Datasets</h2>
+            <div style="display:flex; gap:8px;">
+                <button class="btn btn-secondary" onclick="loadRecentDatasets()">Refresh</button>
+                <button class="btn btn-secondary" onclick="exportCsv()">Export CSV</button>
+            </div>
+        </div>
+        <div style="overflow:auto; max-height:600px;">
+            <table class="preview-table" style="table-layout:fixed; width:100%;">
+                <thead>
+                    <tr>
+                        <th style="width:140px;">Date</th>
+                        <th style="width:160px;">User</th>
+                        <th style="width:200px;">Dataset Name</th>
+                        <th style="width:160px;">Measurement</th>
+                        <th style="width:130px;">Data Type</th>
+                        <th style="width:220px;">Dataset ID</th>
+                        <th>Comment</th>
+                    </tr>
+                </thead>
+                <tbody id="recent-table-body">
+                    <tr><td colspan="7">Loading datasets...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+</div>
+
+<script id="tool-config-json" type="application/json">{{ tool_config | tojson }}</script>
+{% endblock %}
+
+{% block scripts %}
+{{ vite_entry('upload') }}
+{{ vite_entry('instrument') }}
+<script src="{{ url_for('static', filename='js/uploader_common.js') }}"></script>
+<script src="{{ url_for('static', filename='js/session_uploader.js') }}"></script>
+{% endblock %}
