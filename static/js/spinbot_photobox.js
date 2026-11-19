@@ -203,7 +203,7 @@
             statusEl.textContent = 'Triggering carrier segmentation pipeline...';
             await api('/spinbot-photobox/api/postprocess', 'POST', { dataset_id: datasetMfid });
 
-            showAlert('success', 'Carrier photo uploaded and segmentation requested!');
+            showAlert('success', 'Carrier photo uploaded and segmentation requested!', { linkUrl: prep.hub_url || hubDatasetUrl(datasetMfid) });
             statusEl.innerHTML = `<a href="${escapeHtml(prep.hub_url)}" target="_blank">View Dataset in Crucible Hub (${escapeHtml(datasetMfid)})</a>`;
         } catch (e) {
             showAlert('error', 'Upload failed: ' + e.message);

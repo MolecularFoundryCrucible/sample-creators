@@ -617,12 +617,12 @@ def edit_step_record(dataset_id):
 NAME = "fabrication"
 KEY = "fabrication"
 DIVISION = "b67"
-ORDER = 210
+ORDER = 270
 BLUEPRINT = fabrication_bp
 URL_PREFIX = "/fabrication"
 ENDPOINT = "fabrication.page"
-NAV_LABEL = "Fabrication Traveler"
-CARD_TITLE = "Fabrication Traveler"
+NAV_LABEL = "Nanofab - Quantum"
+CARD_TITLE = "Nanofab - Quantum"
 CARD_DESCRIPTION = "Per-wafer process traveler (QCMF): record each step, cut chiplets and chips, attach files, print labels."
 INSTRUMENT_ID = ""
 INSTRUMENT_MFID = ""

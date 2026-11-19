@@ -50,9 +50,9 @@ class MigratedUploadersGroup1Tests(unittest.TestCase):
     def test_pages_render_successfully(self):
         endpoints = [
             ("/b30-gc-ec/", "B30 GC-EC", "gc-files", "gc-anode-mfid"),
-            ("/insitu-pl/", "In-Situ PL", "std-files", "std-group-as-one"),
-            ("/dfs-microscope/", "DFS Microscope", "std-files", "std-group-as-one"),
-            ("/hip-microscope/", "HiP Microscope", "std-files", "std-group-as-one"),
+            ("/insitu-pl/", "Inorganic - In-Situ PL", "std-files", "std-group-as-one"),
+            ("/dfs-microscope/", "Nanofab - DFS-Microscope", "std-files", "std-group-as-one"),
+            ("/hip-microscope/", "Imaging - HiP-Microscope", "std-files", "std-group-as-one"),
         ]
         for url, title_snip, file_id, extra_id in endpoints:
             with self.subTest(url=url):

@@ -254,7 +254,7 @@ async function startStandardUpload() {
                     View Dataset in Crucible Hub &rarr;
                 </a>
             </div>`;
-            showAlert('success', `Dataset ${datasetMfid} uploaded successfully`);
+            showAlert('success', `Dataset ${datasetMfid} uploaded successfully`, { linkUrl: dsRes.hub_url || hubDatasetUrl(datasetMfid) });
 
         } else {
             // Independent dataset per file
@@ -308,7 +308,7 @@ async function startStandardUpload() {
             });
             resHtml += '</ul></div>';
             resultEl.innerHTML = resHtml;
-            showAlert('success', `Uploaded ${results.length} datasets`);
+            showAlert('success', `Uploaded ${results.length} datasets`, results.length === 1 ? { linkUrl: results[0].hubUrl || hubDatasetUrl(results[0].datasetMfid) } : { linkUrl: hubProjectUrl(currentUserState?.selected_project), linkText: 'Open Project in Crucible Hub \u2197' });
         }
 
     } catch (e) {

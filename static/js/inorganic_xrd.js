@@ -230,7 +230,7 @@
                         if (failed.length) throw new Error(failed.map(f => `${f.file.name}: ${f.error}`).join('; '));
                     }
                 }
-                showAlert('success', `Successfully created and uploaded ${uploads.length} dataset(s)!`);
+                showAlert('success', `Successfully created and uploaded ${uploads.length} dataset(s)!`, uploads.length === 1 ? { linkUrl: uploads[0].hub_url } : { linkUrl: hubProjectUrl(currentUserState?.selected_project), linkText: 'Open Project in Crucible Hub \u2197' });
                 statusEl.innerHTML = uploads.map(u => `<a href="${escapeHtml(u.hub_url)}" target="_blank">${escapeHtml(u.filename)}</a>`).join(', ');
 
             } else if (_mode === 'file') {
@@ -271,7 +271,7 @@
                         if (failed.length) throw new Error(failed.map(f => `${f.file.name}: ${f.error}`).join('; '));
                     }
                 }
-                showAlert('success', `Successfully uploaded to ${uploads.length} sample dataset(s)!`);
+                showAlert('success', `Successfully uploaded to ${uploads.length} sample dataset(s)!`, uploads.length === 1 ? { linkUrl: uploads[0].hub_url } : { linkUrl: hubProjectUrl(currentUserState?.selected_project), linkText: 'Open Project in Crucible Hub \u2197' });
                 statusEl.innerHTML = uploads.map(u => `<a href="${escapeHtml(u.hub_url)}" target="_blank">${escapeHtml(u.sample_name)}</a>`).join(', ');
 
             } else if (_mode === 'parent') {
@@ -309,7 +309,7 @@
                         if (failed.length) throw new Error(failed.map(f => `${f.file.name}: ${f.error}`).join('; '));
                     }
                 }
-                showAlert('success', `Uploaded to parent and ${targets.length - 1} child datasets!`);
+                showAlert('success', `Uploaded to parent and ${targets.length - 1} child datasets!`, { linkUrl: prep.parent_hub_url, linkText: 'Open Parent Dataset in Crucible Hub \u2197' });
                 statusEl.innerHTML = `<a href="${escapeHtml(prep.parent_hub_url)}" target="_blank">View Parent Dataset</a>`;
             }
         } catch (e) {

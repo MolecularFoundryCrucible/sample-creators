@@ -150,7 +150,7 @@
                 if (failed.length) throw new Error(failed.map(f => `${f.file.name}: ${f.error}`).join('; '));
             }
 
-            showAlert('success', 'SpinBot SpinRun uploaded successfully!');
+            showAlert('success', 'SpinBot SpinRun uploaded successfully!', { linkUrl: prep.hub_url || hubDatasetUrl(datasetMfid) });
             statusEl.innerHTML = `<a href="${escapeHtml(prep.hub_url)}" target="_blank">View Dataset in Crucible Hub (${escapeHtml(datasetMfid)})</a>`;
         } catch (e) {
             showAlert('error', 'Upload failed: ' + e.message);

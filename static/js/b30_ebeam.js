@@ -42,7 +42,7 @@ async function uploadDataset() {
         async () => {
             try {
                 const result = await depApi('/api/upload-dataset', 'POST', payload);
-                showAlert('success', `Dataset uploaded: ${result.dataset_name} (${result.dataset_id})`);
+                showAlert('success', `Dataset uploaded: ${result.dataset_name} (${result.dataset_id})`, { linkUrl: hubDatasetUrl(result.dataset_id) });
                 if (result.failed_samples && result.failed_samples.length) {
                     const names = result.failed_samples.map(s => s.sample_name || s.unique_id).join(', ');
                     showAlert('error', `Dataset created but could not be linked to: ${names}`);

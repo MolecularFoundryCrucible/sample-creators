@@ -517,6 +517,53 @@ input[readonly] {
     border: 1px solid #90cdf4;
 }
 
+.alert-has-link {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 12px;
+    max-width: 460px;
+}
+
+.alert-body {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+}
+
+.alert-message {
+    word-break: break-word;
+}
+
+.alert-link {
+    display: inline-block;
+    font-weight: 600;
+    color: inherit;
+    text-decoration: underline;
+    width: fit-content;
+}
+
+.alert-link:hover {
+    opacity: 0.8;
+}
+
+.alert-close {
+    background: none;
+    border: none;
+    color: inherit;
+    font-size: 18px;
+    line-height: 1;
+    padding: 0 2px;
+    cursor: pointer;
+    opacity: 0.65;
+    flex-shrink: 0;
+}
+
+.alert-close:hover {
+    opacity: 1;
+}
+
 @keyframes slideIn {
     from { transform: translateX(100%); opacity: 0; }
     to { transform: translateX(0); opacity: 1; }

@@ -540,7 +540,7 @@ async function createDataset() {
             try {
                 const result = await depApi('/api/create-dataset', 'POST', payload);
                 setDatasetSaved(result.dataset_id, result.dataset_name);
-                showAlert('success', `Dataset created: ${result.dataset_name} (${result.dataset_id})`);
+                showAlert('success', `Dataset created: ${result.dataset_name} (${result.dataset_id})`, { linkUrl: hubDatasetUrl(result.dataset_id) });
                 reportFailedLinks(result.failed_samples);
             } catch (e) {
                 showAlert('error', `Create failed: ${e.message}`);
@@ -562,8 +562,8 @@ async function updateDataset() {
         setDatasetSaved(result.dataset_id, result.dataset_name);
         const linked = result.linked_samples || [];
         showAlert('success', linked.length
-            ? `Dataset updated — newly linked: ${linked.join(', ')}`
-            : 'Dataset updated');
+            ? `Dataset updated - newly linked: ${linked.join(', ')}`
+            : 'Dataset updated', { linkUrl: hubDatasetUrl(result.dataset_id) });
         reportFailedLinks(result.failed_samples);
     } catch (e) {
         showAlert('error', `Update failed: ${e.message}`);

@@ -8,11 +8,11 @@ from routes.uploader_common import register_common_uploader_routes
 NAME = "hip_microscope"
 KEY = "hip_microscope"
 DIVISION = "b67"
-ORDER = 240
+ORDER = 280
 URL_PREFIX = "/hip-microscope"
 ENDPOINT = "hip_microscope.page"
-NAV_LABEL = "HiP Microscope"
-CARD_TITLE = "HiP Microscope Uploader"
+NAV_LABEL = "Imaging - HiP-Microscope"
+CARD_TITLE = "Imaging - HiP-Microscope"
 CARD_DESCRIPTION = "Upload HiP ScopeFoundry .h5 microscope datasets and link samples."
 INSTRUMENT_ID = "hip-microscope"
 INSTRUMENT_MFID = "0sh6zrzxhxybd000wwyrkcn2cw"

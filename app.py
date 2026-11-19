@@ -6,7 +6,7 @@ import secrets
 
 from config import DIVISIONS
 from tool_registry import divisions_with_tools, validate_registry
-from routes.shared import shared_bp
+from routes.shared import shared_bp, get_crucible_hub_url
 from routes.uploads import uploads_bp
 from tools.registry import register_all_tools
 
@@ -44,7 +44,7 @@ def create_app():
 
     @app.context_processor
     def inject_divisions():
-        return {"nav_divisions": divisions}
+        return {"nav_divisions": divisions, "crucible_hub_url": get_crucible_hub_url()}
 
     manifest_cache = {"key": None, "entries": {}}
 

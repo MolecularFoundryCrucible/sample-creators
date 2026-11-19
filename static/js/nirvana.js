@@ -296,7 +296,7 @@
                 uploadedDatasets.push({ filename: file.name, datasetMfid, hubUrl: prep.hub_url });
             }
 
-            showAlert('success', `Successfully uploaded ${uploadedDatasets.length} Nirvana scan(s)!`);
+            showAlert('success', `Successfully uploaded ${uploadedDatasets.length} Nirvana scan(s)!`, uploadedDatasets.length === 1 ? { linkUrl: uploadedDatasets[0].hubUrl } : { linkUrl: hubProjectUrl(currentUserState?.selected_project), linkText: 'Open Project in Crucible Hub \u2197' });
             statusEl.innerHTML = uploadedDatasets.map(d => `<a href="${escapeHtml(d.hubUrl)}" target="_blank">${escapeHtml(d.filename)}</a>`).join(', ');
         } catch (e) {
             showAlert('error', 'Upload failed: ' + e.message);

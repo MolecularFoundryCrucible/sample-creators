@@ -53,13 +53,81 @@ async function populatePrinterSelect(selectId) {
 
 // ========== Alert System ==========
 
-function showAlert(type, message) {
+function hubBaseUrl() {
+    const raw = (typeof CRUCIBLE_HUB_URL !== 'undefined' && CRUCIBLE_HUB_URL)
+        ? CRUCIBLE_HUB_URL
+        : 'https://crucible.lbl.gov/hub';
+    return String(raw).replace(/\/+$/, '');
+}
+
+function hubDatasetUrl(datasetId) {
+    return datasetId ? `${hubBaseUrl()}/datasets/${encodeURIComponent(datasetId)}` : '';
+}
+
+function hubProjectUrl(projectId) {
+    return projectId ? `${hubBaseUrl()}/projects/${encodeURIComponent(projectId)}` : '';
+}
+
+function showAlert(type, message, options = {}) {
     const container = document.getElementById('alert-container');
+    if (!container) return;
     const alert = document.createElement('div');
     alert.className = `alert alert-${type}`;
-    alert.textContent = message;
+
+    const linkUrl = typeof options?.linkUrl === 'string' && /^(https?:\/\/|\/)/i.test(options.linkUrl) ? options.linkUrl : '';
+
+    if (!linkUrl) {
+        alert.textContent = message;
+        container.appendChild(alert);
+        const durationMs = options?.durationMs ?? 5000;
+        setTimeout(() => alert.remove(), durationMs);
+        return;
+    }
+
+    alert.classList.add('alert-has-link');
+
+    const body = document.createElement('div');
+    body.className = 'alert-body';
+
+    const msgEl = document.createElement('div');
+    msgEl.className = 'alert-message';
+    msgEl.textContent = message;
+    body.appendChild(msgEl);
+
+    const link = document.createElement('a');
+    link.className = 'alert-link';
+    link.href = linkUrl;
+    link.target = '_blank';
+    link.rel = 'noopener noreferrer';
+    link.textContent = options.linkText || 'Open in Crucible Hub \u2197';
+    body.appendChild(link);
+
+    const closeBtn = document.createElement('button');
+    closeBtn.type = 'button';
+    closeBtn.className = 'alert-close';
+    closeBtn.setAttribute('aria-label', 'Dismiss');
+    closeBtn.innerHTML = '&times;';
+    closeBtn.onclick = () => alert.remove();
+
+    alert.appendChild(body);
+    alert.appendChild(closeBtn);
     container.appendChild(alert);
-    setTimeout(() => alert.remove(), 5000);
+
+    const durationMs = options?.durationMs ?? 15000;
+    let timeoutId = setTimeout(() => alert.remove(), durationMs);
+
+    alert.addEventListener('mouseenter', () => {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+            timeoutId = null;
+        }
+    });
+
+    alert.addEventListener('mouseleave', () => {
+        if (!timeoutId) {
+            timeoutId = setTimeout(() => alert.remove(), durationMs);
+        }
+    });
 }
 
 // ========== Modal ==========

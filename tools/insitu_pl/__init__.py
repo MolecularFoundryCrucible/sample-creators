@@ -8,11 +8,11 @@ from routes.uploader_common import register_common_uploader_routes
 NAME = "insitu_pl"
 KEY = "insitu_pl"
 DIVISION = "b67"
-ORDER = 220
+ORDER = 250
 URL_PREFIX = "/insitu-pl"
 ENDPOINT = "insitu_pl.page"
-NAV_LABEL = "In-Situ PL"
-CARD_TITLE = "In-Situ PL Uploader"
+NAV_LABEL = "Inorganic - In-Situ PL"
+CARD_TITLE = "Inorganic - In-Situ PL"
 CARD_DESCRIPTION = "Upload In-Situ Photoluminescence datasets with sample linking and automatic insitu_aggregation post-processing."
 INSTRUMENT_ID = "in-situ-pl"
 INSTRUMENT_MFID = "0t0nah22xxxjd000gy940mm9d8"
