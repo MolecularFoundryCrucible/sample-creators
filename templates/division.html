@@ -3,7 +3,7 @@
 
 {% block content %}
 <p class="breadcrumb"><a href="{{ url_for('index') }}">Home</a> / {{ division.label }}</p>
-<h1>{{ division.label }}</h1>
+<h1>{{ division.label }}{% if division.badge %} <span class="card-badge">{{ division.badge }}</span>{% endif %}</h1>
 <div class="card-grid">
     {% for tool in division.tools %}
     <a href="{{ url_for(tool.endpoint) }}" class="card">

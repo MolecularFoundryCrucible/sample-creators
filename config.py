@@ -338,5 +338,5 @@ DIVISIONS = [
     {"key": "als", "label": "ALS", "description": "Advanced Light Source beamline samples: GIWAXS bars and RGA carriers."},
     {"key": "b30", "label": "B30", "description": "Building 30 deposition, spectroscopy, microscopy, electrochemistry, electrolyte and data entry tools."},
     {"key": "b67", "label": "B67", "description": "Building 67 synthesis, fabrication, microscopy and SpinBot tools."},
-    {"key": "ncem", "label": "NCEM", "description": "National Center for Electron Microscopy session upload tools."},
+    {"key": "ncem", "label": "NCEM", "badge": "Test Mode", "description": "National Center for Electron Microscopy session upload tools."},
 ]

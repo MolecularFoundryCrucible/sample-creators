@@ -48,6 +48,7 @@ class DivisionPagesTests(unittest.TestCase):
         self.assertIn('href="/division/b30"', html)
         self.assertIn('href="/division/b67"', html)
         self.assertIn('href="/division/ncem"', html)
+        self.assertIn('<span class="card-badge">Test Mode</span>', html)
 
     def test_b67_lists_synthesis_upload(self):
         html = self.client.get("/division/b67").get_data(as_text=True).split('<main class="container">', 1)[1]
