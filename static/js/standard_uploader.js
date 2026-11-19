@@ -1,149 +1,16 @@
 // Standard uploader client-side controller (shared by insitu_pl, dfs_microscope, hip_microscope).
 
 let TOOL_CONFIG = {};
-let currentSample = null;
 
 document.addEventListener('DOMContentLoaded', async () => {
-    const configEl = document.getElementById('tool-config-json');
-    if (configEl) {
-        TOOL_CONFIG = JSON.parse(configEl.textContent);
+    TOOL_CONFIG = readToolConfig();
+    initUploaderSampleInput();
+    if (typeof registerLogoutReset === 'function') {
+        registerLogoutReset(() => clearSample());
     }
     await loadUserState();
     await populatePrinterSelect('printer-select');
 });
-
-// ========== Sample Handling ==========
-
-async function lookupSample() {
-    const val = document.getElementById('sample_barcode').value.trim();
-    const status = document.getElementById('sample-status');
-    if (!val) {
-        status.textContent = 'Enter a barcode or sample name';
-        return;
-    }
-    status.textContent = 'Looking up…';
-    try {
-        const res = await api(`${TOOL_CONFIG.url_prefix}/api/lookup-sample`, 'POST', {
-            sample_unique_id: val,
-            sample_name: val,
-        });
-        currentSample = res;
-        status.textContent = `✓ Found: ${res.sample_name} (${res.unique_id})`;
-        populateSampleFields(res);
-        showSamplePanel('found');
-    } catch (e) {
-        if (e.status === 409 && e.data?.candidates) {
-            showAmbiguousSampleModal(e.data.candidates, (selected) => {
-                currentSample = selected;
-                document.getElementById('sample_barcode').value = selected.unique_id;
-                status.textContent = `✓ Selected: ${selected.sample_name} (${selected.unique_id})`;
-                populateSampleFields(selected);
-                showSamplePanel('found');
-            });
-            status.textContent = 'Multiple candidates found — select from popup.';
-            return;
-        }
-        currentSample = null;
-        status.textContent = 'Sample not found. Fill details below to create.';
-        showSamplePanel('create');
-    }
-}
-
-function clearSample() {
-    currentSample = null;
-    document.getElementById('sample_barcode').value = '';
-    document.getElementById('sample_name').value = '';
-    document.getElementById('sample_type').value = '';
-    document.getElementById('sample_description').value = '';
-    document.getElementById('sample-status').textContent = '';
-    showSamplePanel('hidden');
-}
-
-function populateSampleFields(sample) {
-    document.getElementById('sample_name').value = sample.sample_name || '';
-    document.getElementById('sample_name_text').textContent = sample.sample_name || '';
-    document.getElementById('sample_type').value = sample.sample_type || '';
-    document.getElementById('sample_type_text').textContent = sample.sample_type || '';
-    document.getElementById('sample_description').value = sample.description || '';
-    document.getElementById('sample_description_text').textContent = sample.description || '';
-}
-
-function showSamplePanel(mode) {
-    const panel = document.getElementById('sample-detail-panel');
-    const header = document.getElementById('sample-panel-header');
-    const createRow = document.getElementById('create-btn-row');
-    const fieldIds = ['sample_name', 'sample_type', 'sample_description'];
-
-    if (mode === 'hidden') {
-        panel.classList.add('hidden');
-        return;
-    }
-    panel.classList.remove('hidden');
-    if (mode === 'found') {
-        header.textContent = 'Sample Details';
-        createRow.classList.add('hidden');
-        for (const id of fieldIds) {
-            document.getElementById(id).classList.add('hidden');
-            document.getElementById(id + '_text').classList.remove('hidden');
-        }
-    } else {
-        header.textContent = 'Create New Sample';
-        createRow.classList.remove('hidden');
-        for (const id of fieldIds) {
-            document.getElementById(id).classList.remove('hidden');
-            document.getElementById(id + '_text').classList.add('hidden');
-        }
-    }
-}
-
-async function createSample() {
-    const name = document.getElementById('sample_name').value.trim();
-    const type = document.getElementById('sample_type').value.trim();
-    const desc = document.getElementById('sample_description').value.trim();
-    if (!name || !type) {
-        showAlert('warning', 'Sample Name and Type are required');
-        return;
-    }
-    try {
-        const res = await api(`${TOOL_CONFIG.url_prefix}/api/create-sample`, 'POST', {
-            sample_name: name,
-            sample_type: type,
-            description: desc,
-        });
-        currentSample = res;
-        document.getElementById('sample_barcode').value = res.unique_id;
-        document.getElementById('sample-status').textContent = `✓ Created: ${res.sample_name} (${res.unique_id})`;
-        populateSampleFields(res);
-        showSamplePanel('found');
-        showAlert('success', `Created sample ${res.sample_name}`);
-    } catch (e) {
-        showAlert('error', `Sample creation failed: ${e.message}`);
-    }
-}
-
-async function printSampleBarcode() {
-    const printer = document.getElementById('printer-select').value;
-    if (!printer) {
-        showAlert('warning', 'Please select a printer');
-        return;
-    }
-    const sampleId = currentSample?.unique_id || document.getElementById('sample_barcode').value.trim();
-    const sampleName = currentSample?.sample_name || '';
-    if (!sampleId) {
-        showAlert('warning', 'No sample to print');
-        return;
-    }
-    try {
-        await api(`${TOOL_CONFIG.url_prefix}/api/print-barcode`, 'POST', {
-            printer_id: printer,
-            sample_id: sampleId,
-            sample_name: sampleName,
-        });
-        showAlert('success', `Print job sent to ${printer}`);
-    } catch (e) {
-        showAlert('error', `Print failed: ${e.message}`);
-    }
-}
 
 // ========== Upload Workflow ==========
 
@@ -189,7 +56,7 @@ async function startStandardUpload() {
     const comments = document.getElementById('std-comments').value.trim();
     const rawKeywords = document.getElementById('std-keywords').value;
     const keywords = rawKeywords.split(',').map(s => s.trim()).filter(Boolean);
-    const sampleUniqueId = currentSample?.unique_id || document.getElementById('sample_barcode').value.trim() || null;
+    const sampleUniqueId = getSelectedSampleUniqueId();
 
     const progressSection = document.getElementById('section-progress');
     const progressEl = document.getElementById('std-upload-progress');
