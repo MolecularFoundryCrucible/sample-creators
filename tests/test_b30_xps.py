@@ -42,6 +42,7 @@ class XpsPageTests(unittest.TestCase):
         self.assertIn('data-key="comment"', html)
         self.assertIn("js/instrument_page.js", html)
         self.assertIn("js/b30_xps.js", html)
+        self.assertIn("CRUCIBLE_HUB_URL", html)
 
     def test_dataset_upload_creates_dataset_with_typed_fields_and_links_sample(self):
         with patch("routes.shared.cruc_client.datasets.create", return_value={"dataset_mfid": DATASET}) as create, \
@@ -72,6 +73,7 @@ class XpsPageTests(unittest.TestCase):
             "comment": "test comment",
         })
         link_sample.assert_called_once_with(dataset_mfid=DATASET, sample_mfid="sample-1")
+        self.assertTrue(r.get_json()["hub_url"].endswith(f"/datasets/{DATASET}"))
 
     def test_dataset_upload_without_sample_succeeds_and_skips_link(self):
         with self.client.session_transaction() as sess:

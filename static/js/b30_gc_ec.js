@@ -532,7 +532,7 @@ async function executeConfirmAndUpload(opts) {
                     View Dataset in Crucible Hub &rarr;
                 </a>
             </div>`;
-            showAlert('success', `Upload complete for dataset ${datasetMfid}`);
+            showAlert('success', `Upload complete for dataset ${datasetMfid}`, { linkUrl: confirmRes.hub_url || hubDatasetUrl(datasetMfid) });
         } else {
             const failed = uploadResults.filter(r => !r.ok);
             progressEl.innerHTML = `<div class="alert alert-error">Failed uploading ${failed.length} file(s).</div>`;

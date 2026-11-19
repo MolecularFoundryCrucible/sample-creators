@@ -8,11 +8,11 @@ from routes.uploader_common import register_common_uploader_routes
 NAME = "dfs_microscope"
 KEY = "dfs_microscope"
 DIVISION = "b67"
-ORDER = 230
+ORDER = 260
 URL_PREFIX = "/dfs-microscope"
 ENDPOINT = "dfs_microscope.page"
-NAV_LABEL = "DFS Microscope"
-CARD_TITLE = "DFS Microscope Uploader"
+NAV_LABEL = "Nanofab - DFS-Microscope"
+CARD_TITLE = "Nanofab - DFS-Microscope"
 CARD_DESCRIPTION = "Upload Dark-Field Scattering (DFS) ScopeFoundry .h5 microscope datasets and link samples."
 INSTRUMENT_ID = "dfs-microscope"
 INSTRUMENT_MFID = "0tmz428dmnrf3000128mhfcmdg"

@@ -24,6 +24,24 @@ except ImportError:
 DEFAULT_CRUCIBLE_API_URL = "https://crucible.lbl.gov/api/v4"
 
 
+def get_crucible_hub_url() -> str:
+    env_url = (os.environ.get("CRUCIBLE_HUB_URL") or "").strip()
+    if env_url:
+        return env_url.rstrip("/")
+    try:
+        from crucible.config import get_hub_url
+        cfg_url = (get_hub_url() or "").strip()
+        if cfg_url:
+            return cfg_url.rstrip("/")
+    except Exception:
+        pass
+    return "https://crucible.lbl.gov/hub"
+
+
+def hub_dataset_url(dataset_mfid: str) -> str:
+    return f"{get_crucible_hub_url()}/datasets/{dataset_mfid}"
+
+
 def _maybe_carry_sign_in(target_url: str) -> None:
     if (target_url or "").rstrip("/") == "https://crucible.lbl.gov/api/v4":
         try:

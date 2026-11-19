@@ -53,6 +53,25 @@ class DivisionPagesTests(unittest.TestCase):
         self.assertIn('href="/synthesis/"', html)
         self.assertIn('href="/fabrication/"', html)
 
+    def test_b67_division_order_and_titles(self):
+        html = self.client.get("/division/b67").get_data(as_text=True)
+        main_content = html.split('<main class="container">', 1)[1]
+        titles = re.findall(r'<h2[^>]*>(.*?)</h2>', main_content)
+        self.assertEqual(
+            titles,
+            [
+                "Synthesis Upload",
+                "Inorganic - Nirvana",
+                "Inorganic - SpinBot",
+                "Inorganic - SpinBot Photobox",
+                "Inorganic - XRD",
+                "Inorganic - In-Situ PL",
+                "Nanofab - DFS-Microscope",
+                "Nanofab - Quantum",
+                "Imaging - HiP-Microscope",
+            ],
+        )
+
     def test_division_page_lists_its_tools(self):
         html = self.client.get("/division/b30").get_data(as_text=True)
         html = html.split('<main class="container">', 1)[1]  # skip the nav, which links every tool

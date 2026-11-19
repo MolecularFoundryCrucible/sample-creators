@@ -12,7 +12,7 @@ from flask import current_app, jsonify, request, session
 from crucible import Dataset, Sample
 from crucible.utils import get_tz_isoformat
 from routes.deposition_common import LA_TZ, csv_response, incremental_refresh_rows
-from routes.shared import cruc_client, instrument_mfid, publish_barcode
+from routes.shared import cruc_client, hub_dataset_url, instrument_mfid, publish_barcode
 
 SAMPLE_STATE_KEYS = ("sample_unique_id", "sample_name", "sample_type", "sample_description")
 
@@ -212,7 +212,12 @@ def register_instrument_routes(bp, *, config, session_key, dataset_to_row, logbo
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
-        return jsonify({"dataset_name": dataset_name, "dataset_id": dataset_mfid, "sample_name": sample_name})
+        return jsonify({
+            "dataset_name": dataset_name,
+            "dataset_id": dataset_mfid,
+            "sample_name": sample_name,
+            "hub_url": hub_dataset_url(dataset_mfid),
+        })
 
     @bp.route("/api/recent-datasets", methods=["GET"])
     def recent_datasets():

@@ -47,7 +47,10 @@
         </div>
     </div>
 
-    <script>const BASE_URL = "{{ request.script_root }}";</script>
+    <script>
+        const BASE_URL = {{ request.script_root | tojson }};
+        const CRUCIBLE_HUB_URL = {{ crucible_hub_url | default("https://crucible.lbl.gov/hub") | tojson }};
+    </script>
     <script src="{{ url_for('static', filename='js/shared.js') }}"></script>
     {% block scripts %}{% endblock %}
 </body>

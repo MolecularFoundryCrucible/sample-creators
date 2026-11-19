@@ -284,7 +284,7 @@ async function submitSchemaForm(event) {
             : `Dataset: ${result.dataset_id}`;
         document.getElementById('created-dataset').classList.remove('hidden');
         renderSchemaForm();
-        showAlert('success', `Created dataset: ${result.dataset_name}`);
+        showAlert('success', `Created dataset: ${result.dataset_name}`, { linkUrl: hubDatasetUrl(result.dataset_id) });
     } catch (error) {
         showAlert('error', error.message);
     } finally {

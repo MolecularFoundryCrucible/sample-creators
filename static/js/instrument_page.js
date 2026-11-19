@@ -245,7 +245,7 @@ async function doUpload(metadata, noSample = false) {
         }
         const dataset = await api(instrumentApi('upload-dataset'), 'POST', payload);
         if (!files.length) {
-            showAlert('success', `Dataset uploaded: ${dataset.dataset_name} (${dataset.dataset_id})`);
+            showAlert('success', `Dataset uploaded: ${dataset.dataset_name} (${dataset.dataset_id})`, { linkUrl: dataset.hub_url || hubDatasetUrl(dataset.dataset_id) });
             return;
         }
 
@@ -273,7 +273,8 @@ async function doUpload(metadata, noSample = false) {
 
         const ok = results.filter(r => r.ok);
         showAlert(ok.length === files.length ? 'success' : 'error',
-            `Dataset uploaded: ${dataset.dataset_name} (${dataset.dataset_id}) — ${ok.length} of ${files.length} file(s) attached`);
+            `Dataset uploaded: ${dataset.dataset_name} (${dataset.dataset_id}) - ${ok.length} of ${files.length} file(s) attached`,
+            { linkUrl: dataset.hub_url || hubDatasetUrl(dataset.dataset_id) });
         for (const r of results) {
             if (!r.ok) showAlert('error', `${r.file.name}: ${r.error}`);
             else if (r.ingestionError) showAlert('error', `${r.file.name} uploaded, but ingestion couldn't be requested: ${r.ingestionError}`);

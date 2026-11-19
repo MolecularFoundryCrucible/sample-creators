@@ -27,14 +27,14 @@ class ToolPluginRegistryTests(unittest.TestCase):
             ("schema_forms", 150, "b30"),
             ("print_only", 160, "b30"),
             ("synthesis", 200, "b67"),
-            ("fabrication", 210, "b67"),
-            ("insitu_pl", 220, "b67"),
-            ("dfs_microscope", 230, "b67"),
-            ("hip_microscope", 240, "b67"),
-            ("inorganic_xrd", 250, "b67"),
-            ("spinbot_spinrun", 260, "b67"),
-            ("spinbot_photobox", 270, "b67"),
-            ("nirvana", 280, "b67"),
+            ("nirvana", 210, "b67"),
+            ("spinbot_spinrun", 220, "b67"),
+            ("spinbot_photobox", 230, "b67"),
+            ("inorganic_xrd", 240, "b67"),
+            ("insitu_pl", 250, "b67"),
+            ("dfs_microscope", 260, "b67"),
+            ("fabrication", 270, "b67"),
+            ("hip_microscope", 280, "b67"),
         ]
         self.assertEqual(len(mods), len(expected_plugins))
         actual = [(m.NAME, m.ORDER, m.DIVISION) for m in mods]
@@ -47,9 +47,9 @@ class ToolPluginRegistryTests(unittest.TestCase):
             [
                 "giwaxs", "rga", "b30_sputter", "b30_ebeam", "b30_sem",
                 "b30_raman", "b30_xps", "b30_gc_ec", "electrolyte", "schema_forms",
-                "print_only", "synthesis", "fabrication", "insitu_pl",
-                "dfs_microscope", "hip_microscope", "inorganic_xrd",
-                "spinbot_spinrun", "spinbot_photobox", "nirvana",
+                "print_only", "synthesis", "nirvana", "spinbot_spinrun",
+                "spinbot_photobox", "inorganic_xrd", "insitu_pl",
+                "dfs_microscope", "fabrication", "hip_microscope",
             ],
         )
         self.assertEqual(
