@@ -360,6 +360,10 @@ async function startSessionUpload() {
     }
 }
 
+function safeHubUrl(url) {
+    return typeof url === 'string' && /^(https?:\/\/|\/)/i.test(url) ? url : '';
+}
+
 function showExistingSessionModal(checkRes, matches) {
     let selectedSessionDsid = matches[0].unique_id;
 
@@ -368,7 +372,7 @@ function showExistingSessionModal(checkRes, matches) {
     matches.forEach((match, idx) => {
         const checked = idx === 0 ? 'checked' : '';
         const timestamp = match.modification_time || match.creation_time || '';
-        const hubUrl = match.hub_url || hubDatasetUrl(match.unique_id);
+        const hubUrl = safeHubUrl(match.hub_url || hubDatasetUrl(match.unique_id));
         html += `<label class="existing-session-option">
             <input type="radio" name="existing-session-choice" value="${escapeHtml(match.unique_id)}" ${checked}
                 onchange="window._setSelectedExistingSession(this.value)">
@@ -435,7 +439,7 @@ async function executeSessionStartAndUpload(existingSessionDsid) {
             sessionName: startRes.session_name || currentPlan.folderName,
             datasetName: startRes.dataset_name || `${TOOL_CONFIG.name || TOOL_CONFIG.key} session: ${currentPlan.folderName}`,
             reused: Boolean(startRes.reused),
-            hubUrl: startRes.hub_url || hubDatasetUrl(startRes.session_dsid),
+            hubUrl: safeHubUrl(startRes.hub_url || hubDatasetUrl(startRes.session_dsid)),
             sampleUniqueId,
             comments,
             keywords,
@@ -688,12 +692,22 @@ async function runChildUploadPipeline(itemsToProcess, signal) {
                             error: 'Backend did not return a dataset MFID for this item.',
                         });
                     } else {
+                        const prev = itemStates.get(item.clientId) || {};
+                        const uploadedFilenames = new Set(prev.uploadedFilenames || []);
+                        if (Array.isArray(child.existing_filenames)) {
+                            for (const fname of child.existing_filenames) {
+                                if (typeof fname === 'string' && fname) {
+                                    uploadedFilenames.add(fname);
+                                }
+                            }
+                        }
                         setItemState(item.clientId, {
-                            ...(itemStates.get(item.clientId) || {}),
+                            ...prev,
                             status: 'queued',
                             datasetMfid: child.dataset_mfid,
                             reused: Boolean(child.reused),
-                            hubUrl: child.hub_url || hubDatasetUrl(child.dataset_mfid),
+                            hubUrl: safeHubUrl(child.hub_url || hubDatasetUrl(child.dataset_mfid)),
+                            uploadedFilenames,
                             error: null,
                         });
                     }
@@ -745,7 +759,19 @@ async function uploadSingleChildItem(item, signal) {
         return;
     }
 
+    const uploadedFilenames = new Set(state.uploadedFilenames || []);
     const fileUploaded = new Map();
+
+    // Pre-credit already-uploaded files (from resumed sessions or prior retry attempts).
+    for (const compFile of item.companionFiles) {
+        if (uploadedFilenames.has(compFile.name)) {
+            fileUploaded.set(compFile, compFile.size);
+        }
+    }
+    if (uploadedFilenames.has(item.primaryFile.name)) {
+        fileUploaded.set(item.primaryFile, item.primaryFile.size);
+    }
+
     const calcPct = () => {
         if (!item.totalBytes) return 100;
         let uploaded = 0;
@@ -758,18 +784,22 @@ async function uploadSingleChildItem(item, signal) {
     try {
         // CRITICAL: Upload companion sidecars FIRST without triggering ingestion, so .emi / .rawtlt / .txt
         // are stored in GCS before server-side ingestion runs on the primary .ser or .mrc file.
-        if (item.companionFiles.length > 0) {
+        const pendingCompanions = item.companionFiles.filter(
+            (compFile) => !uploadedFilenames.has(compFile.name)
+        );
+        if (pendingCompanions.length > 0) {
             setItemState(item.clientId, {
                 ...itemStates.get(item.clientId),
                 status: 'uploading',
                 phase: 'sidecars',
                 percent: calcPct(),
+                uploadedFilenames,
                 error: null,
             });
 
             const companionResults = await window.CrucibleUpload.uploadFiles({
                 datasetMfid: state.datasetMfid,
-                files: item.companionFiles,
+                files: pendingCompanions,
                 signal,
                 onProgress: (file, progress) => {
                     fileUploaded.set(file, Math.min(file.size, progress.uploadedBytes));
@@ -778,8 +808,21 @@ async function uploadSingleChildItem(item, signal) {
                         status: 'uploading',
                         phase: 'sidecars',
                         percent: calcPct(),
+                        uploadedFilenames,
                     });
                 },
+            });
+
+            // Record every succeeded sidecar before checking failures so retries skip them.
+            for (const res of companionResults) {
+                if (res.ok) {
+                    uploadedFilenames.add(res.file.name);
+                    fileUploaded.set(res.file, res.file.size);
+                }
+            }
+            setItemState(item.clientId, {
+                ...itemStates.get(item.clientId),
+                uploadedFilenames,
             });
 
             const failedCompanions = companionResults.filter((r) => !r.ok);
@@ -787,55 +830,65 @@ async function uploadSingleChildItem(item, signal) {
                 const detail = failedCompanions.map((r) => `${r.file.name}: ${r.error}`).join('; ');
                 throw new Error(`Sidecar upload failed (${detail})`);
             }
-
-            for (const compFile of item.companionFiles) {
-                fileUploaded.set(compFile, compFile.size);
-            }
         }
 
         if (signal.aborted) {
             setItemState(item.clientId, {
                 ...itemStates.get(item.clientId),
                 status: 'cancelled',
+                uploadedFilenames,
                 error: null,
             });
             return;
         }
 
-        setItemState(item.clientId, {
-            ...itemStates.get(item.clientId),
-            status: 'uploading',
-            phase: 'primary',
-            percent: calcPct(),
-            error: null,
-        });
+        if (!uploadedFilenames.has(item.primaryFile.name)) {
+            setItemState(item.clientId, {
+                ...itemStates.get(item.clientId),
+                status: 'uploading',
+                phase: 'primary',
+                percent: calcPct(),
+                uploadedFilenames,
+                error: null,
+            });
 
-        const ingestor = activeSession.ingestor;
-        const primaryResults = await window.CrucibleUpload.uploadFiles({
-            datasetMfid: state.datasetMfid,
-            files: [item.primaryFile],
-            ingestion: () => ({
-                requested: true,
-                ...(ingestor ? { ingestionClass: ingestor } : {}),
-            }),
-            signal,
-            onProgress: (file, progress) => {
-                fileUploaded.set(file, Math.min(file.size, progress.uploadedBytes));
-                setItemState(item.clientId, {
-                    ...itemStates.get(item.clientId),
-                    status: 'uploading',
-                    phase: 'primary',
-                    percent: calcPct(),
-                });
-            },
-        });
+            const ingestor = activeSession.ingestor;
+            const primaryResults = await window.CrucibleUpload.uploadFiles({
+                datasetMfid: state.datasetMfid,
+                files: [item.primaryFile],
+                ingestion: () => ({
+                    requested: true,
+                    ...(ingestor ? { ingestionClass: ingestor } : {}),
+                }),
+                signal,
+                onProgress: (file, progress) => {
+                    fileUploaded.set(file, Math.min(file.size, progress.uploadedBytes));
+                    setItemState(item.clientId, {
+                        ...itemStates.get(item.clientId),
+                        status: 'uploading',
+                        phase: 'primary',
+                        percent: calcPct(),
+                        uploadedFilenames,
+                    });
+                },
+            });
 
-        const primaryRes = primaryResults[0];
-        if (!primaryRes || !primaryRes.ok) {
-            throw new Error(primaryRes?.error || `Failed uploading ${item.primaryFile.name}`);
-        }
-        if (primaryRes.ingestionError) {
-            throw new Error(`Uploaded file, but ingestion failed: ${primaryRes.ingestionError}`);
+            const primaryRes = primaryResults[0];
+            if (!primaryRes || !primaryRes.ok) {
+                throw new Error(primaryRes?.error || `Failed uploading ${item.primaryFile.name}`);
+            }
+
+            // Record primary file completion even if ingestion failed so retries do not hit HTTP 409.
+            uploadedFilenames.add(item.primaryFile.name);
+            fileUploaded.set(item.primaryFile, item.primaryFile.size);
+            setItemState(item.clientId, {
+                ...itemStates.get(item.clientId),
+                uploadedFilenames,
+            });
+
+            if (primaryRes.ingestionError) {
+                throw new Error(`Uploaded file, but ingestion failed: ${primaryRes.ingestionError}`);
+            }
         }
 
         setItemState(item.clientId, {
@@ -843,6 +896,7 @@ async function uploadSingleChildItem(item, signal) {
             status: 'completed',
             phase: null,
             percent: 100,
+            uploadedFilenames,
             error: null,
         });
     } catch (e) {
@@ -851,6 +905,7 @@ async function uploadSingleChildItem(item, signal) {
                 ...itemStates.get(item.clientId),
                 status: 'cancelled',
                 phase: null,
+                uploadedFilenames,
                 error: null,
             });
             return;
@@ -859,6 +914,7 @@ async function uploadSingleChildItem(item, signal) {
             ...itemStates.get(item.clientId),
             status: 'failed',
             phase: null,
+            uploadedFilenames,
             error: e?.message || String(e),
         });
     }
@@ -890,6 +946,12 @@ function renderParentSessionBanner(sessionInfo) {
     if (!banner) return;
 
     const modeBadge = sessionInfo.reused ? 'Resumed Existing Session' : 'Created New Session';
+    const safeUrl = safeHubUrl(sessionInfo.hubUrl);
+    const linkHtml = safeUrl
+        ? `<a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
+            Open Session in Crucible Hub &#8599;
+        </a>`
+        : '';
     banner.innerHTML = `
         <div>
             <div style="font-weight:700; color:#22543d;">${escapeHtml(sessionInfo.datasetName)}</div>
@@ -897,9 +959,7 @@ function renderParentSessionBanner(sessionInfo) {
                 ${escapeHtml(modeBadge)} &middot; Parent Session MFID: <code>${escapeHtml(sessionInfo.sessionDsid)}</code>
             </div>
         </div>
-        <a href="${escapeHtml(sessionInfo.hubUrl)}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
-            Open Session in Crucible Hub &#8599;
-        </a>
+        ${linkHtml}
     `;
     banner.classList.remove('hidden');
 }
@@ -922,6 +982,7 @@ function initializeProgressTable(items) {
             datasetMfid: null,
             hubUrl: null,
             reused: false,
+            uploadedFilenames: new Set(),
             error: null,
         });
 
@@ -996,8 +1057,10 @@ function updateItemRow(clientId, state) {
 
     const datasetCell = row.querySelector('[data-col="dataset"]');
     if (datasetCell && state.datasetMfid) {
-        const link = state.hubUrl || hubDatasetUrl(state.datasetMfid);
-        datasetCell.innerHTML = `<a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer"><code>${escapeHtml(state.datasetMfid)}</code> &#8599;</a>`;
+        const link = safeHubUrl(state.hubUrl || hubDatasetUrl(state.datasetMfid));
+        datasetCell.innerHTML = link
+            ? `<a href="${escapeHtml(link)}" target="_blank" rel="noopener noreferrer"><code>${escapeHtml(state.datasetMfid)}</code> &#8599;</a>`
+            : `<code>${escapeHtml(state.datasetMfid)}</code>`;
     }
 }
 
