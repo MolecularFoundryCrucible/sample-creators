@@ -49,6 +49,22 @@ def _populate_dicts(mods: list[ModuleType]) -> None:
         if getattr(m, "POST_PROCESSING", None):
             POST_PROCESSING_STEPS[name] = m.POST_PROCESSING
 
+        instruments = getattr(m, "INSTRUMENTS", None)
+        if isinstance(instruments, dict):
+            for inst_key, inst_cfg in instruments.items():
+                if not isinstance(inst_cfg, dict):
+                    continue
+                if inst_cfg.get("instrument_id"):
+                    INSTRUMENT_IDS[inst_key] = inst_cfg["instrument_id"]
+                if inst_cfg.get("instrument_mfid"):
+                    INSTRUMENT_MFIDS[inst_key] = inst_cfg["instrument_mfid"]
+                if inst_cfg.get("ingestor"):
+                    INGESTORS[inst_key] = inst_cfg["ingestor"]
+                if inst_cfg.get("ui_mode"):
+                    UI_MODES[inst_key] = inst_cfg["ui_mode"]
+                if inst_cfg.get("post_processing"):
+                    POST_PROCESSING_STEPS[inst_key] = inst_cfg["post_processing"]
+
 
 def discover_tools(force_reload: bool = False) -> list[ModuleType]:
     """Discover all tool plugins in the tools package, sorted by (ORDER, NAME)."""

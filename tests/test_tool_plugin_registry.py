@@ -35,6 +35,7 @@ class ToolPluginRegistryTests(unittest.TestCase):
             ("dfs_microscope", 260, "b67"),
             ("fabrication", 270, "b67"),
             ("hip_microscope", 280, "b67"),
+            ("tem_sessions", 290, "ncem"),
         ]
         self.assertEqual(len(mods), len(expected_plugins))
         actual = [(m.NAME, m.ORDER, m.DIVISION) for m in mods]
@@ -49,7 +50,7 @@ class ToolPluginRegistryTests(unittest.TestCase):
                 "b30_raman", "b30_xps", "b30_gc_ec", "electrolyte", "schema_forms",
                 "print_only", "synthesis", "nirvana", "spinbot_spinrun",
                 "spinbot_photobox", "inorganic_xrd", "insitu_pl",
-                "dfs_microscope", "fabrication", "hip_microscope",
+                "dfs_microscope", "fabrication", "hip_microscope", "tem_sessions",
             ],
         )
         self.assertEqual(
@@ -67,6 +68,13 @@ class ToolPluginRegistryTests(unittest.TestCase):
                 "spinbot_spinrun": "0sh6zrzxhxsa100089bznryq88",
                 "spinbot_photobox": "0t4ptyzswnyps0006tqctfjbpr",
                 "nirvana": "0t8vneqh81rbz000b41bdw6adw",
+                "m3_microscope": "0tmz7kb6qdwfs000cyevpp43vc",
+                "team05": "0szb5en16nxdk000dcd8a1wt2w",
+                "team1": "0tbrbfgg2sstf000jk1bwhcvw8",
+                "themis": "0t6k7ms7r5zak000bwynwcfacr",
+                "titanx": "0sh6zrzxhnz8k000k7pwq0s2t8",
+                "f200": "0tkkpbc07sv6z000x7b2f1bgs0",
+                "spectre": "0tf06pwcg9ymf00014jzj3rzs8",
             },
         )
         self.assertEqual(
@@ -83,6 +91,20 @@ class ToolPluginRegistryTests(unittest.TestCase):
             },
         )
         self.assertEqual(reg.INSTRUMENT_IDS["insitu_pl"], "in-situ-pl")
+        expected_tem_ids = {
+            "m3_microscope": "m3-microscope",
+            "team05": "team05",
+            "team1": "team01",
+            "themis": "themis",
+            "titanx": "titanx",
+            "f200": "f200",
+            "spectre": "spectre",
+        }
+        for key, expected_id in expected_tem_ids.items():
+            self.assertEqual(reg.INSTRUMENT_IDS[key], expected_id)
+            self.assertEqual(reg.UI_MODES[key], "session")
+            self.assertNotIn(key, reg.INGESTORS)
+            self.assertNotIn(key, reg.POST_PROCESSING_STEPS)
 
     def test_module_aliases_and_mocking(self):
         import routes.giwaxs
@@ -193,6 +215,45 @@ CARD_DESCRIPTION = "A dynamically loaded tool"
                 tools.__path__ = original_path
                 sys.modules.pop("tools.dynamic_tool", None)
                 reg.discover_tools(force_reload=True)
+
+    def test_populate_dicts_multi_tool_instruments(self):
+        from types import SimpleNamespace
+
+        fake_mod = SimpleNamespace(
+            NAME="multi_fake",
+            UI_MODE="session",
+            INSTRUMENTS={
+                "inst_a": {
+                    "instrument_id": "inst-a",
+                    "instrument_mfid": "0" + "a" * 25,
+                    "ingestor": "FakeIngestor",
+                    "ui_mode": "session",
+                    "post_processing": ["step_one"],
+                },
+                "inst_b": {
+                    "instrument_id": "inst-b",
+                    "instrument_mfid": "0" + "b" * 25,
+                    "ingestor": "",
+                    "ui_mode": "session",
+                    "post_processing": [],
+                },
+            },
+        )
+        try:
+            reg._populate_dicts([fake_mod])
+            self.assertEqual(reg.INSTRUMENT_IDS["inst_a"], "inst-a")
+            self.assertEqual(reg.INSTRUMENT_MFIDS["inst_a"], "0" + "a" * 25)
+            self.assertEqual(reg.INGESTORS["inst_a"], "FakeIngestor")
+            self.assertEqual(reg.UI_MODES["inst_a"], "session")
+            self.assertEqual(reg.POST_PROCESSING_STEPS["inst_a"], ["step_one"])
+
+            self.assertEqual(reg.INSTRUMENT_IDS["inst_b"], "inst-b")
+            self.assertEqual(reg.INSTRUMENT_MFIDS["inst_b"], "0" + "b" * 25)
+            self.assertEqual(reg.UI_MODES["inst_b"], "session")
+            self.assertNotIn("inst_b", reg.INGESTORS)
+            self.assertNotIn("inst_b", reg.POST_PROCESSING_STEPS)
+        finally:
+            reg.discover_tools(force_reload=True)
 
 
 if __name__ == "__main__":
