@@ -341,26 +341,32 @@ class TemSessionUploadersTests(unittest.TestCase):
         by_cid = {c["client_id"]: c for c in body["children"]}
         self.assertEqual(set(by_cid.keys()), {"c1", "c2", "c3", "c4"})
 
-        # c1: MUST reuse existing_child_id (same session child)
+        # c1: MUST reuse existing_child_id (same session child), return existing_filenames,
+        # and NOT duplicate the parent->child link.
         self.assertTrue(by_cid["c1"]["reused"])
         self.assertEqual(by_cid["c1"]["dataset_mfid"], existing_child_id)
+        self.assertEqual(by_cid["c1"]["existing_filenames"], ["img01.dm4"])
+        self.assertEqual(self.store["dataset_links"].count((session_dsid, existing_child_id)), 1)
 
         # c2: MUST NOT reuse unrelated_ds_id (not a child of this session)
         self.assertFalse(by_cid["c2"]["reused"])
         self.assertNotEqual(by_cid["c2"]["dataset_mfid"], unrelated_ds_id)
+        self.assertEqual(by_cid["c2"]["existing_filenames"], [])
 
         # c3: MUST NOT reuse other_child_id (child of a different session)
         self.assertFalse(by_cid["c3"]["reused"])
         self.assertNotEqual(by_cid["c3"]["dataset_mfid"], other_child_id)
+        self.assertEqual(by_cid["c3"]["existing_filenames"], [])
 
         # c4: new dataset with null sha256_hash
         self.assertFalse(by_cid["c4"]["reused"])
+        self.assertEqual(by_cid["c4"]["existing_filenames"], [])
 
-        # Every prepared child must be linked to parent session, linked to sample, and have expected metadata
+        # Every prepared child must be linked to parent session exactly once, linked to sample, and have expected metadata
         for cid, child_info in by_cid.items():
             dsid = child_info["dataset_mfid"]
             self.assertTrue(child_info["hub_url"].endswith(f"/datasets/{dsid}"))
-            self.assertIn((session_dsid, dsid), self.store["dataset_links"])
+            self.assertEqual(self.store["dataset_links"].count((session_dsid, dsid)), 1)
             self.assertIn((sample_id, dsid), self.store["sample_datasets"])
             ds_rec = self.store["datasets"][dsid]
             self.assertEqual(ds_rec["instrument_mfid"], "0t6k7ms7r5zak000bwynwcfacr")
@@ -507,6 +513,86 @@ class TemSessionUploadersTests(unittest.TestCase):
         })
         self.assertEqual(lookup_res.status_code, 200)
         self.assertEqual(lookup_res.get_json()["unique_id"], created["unique_id"])
+
+    def test_prepare_children_existing_filenames_multiple_and_fallback(self):
+        start_res = self.client.post("/team1/api/session/start", json={"folder_name": "ser_run"})
+        session_dsid = start_res.get_json()["session_dsid"]
+
+        sha = "d" * 64
+        existing_child = cruc_client.datasets.create(Dataset(
+            dataset_name="Acq_1.ser",
+            project_id="proj-1",
+            owner=self.user["orcid"],
+            instrument_mfid="0tbrbfgg2sstf000jk1bwhcvw8",
+        ))
+        child_id = existing_child["dataset_mfid"]
+        cruc_client.datasets.link(session_dsid, child_id)
+        self.store["files"][child_id] = [
+            {"mfid": "f" + "4" * 25, "filename": "Acq.emi", "sha256_hash": "e" * 64},
+            {"mfid": "f" + "5" * 25, "filename": "Acq_1.ser", "sha256_hash": sha},
+        ]
+
+        res = self.client.post("/team1/api/session/prepare-children", json={
+            "session_dsid": session_dsid,
+            "items": [{"client_id": "c1", "dataset_name": "Acq_1.ser", "sha256_hash": sha}],
+        })
+        self.assertEqual(res.status_code, 200)
+        child = res.get_json()["children"][0]
+        self.assertTrue(child["reused"])
+        self.assertEqual(child["existing_filenames"], ["Acq.emi", "Acq_1.ser"])
+        self.assertEqual(self.store["dataset_links"].count((session_dsid, child_id)), 1)
+
+        # Graceful fallback to [] if list_files raises
+        with patch.object(cruc_client.datasets, "list_files", side_effect=RuntimeError("list_files failed")):
+            res2 = self.client.post("/team1/api/session/prepare-children", json={
+                "session_dsid": session_dsid,
+                "items": [{"client_id": "c1", "dataset_name": "Acq_1.ser", "sha256_hash": sha}],
+            })
+        self.assertEqual(res2.status_code, 200)
+        self.assertEqual(res2.get_json()["children"][0]["existing_filenames"], [])
+
+    def test_get_dataset_in_project_maps_http_and_network_errors(self):
+        import requests
+
+        valid_mfid = "d" + "8" * 25
+
+        # Network / timeout error without HTTP status -> 500 (not 404)
+        with patch.object(cruc_client.datasets, "get", side_effect=ConnectionError("timed out")):
+            res = self.client.post("/f200/api/session/start", json={
+                "folder_name": "run1",
+                "existing_session_dsid": valid_mfid,
+            })
+        self.assertEqual(res.status_code, 500)
+
+        # requests.HTTPError with response.status_code == 404 -> 404
+        resp_404 = requests.Response()
+        resp_404.status_code = 404
+        with patch.object(cruc_client.datasets, "get", side_effect=requests.HTTPError("missing", response=resp_404)):
+            res = self.client.post("/f200/api/session/start", json={
+                "folder_name": "run1",
+                "existing_session_dsid": valid_mfid,
+            })
+        self.assertEqual(res.status_code, 404)
+
+        # requests.HTTPError with response.status_code == 403 -> 403
+        resp_403 = requests.Response()
+        resp_403.status_code = 403
+        with patch.object(cruc_client.datasets, "get", side_effect=requests.HTTPError("denied", response=resp_403)):
+            res = self.client.post("/f200/api/session/prepare-children", json={
+                "session_dsid": valid_mfid,
+                "items": [{"client_id": "c1", "dataset_name": "a.dm4"}],
+            })
+        self.assertEqual(res.status_code, 403)
+
+        # requests.HTTPError with response.status_code == 503 -> 500
+        resp_503 = requests.Response()
+        resp_503.status_code = 503
+        with patch.object(cruc_client.datasets, "get", side_effect=requests.HTTPError("unavailable", response=resp_503)):
+            res = self.client.post("/f200/api/session/prepare-children", json={
+                "session_dsid": valid_mfid,
+                "items": [{"client_id": "c1", "dataset_name": "a.dm4"}],
+            })
+        self.assertEqual(res.status_code, 500)
 
 
 if __name__ == "__main__":

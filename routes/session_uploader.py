@@ -77,11 +77,13 @@ def _get_dataset_in_project(dsid: Any, selected_project: str) -> tuple[dict | No
         ds = cruc_client.datasets.get(clean_dsid)
     except Exception as e:
         status = getattr(e, "status", None)
+        if status is None:
+            status = getattr(getattr(e, "response", None), "status_code", None)
+        if status == 404:
+            return None, (jsonify({"error": f"Dataset '{clean_dsid}' not found"}), 404)
         if status == 403:
             return None, (jsonify({"error": f"Access denied for dataset '{clean_dsid}'"}), 403)
-        if status is not None and status != 404:
-            return None, (jsonify({"error": f"Failed fetching dataset '{clean_dsid}': {e}"}), 500)
-        return None, (jsonify({"error": f"Dataset '{clean_dsid}' not found"}), 404)
+        return None, (jsonify({"error": f"Failed fetching dataset '{clean_dsid}': {e}"}), 500)
 
     if not ds or not ds.get("unique_id"):
         return None, (jsonify({"error": f"Dataset '{clean_dsid}' not found"}), 404)
@@ -179,6 +181,25 @@ def _list_matching_session_datasets(project_id: str, session_dataset_name: str, 
             "hub_url": hub_dataset_url(uid),
         })
     return matches
+
+
+def _list_existing_filenames(dataset_mfid: str) -> list[str]:
+    """Return existing filenames stored on dataset_mfid, falling back to [] on error."""
+    try:
+        files = cruc_client.datasets.list_files(dataset_mfid) or []
+    except Exception as e:
+        logger.warning(f"Failed listing existing files for dataset '{dataset_mfid}': {e}")
+        return []
+    seen: set[str] = set()
+    filenames: list[str] = []
+    for f in files:
+        if not isinstance(f, dict):
+            continue
+        name = f.get("filename") or f.get("file_name")
+        if isinstance(name, str) and name and name not in seen:
+            seen.add(name)
+            filenames.append(name)
+    return filenames
 
 
 def register_session_uploader_routes(bp, tool_config: dict) -> None:
@@ -354,10 +375,11 @@ def register_session_uploader_routes(bp, tool_config: dict) -> None:
             except Exception as e:
                 return jsonify({"error": str(e)}), 500
 
-            try:
-                cruc_client.datasets.link(session_dsid, child_dsid)
-            except Exception as e:
-                return jsonify({"error": f"Failed linking child '{child_dsid}' to session '{session_dsid}': {e}"}), 500
+            if child_dsid not in valid_child_dsids:
+                try:
+                    cruc_client.datasets.link(session_dsid, child_dsid)
+                except Exception as e:
+                    return jsonify({"error": f"Failed linking child '{child_dsid}' to session '{session_dsid}': {e}"}), 500
 
             if sample_uid:
                 try:
@@ -365,10 +387,13 @@ def register_session_uploader_routes(bp, tool_config: dict) -> None:
                 except Exception as e:
                     logger.warning(f"Failed linking sample {sample_uid} to child {child_dsid}: {e}")
 
+            existing_filenames = _list_existing_filenames(child_dsid) if reused else []
+
             children.append({
                 "client_id": item["client_id"],
                 "dataset_mfid": child_dsid,
                 "reused": reused,
+                "existing_filenames": existing_filenames,
                 "hub_url": hub_dataset_url(child_dsid),
             })
 
