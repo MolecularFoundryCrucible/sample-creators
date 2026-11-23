@@ -104,6 +104,8 @@ def resolve_dsid_for_sha256(sha256_hash: str | None, valid_dsids: set[str]) -> t
     """Look up existing dataset for a SHA-256 hash among valid project datasets."""
     if not sha256_hash or not isinstance(sha256_hash, str) or len(sha256_hash) != 64:
         return None, False
+    if not valid_dsids:
+        return None, False
     try:
         files = cruc_client.files.list(sha256_hash=sha256_hash)
         for f in files:
@@ -113,6 +115,25 @@ def resolve_dsid_for_sha256(sha256_hash: str | None, valid_dsids: set[str]) -> t
     except Exception as e:
         logger.warning(f"Error checking sha256 {sha256_hash}: {e}")
     return None, False
+
+
+def list_existing_dataset_filenames(dataset_mfid: str) -> list[str]:
+    """Return existing filenames stored on dataset_mfid, falling back to [] on error."""
+    try:
+        files = cruc_client.datasets.list_files(dataset_mfid) or []
+    except Exception as e:
+        logger.warning(f"Failed listing existing files for dataset '{dataset_mfid}': {e}")
+        return []
+    seen: set[str] = set()
+    filenames: list[str] = []
+    for f in files:
+        if not isinstance(f, dict):
+            continue
+        name = f.get("filename") or f.get("name") or f.get("file_name")
+        if isinstance(name, str) and name and name not in seen:
+            seen.add(name)
+            filenames.append(name)
+    return filenames
 
 
 def dataset_exists(dsid: str | None) -> bool:
@@ -461,10 +482,12 @@ def register_common_uploader_routes(bp, *, tool_config: dict):
             except Exception as e:
                 logger.warning(f"Failed linking sample {sample_unique_id} to {final_dsid}: {e}")
 
+        existing_filenames = list_existing_dataset_filenames(final_dsid) if reused else []
         return jsonify({
             "ok": True,
             "dataset_mfid": final_dsid,
             "reused": reused,
+            "existing_filenames": existing_filenames,
             "hub_url": hub_dataset_url(final_dsid),
         }), 200
 

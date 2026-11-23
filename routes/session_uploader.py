@@ -17,6 +17,7 @@ from routes.uploader_common import (
     CrossProjectError,
     create_or_update_dataset,
     hub_dataset_url,
+    list_existing_dataset_filenames,
     require_logged_in_user,
     resolve_dsid_for_sha256,
     verify_sample_in_project,
@@ -183,23 +184,7 @@ def _list_matching_session_datasets(project_id: str, session_dataset_name: str, 
     return matches
 
 
-def _list_existing_filenames(dataset_mfid: str) -> list[str]:
-    """Return existing filenames stored on dataset_mfid, falling back to [] on error."""
-    try:
-        files = cruc_client.datasets.list_files(dataset_mfid) or []
-    except Exception as e:
-        logger.warning(f"Failed listing existing files for dataset '{dataset_mfid}': {e}")
-        return []
-    seen: set[str] = set()
-    filenames: list[str] = []
-    for f in files:
-        if not isinstance(f, dict):
-            continue
-        name = f.get("filename") or f.get("file_name")
-        if isinstance(name, str) and name and name not in seen:
-            seen.add(name)
-            filenames.append(name)
-    return filenames
+_list_existing_filenames = list_existing_dataset_filenames
 
 
 def register_session_uploader_routes(bp, tool_config: dict) -> None:

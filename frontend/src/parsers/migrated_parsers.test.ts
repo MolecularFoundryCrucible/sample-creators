@@ -65,6 +65,83 @@ describe("computeBlobSha256", () => {
     expect(hash).toHaveLength(64)
     expect(hash).toMatch(/^[0-9a-f]{64}$/)
   })
+
+  it("calls onProgress with (0, 0) for empty blob", async () => {
+    const progress: [number, number][] = []
+    const blob = new Blob([])
+    const hash = await computeBlobSha256(blob, (hashed, total) => progress.push([hashed, total]))
+    expect(hash).toBe("e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855")
+    expect(progress).toEqual([[0, 0]])
+  })
+
+  it("reports onProgress for small single-chunk blob", async () => {
+    const progress: [number, number][] = []
+    const blob = new Blob(["hello world"])
+    const hash = await computeBlobSha256(blob, (hashed, total) => progress.push([hashed, total]))
+    expect(hash).toBe("b94d27b9934d3e08a52e52d7da7dabfac484efe37a5380ee9088f7ace2efcde9")
+    expect(progress).toEqual([
+      [0, 11],
+      [11, 11],
+    ])
+  })
+
+  it("reports monotonic onProgress for multi-chunk ~10 MiB blob", async () => {
+    const progress: [number, number][] = []
+    const chunkSize = 1024 * 1024
+    const chunks: ArrayBuffer[] = []
+    for (let i = 0; i < 10; i++) {
+      const u8 = new Uint8Array(new ArrayBuffer(chunkSize))
+      u8.fill(i + 1)
+      chunks.push(u8.buffer)
+    }
+    const blob = new Blob(chunks)
+    const expectedSize = 10 * 1024 * 1024
+    expect(blob.size).toBe(expectedSize)
+
+    const expectedHash = await computeBlobSha256(blob)
+    const hash = await computeBlobSha256(blob, (hashed, total) => progress.push([hashed, total]))
+
+    expect(hash).toBe(expectedHash)
+    expect(progress.length).toBeGreaterThanOrEqual(2)
+    expect(progress[0]).toEqual([0, expectedSize])
+    expect(progress[progress.length - 1]).toEqual([expectedSize, expectedSize])
+
+    for (let i = 1; i < progress.length; i++) {
+      const [prevHashed] = progress[i - 1]
+      const [currHashed, total] = progress[i]
+      expect(total).toBe(expectedSize)
+      expect(currHashed).toBeGreaterThanOrEqual(prevHashed)
+      expect(currHashed).toBeLessThanOrEqual(expectedSize)
+    }
+  })
+
+  it("aborts via AbortSignal inside onProgress without reading remaining chunks", async () => {
+    const ac = new AbortController()
+    const chunkSize = 1024 * 1024
+    const chunks: ArrayBuffer[] = []
+    for (let i = 0; i < 10; i++) {
+      const u8 = new Uint8Array(new ArrayBuffer(chunkSize))
+      u8.fill(i + 1)
+      chunks.push(u8.buffer)
+    }
+    const blob = new Blob(chunks)
+    let progressCalls = 0
+
+    await expect(
+      computeBlobSha256(
+        blob,
+        (hashed) => {
+          progressCalls++
+          if (hashed > 0) {
+            ac.abort(new Error("aborted by caller"))
+          }
+        },
+        ac.signal
+      )
+    ).rejects.toThrow("aborted by caller")
+
+    expect(progressCalls).toBeLessThan(10)
+  })
 })
 
 describe("parseGcLogText", () => {
