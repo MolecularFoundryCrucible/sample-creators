@@ -30,6 +30,38 @@ function resolveSafeDatasetHubUrl(hubUrl, datasetMfid) {
     return safeHubUrl(hubUrl) || safeHubUrl(hubDatasetUrl(datasetMfid));
 }
 
+function getPendingStorageKey(project, toolKey, sha256Hash) {
+    return `crucible_std_pending:${project || ''}:${toolKey || ''}:${sha256Hash || ''}`;
+}
+
+function getPendingDatasetMfid(project, toolKey, sha256Hash) {
+    if (!project || !toolKey || !sha256Hash) return null;
+    try {
+        const val = localStorage.getItem(getPendingStorageKey(project, toolKey, sha256Hash));
+        return typeof val === 'string' && /^[0-9a-hjkmnp-tv-z]{26}$/i.test(val.trim()) ? val.trim() : null;
+    } catch {
+        return null;
+    }
+}
+
+function setPendingDatasetMfid(project, toolKey, sha256Hash, datasetMfid) {
+    if (!project || !toolKey || !sha256Hash || !datasetMfid) return;
+    try {
+        localStorage.setItem(getPendingStorageKey(project, toolKey, sha256Hash), datasetMfid.trim());
+    } catch {
+        // Ignore storage errors
+    }
+}
+
+function clearPendingDatasetMfid(project, toolKey, sha256Hash) {
+    if (!project || !toolKey || !sha256Hash) return;
+    try {
+        localStorage.removeItem(getPendingStorageKey(project, toolKey, sha256Hash));
+    } catch {
+        // Ignore storage errors
+    }
+}
+
 function renderTwoStepProgress(containerEl, opts = {}) {
     const step1LabelText = opts.step1Label || 'Step 1/2: Create Dataset';
     const step2LabelText = opts.step2Label || 'Step 2/2: Uploading';
@@ -185,17 +217,43 @@ async function startStandardUpload() {
                 detail: 'Creating dataset record in Crucible...',
             });
 
-            const dsRes = await api(`${TOOL_CONFIG.url_prefix}/api/create-dataset`, 'POST', {
-                embedded_dsid: embeddedDsid,
+            let targetEmbeddedDsid = embeddedDsid;
+            let usedPendingDsid = false;
+            if (!targetEmbeddedDsid && sha256Hash) {
+                const pendingDsid = getPendingDatasetMfid(currentUserState.selected_project, TOOL_CONFIG.key, sha256Hash);
+                if (pendingDsid) {
+                    targetEmbeddedDsid = pendingDsid;
+                    usedPendingDsid = true;
+                }
+            }
+
+            const createPayload = {
+                embedded_dsid: targetEmbeddedDsid,
                 sha256_hash: sha256Hash,
                 dataset_name: datasetNameOverride || null,
                 session_name: sessionName || null,
                 comments,
                 keywords,
                 sample_unique_id: sampleUniqueId,
-            });
+            };
+
+            let dsRes;
+            try {
+                dsRes = await api(`${TOOL_CONFIG.url_prefix}/api/create-dataset`, 'POST', createPayload);
+            } catch (err) {
+                if (usedPendingDsid && (err.status === 403 || err.status === 404)) {
+                    clearPendingDatasetMfid(currentUserState.selected_project, TOOL_CONFIG.key, sha256Hash);
+                    createPayload.embedded_dsid = null;
+                    dsRes = await api(`${TOOL_CONFIG.url_prefix}/api/create-dataset`, 'POST', createPayload);
+                } else {
+                    throw err;
+                }
+            }
 
             const datasetMfid = dsRes.dataset_mfid;
+            if (sha256Hash && datasetMfid) {
+                setPendingDatasetMfid(currentUserState.selected_project, TOOL_CONFIG.key, sha256Hash, datasetMfid);
+            }
             const step1Detail = dsRes.reused
                 ? `Dataset ${datasetMfid} (reused existing)`
                 : `Dataset ${datasetMfid} ready`;
@@ -230,6 +288,7 @@ async function startStandardUpload() {
             };
 
             if (filesToUpload.length === 0) {
+                clearPendingDatasetMfid(currentUserState.selected_project, TOOL_CONFIG.key, sha256Hash);
                 steps.updateStep2({
                     percent: 100,
                     detail: 'Already uploaded (reused existing dataset)',
@@ -263,6 +322,8 @@ async function startStandardUpload() {
                     const failed = uploadResults.filter(r => !r.ok);
                     throw new Error(`Failed uploading ${failed.length} file(s)`);
                 }
+
+                clearPendingDatasetMfid(currentUserState.selected_project, TOOL_CONFIG.key, sha256Hash);
 
                 steps.updateStep2({
                     percent: 100,
@@ -327,18 +388,44 @@ async function startStandardUpload() {
                     detail: 'Creating dataset record in Crucible...',
                 });
 
+                let targetEmbeddedDsid = embeddedDsid;
+                let usedPendingDsid = false;
+                if (!targetEmbeddedDsid && sha256Hash) {
+                    const pendingDsid = getPendingDatasetMfid(currentUserState.selected_project, TOOL_CONFIG.key, sha256Hash);
+                    if (pendingDsid) {
+                        targetEmbeddedDsid = pendingDsid;
+                        usedPendingDsid = true;
+                    }
+                }
+
                 const dsName = datasetNameOverride ? `${datasetNameOverride}_${file.name}` : file.name;
-                const dsRes = await api(`${TOOL_CONFIG.url_prefix}/api/create-dataset`, 'POST', {
-                    embedded_dsid: embeddedDsid,
+                const createPayload = {
+                    embedded_dsid: targetEmbeddedDsid,
                     sha256_hash: sha256Hash,
                     dataset_name: dsName,
                     session_name: sessionName || null,
                     comments,
                     keywords,
                     sample_unique_id: sampleUniqueId,
-                });
+                };
+
+                let dsRes;
+                try {
+                    dsRes = await api(`${TOOL_CONFIG.url_prefix}/api/create-dataset`, 'POST', createPayload);
+                } catch (err) {
+                    if (usedPendingDsid && (err.status === 403 || err.status === 404)) {
+                        clearPendingDatasetMfid(currentUserState.selected_project, TOOL_CONFIG.key, sha256Hash);
+                        createPayload.embedded_dsid = null;
+                        dsRes = await api(`${TOOL_CONFIG.url_prefix}/api/create-dataset`, 'POST', createPayload);
+                    } else {
+                        throw err;
+                    }
+                }
 
                 const datasetMfid = dsRes.dataset_mfid;
+                if (sha256Hash && datasetMfid) {
+                    setPendingDatasetMfid(currentUserState.selected_project, TOOL_CONFIG.key, sha256Hash, datasetMfid);
+                }
                 const step1Detail = dsRes.reused
                     ? `Dataset ${datasetMfid} (reused existing)`
                     : `Dataset ${datasetMfid} ready`;
@@ -356,6 +443,7 @@ async function startStandardUpload() {
                     : filesToSend;
 
                 if (filesToUpload.length === 0) {
+                    clearPendingDatasetMfid(currentUserState.selected_project, TOOL_CONFIG.key, sha256Hash);
                     steps.updateStep2({
                         percent: 100,
                         detail: 'Already uploaded (reused existing dataset)',
@@ -386,6 +474,8 @@ async function startStandardUpload() {
                     if (!uploadResults[0]?.ok) {
                         throw new Error(uploadResults[0]?.error || `Failed uploading ${file.name}`);
                     }
+
+                    clearPendingDatasetMfid(currentUserState.selected_project, TOOL_CONFIG.key, sha256Hash);
 
                     steps.updateStep2({
                         percent: 100,

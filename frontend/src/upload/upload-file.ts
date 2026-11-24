@@ -118,6 +118,16 @@ async function completeWithRetry(
   }
 }
 
+export type ResumeStorage = Pick<Storage, "getItem" | "setItem" | "removeItem">
+
+function getDefaultResumeStorage(): ResumeStorage | null {
+  try {
+    return typeof window !== "undefined" ? window.localStorage : null
+  } catch {
+    return null
+  }
+}
+
 export async function uploadDatasetFile(options: {
   datasetMfid: string
   file: Blob
@@ -125,8 +135,11 @@ export async function uploadDatasetFile(options: {
   onProgress?: (progress: UploadProgress) => void
   signal?: AbortSignal
   putPart?: PutPart
+  resumeStorage?: ResumeStorage | null
 }): Promise<DatasetFile> {
   const { datasetMfid, file, filename, putPart = putPartWithXhr } = options
+  const resumeStorage =
+    options.resumeStorage !== undefined ? options.resumeStorage : getDefaultResumeStorage()
   const onProgress = options.onProgress ?? (() => undefined)
   const signal = options.signal ?? new AbortController().signal
 
@@ -134,6 +147,33 @@ export async function uploadDatasetFile(options: {
   if (filenameIssues.length > 0) throw new UploadFilenameError(filenameIssues)
   if (file.size === 0) throw new Error("Empty files can't be uploaded.")
   if (file.size > MAX_UPLOAD_SIZE) throw new UploadSizeError()
+
+  const storageKey = `crucible_upload_idem:${datasetMfid}:${filename}:${file.size}`
+  const readStoredKey = (): string | null => {
+    if (!resumeStorage) return null
+    try {
+      const val = resumeStorage.getItem(storageKey)
+      return typeof val === "string" && /^[A-Za-z0-9-]{8,64}$/.test(val) ? val : null
+    } catch {
+      return null
+    }
+  }
+  const writeStoredKey = (key: string): void => {
+    if (!resumeStorage) return
+    try {
+      resumeStorage.setItem(storageKey, key)
+    } catch {
+      // Ignore quota or private browsing errors
+    }
+  }
+  const clearStoredKey = (): void => {
+    if (!resumeStorage) return
+    try {
+      resumeStorage.removeItem(storageKey)
+    } catch {
+      // Ignore errors
+    }
+  }
 
   const partLoaded = new Map<number, number>()
   let preparedBytes = 0
@@ -151,18 +191,50 @@ export async function uploadDatasetFile(options: {
   }
   report(true)
 
-  const initiation = await uploadsApi.initiate(
-    { dataset_mfid: datasetMfid, filename, size: file.size, idempotency_key: crypto.randomUUID() },
-    signal
-  )
+  const initiateWithStorageGuard = async (key: string) => {
+    try {
+      return await uploadsApi.initiate(
+        { dataset_mfid: datasetMfid, filename, size: file.size, idempotency_key: key },
+        signal
+      )
+    } catch (error) {
+      if (error instanceof HubApiClientError && !error.details.retryable) {
+        clearStoredKey()
+      }
+      throw error
+    }
+  }
+
+  let storedKey = readStoredKey()
+  let usedStoredKey = Boolean(storedKey)
+  let idempotencyKey = storedKey ?? crypto.randomUUID()
+  if (!usedStoredKey) {
+    writeStoredKey(idempotencyKey)
+  }
+
+  let initiation = await initiateWithStorageGuard(idempotencyKey)
+
+  if (usedStoredKey && initiation.state !== "uploading" && initiation.state !== "completed") {
+    clearStoredKey()
+    idempotencyKey = crypto.randomUUID()
+    writeStoredKey(idempotencyKey)
+    usedStoredKey = false
+    initiation = await initiateWithStorageGuard(idempotencyKey)
+  }
+
   if (initiation.state === "completed") {
+    clearStoredKey()
     onProgress({ phase: "done", preparedBytes: file.size, uploadedBytes: file.size })
     return initiation.file
   }
   const uploadId = initiation.upload_id
   const partSize = initiation.part_size ?? undefined
   const abortSession = () =>
-    uploadsApi.abort({ dataset_mfid: datasetMfid, upload_id: uploadId }).catch(() => undefined)
+    Promise.resolve(uploadsApi.abort({ dataset_mfid: datasetMfid, upload_id: uploadId }))
+      .then(() => {
+        clearStoredKey()
+      })
+      .catch(() => undefined)
 
   let parts: ReturnType<typeof planUploadParts>
   try {
@@ -212,7 +284,16 @@ export async function uploadDatasetFile(options: {
           if (current.part_size != null && partSize !== undefined && current.part_size !== partSize) {
             throw new Error("The upload session uses an unsupported part size.")
           }
-          return new Set(current.acknowledged_part_numbers)
+          const ackSet = new Set(current.acknowledged_part_numbers)
+          let ackBytes = 0
+          for (const partNum of ackSet) {
+            ackBytes += partSizes.get(partNum) ?? 0
+          }
+          completedBytes = ackBytes
+          if (ackBytes > 0) {
+            report(true)
+          }
+          return ackSet
         },
         signParts: async (signatures) => {
           const signed = await uploadsApi.sign(
@@ -262,6 +343,7 @@ export async function uploadDatasetFile(options: {
     )
     phase = "done"
     report(true)
+    clearStoredKey()
     return completed
   } catch (error) {
     preparation.abort()

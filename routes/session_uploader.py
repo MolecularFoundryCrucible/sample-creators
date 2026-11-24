@@ -184,6 +184,25 @@ def _list_matching_session_datasets(project_id: str, session_dataset_name: str, 
     return matches
 
 
+def _try_list_existing_filenames(dataset_mfid: str) -> list[str] | None:
+    """Return existing filenames stored on dataset_mfid, or None if list_files raises."""
+    try:
+        files = cruc_client.datasets.list_files(dataset_mfid) or []
+    except Exception as e:
+        logger.warning(f"Failed listing files for candidate dataset '{dataset_mfid}': {e}")
+        return None
+    seen: set[str] = set()
+    filenames: list[str] = []
+    for f in files:
+        if not isinstance(f, dict):
+            continue
+        name = f.get("filename") or f.get("name") or f.get("file_name")
+        if isinstance(name, str) and name and name not in seen:
+            seen.add(name)
+            filenames.append(name)
+    return filenames
+
+
 _list_existing_filenames = list_existing_dataset_filenames
 
 
@@ -337,11 +356,47 @@ def register_session_uploader_routes(bp, tool_config: dict) -> None:
             if isinstance(c, dict) and c.get("unique_id")
         }
 
+        # Accept optional "exclude_dsids" list in request JSON and seed claimed_child_dsids
+        raw_exclude = data.get("exclude_dsids") or []
+        claimed_child_dsids: set[str] = {
+            d.strip() for d in raw_exclude
+            if isinstance(d, str) and d.strip()
+        }
+
+        candidates_by_name: dict[str, list[str]] = {}
+        for c in (existing_children or []):
+            if isinstance(c, dict) and c.get("unique_id"):
+                dname = c.get("dataset_name")
+                if isinstance(dname, str) and dname:
+                    candidates_by_name.setdefault(dname, []).append(c["unique_id"])
+
+        files_cache: dict[str, list[str] | None] = {}
+
         children = []
         for item in items:
             matched_dsid = None
-            if item["sha256_hash"]:
-                matched_dsid, _ = resolve_dsid_for_sha256(item["sha256_hash"], valid_child_dsids)
+            same_name_unclaimed = {
+                d for d in candidates_by_name.get(item["dataset_name"], [])
+                if d not in claimed_child_dsids
+            }
+            if item["sha256_hash"] and same_name_unclaimed:
+                matched_dsid, _ = resolve_dsid_for_sha256(item["sha256_hash"], same_name_unclaimed)
+                if matched_dsid:
+                    claimed_child_dsids.add(matched_dsid)
+
+            if matched_dsid is None:
+                for cand_dsid in candidates_by_name.get(item["dataset_name"], []):
+                    if cand_dsid in claimed_child_dsids:
+                        continue
+                    if cand_dsid not in files_cache:
+                        files_cache[cand_dsid] = _try_list_existing_filenames(cand_dsid)
+                    cand_files = files_cache[cand_dsid]
+                    if cand_files is None:
+                        continue
+                    if item["dataset_name"] not in cand_files:
+                        matched_dsid = cand_dsid
+                        claimed_child_dsids.add(cand_dsid)
+                        break
 
             try:
                 child_dsid, reused = create_or_update_dataset(
@@ -372,7 +427,12 @@ def register_session_uploader_routes(bp, tool_config: dict) -> None:
                 except Exception as e:
                     logger.warning(f"Failed linking sample {sample_uid} to child {child_dsid}: {e}")
 
-            existing_filenames = _list_existing_filenames(child_dsid) if reused else []
+            if reused:
+                if child_dsid not in files_cache or files_cache[child_dsid] is None:
+                    files_cache[child_dsid] = _try_list_existing_filenames(child_dsid)
+                existing_filenames = files_cache[child_dsid] or []
+            else:
+                existing_filenames = []
 
             children.append({
                 "client_id": item["client_id"],

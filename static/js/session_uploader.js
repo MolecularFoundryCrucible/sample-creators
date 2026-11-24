@@ -683,6 +683,7 @@ async function runChildUploadPipeline(itemsToProcess, signal) {
             }
 
             try {
+                const excludeDsids = Array.from(itemStates.values()).map((s) => s?.datasetMfid).filter(Boolean);
                 const prepRes = await api(`${TOOL_CONFIG.url_prefix}/api/session/prepare-children`, 'POST', {
                     session_dsid: activeSession.sessionDsid,
                     session_name: activeSession.sessionName,
@@ -690,6 +691,7 @@ async function runChildUploadPipeline(itemsToProcess, signal) {
                     comments: activeSession.comments,
                     keywords: activeSession.keywords,
                     items: preparedPayloadItems,
+                    exclude_dsids: excludeDsids,
                 });
 
                 const byClientId = new Map();
