@@ -482,9 +482,19 @@ async function executeConfirmAndUpload(opts) {
     const progressEl = document.getElementById('gc-upload-progress');
     const resultEl = document.getElementById('gc-upload-result');
     progressSection.classList.remove('hidden');
-    progressEl.innerHTML = '<div class="info-text">Creating/updating dataset record in Crucible…</div>';
+    try {
+        progressSection.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+    } catch {
+        // Ignore scroll errors
+    }
     resultEl.innerHTML = '';
 
+    const progressCtrl = renderSingleUploadProgress(progressEl, {
+        label: 'Preparing Dataset',
+        detail: 'Creating/updating dataset record in Crucible...',
+    });
+
+    const releaseGuard = beginUploadTabGuard();
     try {
         const confirmRes = await api('/b30-gc-ec/api/confirm-upload', 'POST', {
             dsid: prepareRes.dsid,
@@ -498,7 +508,14 @@ async function executeConfirmAndUpload(opts) {
         });
 
         const datasetMfid = confirmRes.dataset_mfid;
-        progressEl.innerHTML = `<div class="info-text">Dataset <code>${datasetMfid}</code> ready. Uploading ${files.length} file(s) to storage…</div>`;
+        progressCtrl.update({
+            label: `Uploading ${files.length} file(s)`,
+            detail: `Dataset ${datasetMfid} ready. Starting file transfer...`,
+            percent: 0,
+        });
+
+        const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
+        const fileUploaded = new Map();
 
         // Upload files directly to storage
         const uploadResults = await window.CrucibleUpload.uploadFiles({
@@ -518,14 +535,27 @@ async function executeConfirmAndUpload(opts) {
                 return { requested: true };
             },
             onProgress: (file, p) => {
-                const pct = file.size ? Math.min(100, Math.round((p.uploadedBytes / file.size) * 100)) : 100;
-                progressEl.innerHTML = `<div class="info-text">Uploading <code>${escapeHtml(file.name)}</code>: ${pct}%</div>`;
+                fileUploaded.set(file, Math.min(file.size, p.uploadedBytes));
+                let done = 0;
+                for (const bytes of fileUploaded.values()) done += bytes;
+                const pct = totalBytes ? Math.min(100, Math.floor((100 * done) / totalBytes)) : 100;
+                progressCtrl.update({
+                    label: `Uploading ${files.length} file(s)`,
+                    detail: `Uploading ${file.name} (${pct}%)`,
+                    percent: pct,
+                });
             },
         });
 
         const allOk = uploadResults.every(r => r.ok);
         if (allOk) {
-            progressEl.innerHTML = '<div class="info-text" style="color:#22543d; font-weight:700;">✓ All files uploaded and ingestion requested!</div>';
+            progressCtrl.update({
+                label: 'Upload Complete',
+                detail: `All ${files.length} file(s) attached to ${datasetMfid}`,
+                percent: 100,
+                isDone: true,
+            });
+            progressCtrl.hideNotice();
             resultEl.innerHTML = `<div class="alert alert-success" style="margin-top:10px;">
                 <strong>Upload Complete!</strong> Dataset: <code>${escapeHtml(datasetMfid)}</code><br>
                 <a href="${escapeHtml(confirmRes.hub_url)}" target="_blank" style="font-weight:700; color:#1a365d; text-decoration:underline;">
@@ -534,6 +564,7 @@ async function executeConfirmAndUpload(opts) {
             </div>`;
             showAlert('success', `Upload complete for dataset ${datasetMfid}`, { linkUrl: confirmRes.hub_url || hubDatasetUrl(datasetMfid) });
         } else {
+            progressCtrl.hideNotice();
             const failed = uploadResults.filter(r => !r.ok);
             progressEl.innerHTML = `<div class="alert alert-error">Failed uploading ${failed.length} file(s).</div>`;
         }
@@ -541,6 +572,8 @@ async function executeConfirmAndUpload(opts) {
     } catch (e) {
         progressEl.innerHTML = `<div class="alert alert-error">Upload failed: ${escapeHtml(e.message)}</div>`;
         showAlert('error', `Upload failed: ${e.message}`);
+    } finally {
+        releaseGuard();
     }
 }
 

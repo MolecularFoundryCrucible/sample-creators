@@ -326,6 +326,10 @@ function updateActionButtons() {
     if (folderInput) {
         folderInput.disabled = isUploading;
     }
+    const activeNotice = document.getElementById('session-active-notice');
+    if (activeNotice) {
+        activeNotice.classList.toggle('hidden', !isUploading);
+    }
 }
 
 async function startSessionUpload() {
@@ -447,6 +451,11 @@ async function executeSessionStartAndUpload(existingSessionDsid) {
 
         initializeProgressTable(currentPlan.items);
         renderParentSessionBanner(activeSession);
+        try {
+            document.getElementById('section-session-progress')?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+        } catch {
+            // Ignore scroll errors
+        }
 
         if (activeAbortController.signal.aborted) {
             markRemainingCancelled(currentPlan.items);
@@ -494,6 +503,11 @@ async function retryFailedSessionItems() {
     isUploading = true;
     activeAbortController = new AbortController();
     updateActionButtons();
+    try {
+        document.getElementById('section-session-progress')?.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+    } catch {
+        // Ignore scroll errors
+    }
     showAlert('info', `Retrying ${retryItems.length} item(s) in session ${activeSession.sessionDsid}...`);
 
     try {
@@ -678,6 +692,7 @@ async function runChildUploadPipeline(itemsToProcess, signal) {
                 setItemState(item.clientId, {
                     ...(itemStates.get(item.clientId) || {}),
                     status: 'preparing',
+                    percent: 0,
                     error: null,
                 });
             }
@@ -720,6 +735,7 @@ async function runChildUploadPipeline(itemsToProcess, signal) {
                         setItemState(item.clientId, {
                             ...prev,
                             status: 'queued',
+                            percent: 0,
                             datasetMfid: child.dataset_mfid,
                             reused: Boolean(child.reused),
                             hubUrl: safeHubUrl(child.hub_url || hubDatasetUrl(child.dataset_mfid)),
@@ -941,6 +957,8 @@ async function uploadSingleChildItem(item, signal) {
 function resetProgressSection() {
     const section = document.getElementById('section-session-progress');
     if (section) section.classList.add('hidden');
+    const notice = document.getElementById('session-active-notice');
+    if (notice) notice.classList.add('hidden');
     const banner = document.getElementById('session-parent-banner');
     if (banner) {
         banner.innerHTML = '';
@@ -1065,10 +1083,15 @@ function updateItemRow(clientId, state) {
             badgeClass = 'status-cancelled';
         }
 
+        const pct = typeof state.percent === 'number' ? Math.max(0, Math.min(100, Math.round(state.percent))) : 0;
+        const progressHtml = (state.status === 'hashing' || state.status === 'uploading')
+            ? `<div class="inline-row-progress"><div class="inline-row-progress-fill" style="width:${pct}%;"></div></div>`
+            : '';
+
         const errorHtml = state.error
             ? `<span class="session-item-error">${escapeHtml(state.error)}</span>`
             : '';
-        statusCell.innerHTML = `<span class="status-badge ${badgeClass}">${escapeHtml(label)}</span>${errorHtml}`;
+        statusCell.innerHTML = `<span class="status-badge ${badgeClass}">${escapeHtml(label)}</span>${progressHtml}${errorHtml}`;
     }
 
     const datasetCell = row.querySelector('[data-col="dataset"]');
@@ -1098,9 +1121,29 @@ function updateOverallProgress() {
     const cancelled = countItemsByStatus(['cancelled']);
     const active = countItemsByStatus(['hashing', 'preparing', 'uploading']);
 
+    let totalPercentSum = 0;
+    const prepBase = activeSession?.reused ? 10 : 5;
+    const uploadRange = activeSession?.reused ? 90 : 95;
+
+    for (const state of itemStates.values()) {
+        const itemPct = typeof state.percent === 'number' ? Math.max(0, Math.min(100, state.percent)) : 0;
+        if (state.status === 'completed' || state.status === 'failed' || state.status === 'cancelled') {
+            totalPercentSum += 100;
+        } else if (state.status === 'hashing') {
+            totalPercentSum += (itemPct / 100) * 10;
+        } else if (state.status === 'preparing' || (state.status === 'queued' && state.datasetMfid)) {
+            totalPercentSum += prepBase;
+        } else if (state.status === 'uploading') {
+            totalPercentSum += prepBase + (itemPct / 100) * uploadRange;
+        } else {
+            totalPercentSum += 0;
+        }
+    }
+    const pct = Math.min(100, Math.round(totalPercentSum / total));
+
     const summaryEl = document.getElementById('session-overall-summary');
     if (summaryEl) {
-        const parts = [`Completed: ${completed} / ${total}`];
+        const parts = [`Overall: ${pct}%`, `Completed: ${completed} / ${total}`];
         if (active) parts.push(`Active: ${active}`);
         if (failed) parts.push(`Failed: ${failed}`);
         if (cancelled) parts.push(`Cancelled: ${cancelled}`);
@@ -1109,7 +1152,6 @@ function updateOverallProgress() {
 
     const fillEl = document.getElementById('session-overall-bar-fill');
     if (fillEl) {
-        const pct = Math.round(((completed + failed + cancelled) / total) * 100);
         fillEl.style.width = `${pct}%`;
         fillEl.style.background = failed > 0 ? '#c53030' : completed === total ? '#2f855a' : '#2b6cb0';
     }

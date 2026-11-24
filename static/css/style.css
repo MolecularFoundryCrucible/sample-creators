@@ -749,6 +749,21 @@ input[readonly] {
 }
 
 /* ========== Standard Uploader Two-Step Progress ========== */
+.upload-active-notice {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    background: #fffaf0;
+    border: 1px solid #ed8936;
+    border-left: 4px solid #dd6b20;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin: 10px 0 12px;
+    color: #7b341e;
+    font-size: 14px;
+    font-weight: 600;
+}
+
 .upload-steps {
     display: flex;
     flex-direction: column;
@@ -758,9 +773,15 @@ input[readonly] {
 
 .upload-step {
     background: #ffffff;
-    border: 1px solid #e2e8f0;
-    border-radius: 6px;
-    padding: 10px 14px;
+    border: 1px solid #cbd5e0;
+    border-radius: 8px;
+    padding: 12px 16px;
+    transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+
+.upload-step.is-active {
+    border-color: #63b3ed;
+    box-shadow: 0 2px 8px rgba(43, 108, 176, 0.12);
 }
 
 .upload-step-header {
@@ -771,9 +792,9 @@ input[readonly] {
 }
 
 .upload-step-label {
-    font-size: 13px;
-    font-weight: 600;
-    color: #2d3748;
+    font-size: 14px;
+    font-weight: 700;
+    color: #1a365d;
 }
 
 .upload-step-detail {
@@ -783,16 +804,17 @@ input[readonly] {
 }
 
 .upload-step-pct {
-    font-size: 12px;
-    font-weight: 600;
-    color: #4a5568;
+    font-size: 15px;
+    font-weight: 700;
+    color: #1a365d;
+    font-variant-numeric: tabular-nums;
 }
 
 .upload-step-bar {
     width: 100%;
-    height: 8px;
-    background: #edf2f7;
-    border-radius: 6px;
+    height: 12px;
+    background: #e2e8f0;
+    border-radius: 999px;
     overflow: hidden;
 }
 
@@ -800,10 +822,39 @@ input[readonly] {
     height: 100%;
     width: 0%;
     background: #2b6cb0;
-    border-radius: 6px;
+    border-radius: 999px;
     transition: width 0.15s ease;
+}
+
+.upload-step-bar-fill.is-active:not(.is-done) {
+    background-image: linear-gradient(45deg, rgba(255,255,255,0.2) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.2) 50%, rgba(255,255,255,0.2) 75%, transparent 75%, transparent);
+    background-size: 20px 20px;
+    animation: upload-bar-stripes 0.8s linear infinite;
+}
+
+@keyframes upload-bar-stripes {
+    from { background-position: 0 0; }
+    to { background-position: 20px 0; }
 }
 
 .upload-step-bar-fill.is-done {
     background: #38a169;
+    background-image: none;
+    animation: none;
+}
+
+.inline-row-progress {
+    width: 100%;
+    height: 6px;
+    background: #e2e8f0;
+    border-radius: 999px;
+    overflow: hidden;
+    margin-top: 5px;
+}
+
+.inline-row-progress-fill {
+    height: 100%;
+    background: #2b6cb0;
+    border-radius: 999px;
+    transition: width 0.15s ease;
 }

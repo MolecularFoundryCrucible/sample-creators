@@ -67,8 +67,11 @@ function renderTwoStepProgress(containerEl, opts = {}) {
     const step2LabelText = opts.step2Label || 'Step 2/2: Uploading';
 
     containerEl.innerHTML = `
+        <div class="upload-active-notice" id="std-active-notice">
+            Upload in progress -- please do not close or refresh this browser tab until the upload is finished.
+        </div>
         <div class="upload-steps">
-            <div class="upload-step">
+            <div class="upload-step is-active" id="step-1-card">
                 <div class="upload-step-header">
                     <div>
                         <span class="upload-step-label">${escapeHtml(step1LabelText)}</span>
@@ -77,10 +80,10 @@ function renderTwoStepProgress(containerEl, opts = {}) {
                     <span class="upload-step-pct" id="step-1-pct">0%</span>
                 </div>
                 <div class="upload-step-bar">
-                    <div class="upload-step-bar-fill" id="step-1-fill" style="width: 0%;"></div>
+                    <div class="upload-step-bar-fill is-active" id="step-1-fill" style="width: 0%;"></div>
                 </div>
             </div>
-            <div class="upload-step">
+            <div class="upload-step" id="step-2-card">
                 <div class="upload-step-header">
                     <div>
                         <span class="upload-step-label">${escapeHtml(step2LabelText)}</span>
@@ -95,20 +98,32 @@ function renderTwoStepProgress(containerEl, opts = {}) {
         </div>
     `;
 
+    const noticeEl = containerEl.querySelector('#std-active-notice');
+    const step1Card = containerEl.querySelector('#step-1-card');
     const step1Fill = containerEl.querySelector('#step-1-fill');
     const step1Pct = containerEl.querySelector('#step-1-pct');
     const step1Detail = containerEl.querySelector('#step-1-detail');
 
+    const step2Card = containerEl.querySelector('#step-2-card');
     const step2Fill = containerEl.querySelector('#step-2-fill');
     const step2Pct = containerEl.querySelector('#step-2-pct');
     const step2Detail = containerEl.querySelector('#step-2-detail');
 
+    const hideNotice = () => {
+        if (noticeEl) noticeEl.style.display = 'none';
+    };
+
     return {
+        hideNotice,
         updateStep1({ percent, detail, isDone }) {
             const clamped = Math.max(0, Math.min(100, Math.round(percent ?? 0)));
             if (step1Fill) {
                 step1Fill.style.width = `${clamped}%`;
                 step1Fill.classList.toggle('is-done', Boolean(isDone));
+                step1Fill.classList.toggle('is-active', !isDone);
+            }
+            if (step1Card) {
+                step1Card.classList.toggle('is-active', !isDone);
             }
             if (step1Pct) {
                 step1Pct.textContent = `${clamped}%`;
@@ -116,18 +131,29 @@ function renderTwoStepProgress(containerEl, opts = {}) {
             if (step1Detail && detail !== undefined) {
                 step1Detail.textContent = detail;
             }
+            if (isDone && step2Card && step2Fill && !step2Fill.classList.contains('is-done')) {
+                step2Card.classList.add('is-active');
+                step2Fill.classList.add('is-active');
+            }
         },
         updateStep2({ percent, detail, isDone }) {
             const clamped = Math.max(0, Math.min(100, Math.round(percent ?? 0)));
             if (step2Fill) {
                 step2Fill.style.width = `${clamped}%`;
                 step2Fill.classList.toggle('is-done', Boolean(isDone));
+                step2Fill.classList.toggle('is-active', !isDone);
+            }
+            if (step2Card) {
+                step2Card.classList.toggle('is-active', !isDone);
             }
             if (step2Pct) {
                 step2Pct.textContent = `${clamped}%`;
             }
             if (step2Detail && detail !== undefined) {
                 step2Detail.textContent = detail;
+            }
+            if (isDone) {
+                hideNotice();
             }
         },
     };
@@ -189,14 +215,21 @@ async function startStandardUpload() {
     const progressEl = document.getElementById('std-upload-progress');
     const resultEl = document.getElementById('std-upload-result');
     progressSection.classList.remove('hidden');
+    try {
+        progressSection.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+    } catch {
+        // Ignore scroll errors
+    }
     resultEl.innerHTML = '';
 
     showAlert('info', 'Starting upload...');
 
+    let steps = null;
+
     try {
         if (groupAsOne) {
             // Group all files into a single dataset
-            const steps = renderTwoStepProgress(progressEl, {
+            steps = renderTwoStepProgress(progressEl, {
                 step1Label: 'Step 1/2: Create Dataset',
                 step2Label: 'Step 2/2: Uploading',
             });
@@ -351,6 +384,8 @@ async function startStandardUpload() {
                 });
             }
 
+            steps.hideNotice();
+
             const safeUrl = resolveSafeDatasetHubUrl(dsRes.hub_url, datasetMfid);
             const hubLinkHtml = safeUrl
                 ? `<br><a href="${escapeHtml(safeUrl)}" target="_blank" rel="noopener noreferrer" style="font-weight:700; color:#1a365d; text-decoration:underline;">View Dataset in Crucible Hub &rarr;</a>`
@@ -367,7 +402,7 @@ async function startStandardUpload() {
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
                 const fileIdxLabel = `[${i + 1}/${files.length}]`;
-                const steps = renderTwoStepProgress(progressEl, {
+                steps = renderTwoStepProgress(progressEl, {
                     step1Label: `${fileIdxLabel} Step 1/2: Create Dataset (${file.name})`,
                     step2Label: `${fileIdxLabel} Step 2/2: Uploading (${file.name})`,
                 });
@@ -503,6 +538,8 @@ async function startStandardUpload() {
                 results.push({ file: file.name, datasetMfid, hubUrl: dsRes.hub_url });
             }
 
+            steps?.hideNotice?.();
+
             let resHtml = '<div class="alert alert-success" style="margin-top:10px;"><strong>Uploaded Datasets:</strong><ul style="margin:4px 0 0 16px;">';
             results.forEach(r => {
                 const safeUrl = resolveSafeDatasetHubUrl(r.hubUrl, r.datasetMfid);
@@ -525,6 +562,7 @@ async function startStandardUpload() {
         }
 
     } catch (e) {
+        steps?.hideNotice?.();
         progressEl.innerHTML = `<div class="alert alert-error">Upload failed: ${escapeHtml(e.message)}</div>`;
         showAlert('error', `Upload failed: ${e.message}`);
     } finally {

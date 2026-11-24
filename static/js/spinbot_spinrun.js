@@ -101,13 +101,24 @@
         const comments = (document.getElementById('spinrun-comments').value || '').trim() || null;
 
         uploadBtn.disabled = true;
-        statusEl.textContent = 'Preparing SpinRun dataset...';
+        const releaseGuard = beginUploadTabGuard();
+        const progressCtrl = renderSingleUploadProgress(statusEl, {
+            label: 'Preparing SpinRun Dataset',
+            detail: 'Computing hashes and creating dataset record...',
+        });
 
         try {
             let sha256 = '';
             if (!_embeddedInfo.dsid && window.InstrumentParsers?.computeBlobSha256) {
                 try {
-                    sha256 = await window.InstrumentParsers.computeBlobSha256(_h5File);
+                    sha256 = await window.InstrumentParsers.computeBlobSha256(_h5File, (hashed, total) => {
+                        const hPct = total ? Math.min(100, Math.round((hashed / total) * 100)) : 100;
+                        progressCtrl.update({
+                            label: 'Hashing SpinRun file',
+                            detail: `Computing SHA-256 (${hPct}%)...`,
+                            percent: Math.round(hPct * 0.2),
+                        });
+                    });
                 } catch (e) {
                     console.warn('Could not compute SHA-256:', e);
                 }
@@ -124,31 +135,70 @@
             });
 
             const datasetMfid = prep.dataset_mfid;
-            statusEl.textContent = `Uploading files to dataset ${datasetMfid}...`;
+            progressCtrl.update({
+                label: 'Uploading files',
+                detail: `Dataset ${datasetMfid} ready. Starting file transfer...`,
+                percent: 20,
+            });
+
+            const allFiles = [_yamlFile, _h5File].filter(Boolean);
+            const totalBytes = allFiles.reduce((sum, f) => sum + f.size, 0);
+            const fileUploaded = new Map();
+
+            const calcOverallPct = () => {
+                let loaded = 0;
+                for (const b of fileUploaded.values()) loaded += b;
+                return totalBytes ? Math.min(100, Math.round((loaded / totalBytes) * 100)) : 100;
+            };
 
             // If .yaml companion is present, upload it first with ingestion requested=false
             if (_yamlFile && window.CrucibleUpload?.uploadFiles) {
-                statusEl.textContent = `Uploading companion ${_yamlFile.name}...`;
                 const res = await window.CrucibleUpload.uploadFiles({
                     datasetMfid,
                     files: [_yamlFile],
                     ingestion: () => ({ requested: false }),
+                    onProgress: (file, p) => {
+                        fileUploaded.set(file, Math.min(file.size, p.uploadedBytes));
+                        const transferPct = calcOverallPct();
+                        progressCtrl.update({
+                            label: 'Uploading companion file',
+                            detail: `Uploading ${file.name} (${transferPct}%)...`,
+                            percent: Math.round(20 + transferPct * 0.8),
+                        });
+                    },
                 });
                 const failed = res.filter(r => !r.ok);
                 if (failed.length) throw new Error(failed.map(f => `${f.file.name}: ${f.error}`).join('; '));
+                fileUploaded.set(_yamlFile, _yamlFile.size);
             }
 
             // Upload .h5 file and request SpinbotSpinRunIngestor
-            statusEl.textContent = `Uploading ${_h5File.name}...`;
             if (window.CrucibleUpload?.uploadFiles) {
                 const res = await window.CrucibleUpload.uploadFiles({
                     datasetMfid,
                     files: [_h5File],
                     ingestion: () => ({ requested: true, ingestionClass: 'SpinbotSpinRunIngestor' }),
+                    onProgress: (file, p) => {
+                        fileUploaded.set(file, Math.min(file.size, p.uploadedBytes));
+                        const transferPct = calcOverallPct();
+                        progressCtrl.update({
+                            label: 'Uploading SpinRun data',
+                            detail: `Uploading ${file.name} (${transferPct}%)...`,
+                            percent: Math.round(20 + transferPct * 0.8),
+                        });
+                    },
                 });
                 const failed = res.filter(r => !r.ok);
                 if (failed.length) throw new Error(failed.map(f => `${f.file.name}: ${f.error}`).join('; '));
             }
+
+            progressCtrl.update({
+                label: 'Upload Complete',
+                detail: `Dataset ${datasetMfid} ready`,
+                percent: 100,
+                isDone: true,
+            });
+            progressCtrl.hideNotice();
 
             showAlert('success', 'SpinBot SpinRun uploaded successfully!', { linkUrl: prep.hub_url || hubDatasetUrl(datasetMfid) });
             statusEl.innerHTML = `<a href="${escapeHtml(prep.hub_url)}" target="_blank">View Dataset in Crucible Hub (${escapeHtml(datasetMfid)})</a>`;
@@ -156,6 +206,7 @@
             showAlert('error', 'Upload failed: ' + e.message);
             statusEl.textContent = 'Upload failed: ' + e.message;
         } finally {
+            releaseGuard();
             uploadBtn.disabled = false;
         }
     };

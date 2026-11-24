@@ -195,7 +195,11 @@
         const comments = (document.getElementById('xrd-comments').value || '').trim() || null;
 
         uploadBtn.disabled = true;
-        statusEl.textContent = 'Preparing upload...';
+        const releaseGuard = beginUploadTabGuard();
+        const progressCtrl = renderSingleUploadProgress(statusEl, {
+            label: 'Preparing XRD Upload',
+            detail: 'Creating dataset records in Crucible...',
+        });
 
         try {
             if (_mode === 'single') {
@@ -213,23 +217,42 @@
                 });
 
                 const uploads = prep.uploads || [];
-                statusEl.textContent = `Uploading ${uploads.length} dataset file(s)...`;
 
                 for (let i = 0; i < uploads.length; i++) {
                     const u = uploads[i];
                     const fileObj = _assignments[i]?.file || _selectedFiles[i];
-                    statusEl.textContent = `Uploading file ${i + 1}/${uploads.length}: ${u.filename}...`;
+                    progressCtrl.update({
+                        label: `[${i + 1}/${uploads.length}] Uploading ${u.filename}`,
+                        detail: `Transferring ${u.filename}...`,
+                        percent: Math.round((i / uploads.length) * 100),
+                    });
 
                     if (window.CrucibleUpload?.uploadFiles) {
                         const res = await window.CrucibleUpload.uploadFiles({
                             datasetMfid: u.dataset_mfid,
                             files: [fileObj],
                             ingestion: () => ({ requested: true, ingestionClass: 'InorganicXRDIngestor' }),
+                            onProgress: (f, p) => {
+                                const filePct = f.size ? Math.min(100, Math.round((p.uploadedBytes / f.size) * 100)) : 100;
+                                const overallPct = Math.round(((i + (filePct / 100)) / uploads.length) * 100);
+                                progressCtrl.update({
+                                    label: `[${i + 1}/${uploads.length}] Uploading ${u.filename}`,
+                                    detail: `Transferring ${u.filename} (${filePct}%)...`,
+                                    percent: overallPct,
+                                });
+                            },
                         });
                         const failed = res.filter(r => !r.ok);
                         if (failed.length) throw new Error(failed.map(f => `${f.file.name}: ${f.error}`).join('; '));
                     }
                 }
+                progressCtrl.update({
+                    label: 'Upload Complete',
+                    detail: `Uploaded ${uploads.length} dataset(s)`,
+                    percent: 100,
+                    isDone: true,
+                });
+                progressCtrl.hideNotice();
                 showAlert('success', `Successfully created and uploaded ${uploads.length} dataset(s)!`, uploads.length === 1 ? { linkUrl: uploads[0].hub_url } : { linkUrl: hubProjectUrl(currentUserState?.selected_project), linkText: 'Open Project in Crucible Hub \u2197' });
                 statusEl.innerHTML = uploads.map(u => `<a href="${escapeHtml(u.hub_url)}" target="_blank">${escapeHtml(u.filename)}</a>`).join(', ');
 
@@ -256,21 +279,40 @@
                 });
 
                 const uploads = prep.uploads || [];
-                statusEl.textContent = `Uploading file to ${uploads.length} dataset(s)...`;
 
                 for (let i = 0; i < uploads.length; i++) {
                     const u = uploads[i];
-                    statusEl.textContent = `Uploading to dataset ${i + 1}/${uploads.length} (${u.sample_name})...`;
+                    progressCtrl.update({
+                        label: `[${i + 1}/${uploads.length}] Uploading ${combinedFile.name}`,
+                        detail: `Uploading to dataset for ${u.sample_name}...`,
+                        percent: Math.round((i / uploads.length) * 100),
+                    });
                     if (window.CrucibleUpload?.uploadFiles) {
                         const res = await window.CrucibleUpload.uploadFiles({
                             datasetMfid: u.dataset_mfid,
                             files: [combinedFile],
                             ingestion: () => ({ requested: true, ingestionClass: 'InorganicXRDIngestor' }),
+                            onProgress: (f, p) => {
+                                const filePct = f.size ? Math.min(100, Math.round((p.uploadedBytes / f.size) * 100)) : 100;
+                                const overallPct = Math.round(((i + (filePct / 100)) / uploads.length) * 100);
+                                progressCtrl.update({
+                                    label: `[${i + 1}/${uploads.length}] Uploading ${combinedFile.name}`,
+                                    detail: `Uploading to ${u.sample_name} (${filePct}%)...`,
+                                    percent: overallPct,
+                                });
+                            },
                         });
                         const failed = res.filter(r => !r.ok);
                         if (failed.length) throw new Error(failed.map(f => `${f.file.name}: ${f.error}`).join('; '));
                     }
                 }
+                progressCtrl.update({
+                    label: 'Upload Complete',
+                    detail: `Uploaded to ${uploads.length} sample dataset(s)`,
+                    percent: 100,
+                    isDone: true,
+                });
+                progressCtrl.hideNotice();
                 showAlert('success', `Successfully uploaded to ${uploads.length} sample dataset(s)!`, uploads.length === 1 ? { linkUrl: uploads[0].hub_url } : { linkUrl: hubProjectUrl(currentUserState?.selected_project), linkText: 'Open Project in Crucible Hub \u2197' });
                 statusEl.innerHTML = uploads.map(u => `<a href="${escapeHtml(u.hub_url)}" target="_blank">${escapeHtml(u.sample_name)}</a>`).join(', ');
 
@@ -294,21 +336,40 @@
                 });
 
                 const targets = prep.upload_targets || [];
-                statusEl.textContent = `Uploading file to parent and ${targets.length - 1} child dataset(s)...`;
 
                 for (let i = 0; i < targets.length; i++) {
                     const dsid = targets[i];
-                    statusEl.textContent = `Uploading to dataset ${i + 1}/${targets.length}...`;
+                    progressCtrl.update({
+                        label: `[${i + 1}/${targets.length}] Uploading ${combinedFile.name}`,
+                        detail: `Uploading to dataset ${i + 1}/${targets.length}...`,
+                        percent: Math.round((i / targets.length) * 100),
+                    });
                     if (window.CrucibleUpload?.uploadFiles) {
                         const res = await window.CrucibleUpload.uploadFiles({
                             datasetMfid: dsid,
                             files: [combinedFile],
                             ingestion: () => ({ requested: true, ingestionClass: 'InorganicXRDIngestor' }),
+                            onProgress: (f, p) => {
+                                const filePct = f.size ? Math.min(100, Math.round((p.uploadedBytes / f.size) * 100)) : 100;
+                                const overallPct = Math.round(((i + (filePct / 100)) / targets.length) * 100);
+                                progressCtrl.update({
+                                    label: `[${i + 1}/${targets.length}] Uploading ${combinedFile.name}`,
+                                    detail: `Transferring file (${filePct}%)...`,
+                                    percent: overallPct,
+                                });
+                            },
                         });
                         const failed = res.filter(r => !r.ok);
                         if (failed.length) throw new Error(failed.map(f => `${f.file.name}: ${f.error}`).join('; '));
                     }
                 }
+                progressCtrl.update({
+                    label: 'Upload Complete',
+                    detail: `Uploaded to parent and ${targets.length - 1} child datasets`,
+                    percent: 100,
+                    isDone: true,
+                });
+                progressCtrl.hideNotice();
                 showAlert('success', `Uploaded to parent and ${targets.length - 1} child datasets!`, { linkUrl: prep.parent_hub_url, linkText: 'Open Parent Dataset in Crucible Hub \u2197' });
                 statusEl.innerHTML = `<a href="${escapeHtml(prep.parent_hub_url)}" target="_blank">View Parent Dataset</a>`;
             }
@@ -316,6 +377,7 @@
             showAlert('error', 'Upload failed: ' + e.message);
             statusEl.textContent = 'Upload failed: ' + e.message;
         } finally {
+            releaseGuard();
             uploadBtn.disabled = false;
         }
     };

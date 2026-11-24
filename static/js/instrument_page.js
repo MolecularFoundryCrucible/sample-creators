@@ -249,10 +249,14 @@ async function doUpload(metadata, noSample = false) {
             return;
         }
 
+        const releaseGuard = beginUploadTabGuard();
         const progressEl = document.getElementById('upload-progress');
+        const progressCtrl = renderSingleUploadProgress(progressEl, {
+            label: `Uploading ${files.length} file(s)`,
+            detail: 'Starting upload...',
+        });
         const totalBytes = files.reduce((sum, f) => sum + f.size, 0);
         const uploaded = new Map();
-        progressEl.textContent = `Uploading ${files.length} file(s)…`;
         let results;
         try {
             results = await window.CrucibleUpload.uploadFiles({
@@ -260,15 +264,20 @@ async function doUpload(metadata, noSample = false) {
                 files,
                 ingestion: INSTRUMENT_PAGE.ingestionFor,
                 onProgress: (file, progress) => {
-                    uploaded.set(file, progress.uploadedBytes);
+                    uploaded.set(file, Math.min(file.size, progress.uploadedBytes || 0));
                     let done = 0;
                     for (const bytes of uploaded.values()) done += bytes;
                     const pct = totalBytes ? Math.min(100, Math.floor((100 * done) / totalBytes)) : 100;
-                    progressEl.textContent = `Uploading ${files.length} file(s): ${pct}%`;
+                    progressCtrl.update({
+                        label: `Uploading ${files.length} file(s)`,
+                        detail: `${file.name} (${pct}%)`,
+                        percent: pct,
+                    });
                 },
             });
         } finally {
-            progressEl.textContent = '';
+            releaseGuard();
+            if (progressEl) progressEl.innerHTML = '';
         }
 
         const ok = results.filter(r => r.ok);
