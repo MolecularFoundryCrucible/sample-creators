@@ -6,12 +6,14 @@
 """
 import os
 import unittest
+from unittest.mock import patch
 
 os.environ.setdefault("CRUCIBLE_API_KEY", "test-api-key")
 
 from app import create_app
 from crucible import Dataset, Sample
 from routes.shared import cruc_client
+from routes.uploader_common import list_existing_dataset_filenames, resolve_dsid_for_sha256
 from tests import fake_crucible
 
 
@@ -387,6 +389,55 @@ class MigratedUploadersGroup1Tests(unittest.TestCase):
         })
         self.assertEqual(res3.status_code, 403)
         self.assertIn("belongs to project", res3.get_json()["error"])
+
+    def test_resolve_dsid_for_sha256_empty_valid_dsids_avoids_files_list(self):
+        with patch.object(cruc_client.files, "list", side_effect=AssertionError("files.list should not be called")):
+            dsid, reused = resolve_dsid_for_sha256("a" * 64, set())
+            self.assertIsNone(dsid)
+            self.assertFalse(reused)
+
+    def test_dfs_microscope_create_dataset_existing_filenames_and_sha256_dedup(self):
+        # 1. New dataset: not reused, empty existing_filenames
+        res1 = self.client.post("/dfs-microscope/api/create-dataset", json={
+            "dataset_name": "DFS_Initial_Run",
+            "comments": "Initial upload",
+        })
+        self.assertEqual(res1.status_code, 200, res1.get_data(as_text=True))
+        data1 = res1.get_json()
+        self.assertTrue(data1["ok"])
+        self.assertFalse(data1["reused"])
+        self.assertEqual(data1["existing_filenames"], [])
+        dsid = data1["dataset_mfid"]
+
+        # 2. Add existing file with sha256 to this dataset
+        test_sha = "b" * 64
+        self.store["files"][dsid] = [
+            {"filename": "scan1.tif", "sha256_hash": test_sha, "size": 2048}
+        ]
+
+        # 3. Create dataset with matching sha256: reused = True, returns existing_filenames
+        res2 = self.client.post("/dfs-microscope/api/create-dataset", json={
+            "dataset_name": "DFS_Resumed_Run",
+            "sha256_hash": test_sha,
+        })
+        self.assertEqual(res2.status_code, 200, res2.get_data(as_text=True))
+        data2 = res2.get_json()
+        self.assertTrue(data2["ok"])
+        self.assertTrue(data2["reused"])
+        self.assertEqual(data2["dataset_mfid"], dsid)
+        self.assertEqual(data2["existing_filenames"], ["scan1.tif"])
+
+        # 4. Graceful fallback to [] when list_files raises
+        with patch.object(cruc_client.datasets, "list_files", side_effect=Exception("list_files error")):
+            res3 = self.client.post("/dfs-microscope/api/create-dataset", json={
+                "dataset_name": "DFS_Resumed_Error_Run",
+                "sha256_hash": test_sha,
+            })
+            self.assertEqual(res3.status_code, 200)
+            data3 = res3.get_json()
+            self.assertTrue(data3["reused"])
+            self.assertEqual(data3["dataset_mfid"], dsid)
+            self.assertEqual(data3["existing_filenames"], [])
 
 
 if __name__ == "__main__":

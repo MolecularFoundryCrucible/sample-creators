@@ -3,7 +3,6 @@
 let TOOL_CONFIG = {};
 
 const PREPARE_CHUNK_SIZE = 25;
-const SHA256_PREHASH_MAX_BYTES = 512 * 1024 * 1024; // 512 MiB
 const LARGE_ITEM_THRESHOLD_BYTES = 64 * 1024 * 1024; // 64 MiB
 const MAX_CONCURRENCY_SLOTS = 2;
 
@@ -618,7 +617,7 @@ async function runChildUploadPipeline(itemsToProcess, signal) {
 
         const chunk = itemsToProcess.slice(offset, offset + PREPARE_CHUNK_SIZE);
 
-        // Reuse existing datasetMfid on retry so large (>512 MiB) unhashed items never create duplicates.
+        // Reuse existing datasetMfid on retry so unhashed items never create duplicates.
         const needPrepare = chunk.filter((item) => !itemStates.get(item.clientId)?.datasetMfid);
 
         if (needPrepare.length > 0) {
@@ -628,10 +627,7 @@ async function runChildUploadPipeline(itemsToProcess, signal) {
                 if (signal.aborted) break;
 
                 let sha256Hash = null;
-                if (
-                    item.primaryFile.size <= SHA256_PREHASH_MAX_BYTES &&
-                    window.InstrumentParsers?.computeBlobSha256
-                ) {
+                if (activeSession?.reused && window.InstrumentParsers?.computeBlobSha256) {
                     setItemState(item.clientId, {
                         ...(itemStates.get(item.clientId) || {}),
                         status: 'hashing',
@@ -639,8 +635,26 @@ async function runChildUploadPipeline(itemsToProcess, signal) {
                         error: null,
                     });
                     try {
-                        sha256Hash = await window.InstrumentParsers.computeBlobSha256(item.primaryFile);
+                        sha256Hash = await window.InstrumentParsers.computeBlobSha256(
+                            item.primaryFile,
+                            (hashedBytes, totalBytes) => {
+                                if (signal.aborted) return;
+                                const pct = totalBytes > 0
+                                    ? Math.min(100, Math.round((hashedBytes / totalBytes) * 100))
+                                    : 100;
+                                setItemState(item.clientId, {
+                                    ...(itemStates.get(item.clientId) || {}),
+                                    status: 'hashing',
+                                    percent: pct,
+                                    error: null,
+                                });
+                            },
+                            signal
+                        );
                     } catch (e) {
+                        if (signal.aborted) {
+                            break;
+                        }
                         console.warn(`Could not pre-hash ${item.relativePath}:`, e);
                     }
                 }
@@ -669,6 +683,7 @@ async function runChildUploadPipeline(itemsToProcess, signal) {
             }
 
             try {
+                const excludeDsids = Array.from(itemStates.values()).map((s) => s?.datasetMfid).filter(Boolean);
                 const prepRes = await api(`${TOOL_CONFIG.url_prefix}/api/session/prepare-children`, 'POST', {
                     session_dsid: activeSession.sessionDsid,
                     session_name: activeSession.sessionName,
@@ -676,6 +691,7 @@ async function runChildUploadPipeline(itemsToProcess, signal) {
                     comments: activeSession.comments,
                     keywords: activeSession.keywords,
                     items: preparedPayloadItems,
+                    exclude_dsids: excludeDsids,
                 });
 
                 const byClientId = new Map();
@@ -1029,7 +1045,7 @@ function updateItemRow(clientId, state) {
         let badgeClass = 'status-queued';
 
         if (state.status === 'hashing') {
-            label = 'Hashing';
+            label = typeof state.percent === 'number' ? `Hashing ${state.percent}%` : 'Hashing';
             badgeClass = 'status-hashing';
         } else if (state.status === 'preparing') {
             label = 'Preparing';

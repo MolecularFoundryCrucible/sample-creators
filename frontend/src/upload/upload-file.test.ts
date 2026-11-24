@@ -102,6 +102,200 @@ describe("uploadDatasetFile", () => {
     )
     expect(api.initiate).not.toHaveBeenCalled()
   })
+
+  it("resumes interrupted upload from acknowledged parts after offline crash", async () => {
+    const memory = new Map<string, string>()
+    const resumeStorage: Pick<Storage, "getItem" | "setItem" | "removeItem"> = {
+      getItem: (k) => memory.get(k) ?? null,
+      setItem: (k, v) => {
+        memory.set(k, v)
+      },
+      removeItem: (k) => {
+        memory.delete(k)
+      },
+    }
+
+    const content = "0123456789"
+    const storageKey = `crucible_upload_idem:${DATASET}:a.txt:${content.length}`
+
+    happySession(4)
+    api.abort.mockRejectedValueOnce(new Error("network offline"))
+    const run1Puts: number[] = []
+    const run1Put: PutPart = async ({ partNumber }) => {
+      run1Puts.push(partNumber)
+      if (partNumber === 3) {
+        throw Object.assign(new Error("socket hang up"), { retryAfterSeconds: 0 })
+      }
+    }
+
+    await expect(
+      uploadDatasetFile({
+        datasetMfid: DATASET,
+        file: new Blob([content]),
+        filename: "a.txt",
+        putPart: run1Put,
+        resumeStorage,
+      })
+    ).rejects.toThrow(/Part 3 could not be transferred/)
+
+    const savedIdemKey = memory.get(storageKey)
+    expect(savedIdemKey).toBeTruthy()
+
+    api.initiate.mockResolvedValueOnce({ state: "uploading", upload_id: "up-1", part_size: 4 })
+    api.status.mockResolvedValueOnce({ state: "uploading", acknowledged_part_numbers: [1, 2] })
+    const run2Puts: number[] = []
+    const progressList: { phase: string; preparedBytes: number; uploadedBytes: number }[] = []
+    const run2Put: PutPart = async ({ partNumber }) => {
+      run2Puts.push(partNumber)
+    }
+
+    const result = await uploadDatasetFile({
+      datasetMfid: DATASET,
+      file: new Blob([content]),
+      filename: "a.txt",
+      putPart: run2Put,
+      resumeStorage,
+      onProgress: (p) => progressList.push({ ...p }),
+    })
+
+    expect(result).toEqual(RECORD)
+    expect(api.initiate).toHaveBeenLastCalledWith(
+      expect.objectContaining({ idempotency_key: savedIdemKey }),
+      expect.anything()
+    )
+    expect(run2Puts).toEqual([3])
+    expect(api.complete).toHaveBeenCalledWith(
+      {
+        dataset_mfid: DATASET,
+        upload_id: "up-1",
+        sha256_hash: await sha256(content),
+        crc32c: base64Crc32c(await crc32(content, 0x82f63b78)),
+      },
+      expect.anything()
+    )
+    expect(progressList.some((p) => p.uploadedBytes === 8)).toBe(true)
+    expect(progressList[progressList.length - 1].uploadedBytes).toBe(10)
+    expect(memory.get(storageKey)).toBeUndefined()
+  })
+
+  it("clears stored key when abort succeeds on online failure", async () => {
+    const memory = new Map<string, string>()
+    const resumeStorage: Pick<Storage, "getItem" | "setItem" | "removeItem"> = {
+      getItem: (k) => memory.get(k) ?? null,
+      setItem: (k, v) => {
+        memory.set(k, v)
+      },
+      removeItem: (k) => {
+        memory.delete(k)
+      },
+    }
+
+    happySession(4)
+    api.abort.mockResolvedValueOnce({ ok: true })
+    const storageKey = `crucible_upload_idem:${DATASET}:a.txt:10`
+
+    const failingPut: PutPart = async () => {
+      throw Object.assign(new Error("fail"), { retryAfterSeconds: 0 })
+    }
+
+    await expect(
+      uploadDatasetFile({
+        datasetMfid: DATASET,
+        file: new Blob(["0123456789"]),
+        filename: "a.txt",
+        putPart: failingPut,
+        resumeStorage,
+      })
+    ).rejects.toThrow(/Part 1 could not be transferred/)
+
+    expect(api.abort).toHaveBeenCalledWith({ dataset_mfid: DATASET, upload_id: "up-1" })
+    expect(memory.get(storageKey)).toBeUndefined()
+
+    // Run 2 gets a fresh key
+    happySession(4)
+    await uploadDatasetFile({
+      datasetMfid: DATASET,
+      file: new Blob(["0123456789"]),
+      filename: "a.txt",
+      putPart: async () => {},
+      resumeStorage,
+    })
+    const key1 = api.initiate.mock.calls[0][0].idempotency_key
+    const key2 = api.initiate.mock.calls[1][0].idempotency_key
+    expect(key1).not.toBe(key2)
+  })
+
+  it("rotates to a new idempotency_key when stored session is aborted", async () => {
+    const memory = new Map<string, string>()
+    const resumeStorage: Pick<Storage, "getItem" | "setItem" | "removeItem"> = {
+      getItem: (k) => memory.get(k) ?? null,
+      setItem: (k, v) => {
+        memory.set(k, v)
+      },
+      removeItem: (k) => {
+        memory.delete(k)
+      },
+    }
+
+    const storageKey = `crucible_upload_idem:${DATASET}:a.txt:10`
+    memory.set(storageKey, "stale-aborted-key-12345")
+
+    happySession(4)
+    api.initiate.mockReset()
+    api.initiate
+      .mockResolvedValueOnce({ state: "aborted", upload_id: "old-up" })
+      .mockResolvedValueOnce({ state: "uploading", upload_id: "new-up", part_size: 4 })
+
+    const result = await uploadDatasetFile({
+      datasetMfid: DATASET,
+      file: new Blob(["0123456789"]),
+      filename: "a.txt",
+      putPart: async () => {},
+      resumeStorage,
+    })
+
+    expect(result).toEqual(RECORD)
+    expect(api.initiate).toHaveBeenCalledTimes(2)
+    expect(api.initiate.mock.calls[0][0].idempotency_key).toBe("stale-aborted-key-12345")
+    expect(api.initiate.mock.calls[1][0].idempotency_key).not.toBe("stale-aborted-key-12345")
+    expect(memory.get(storageKey)).toBeUndefined()
+  })
+
+  it("clears stored key on non-retryable 409 initiate error", async () => {
+    const memory = new Map<string, string>()
+    const resumeStorage: Pick<Storage, "getItem" | "setItem" | "removeItem"> = {
+      getItem: (k) => memory.get(k) ?? null,
+      setItem: (k, v) => {
+        memory.set(k, v)
+      },
+      removeItem: (k) => {
+        memory.delete(k)
+      },
+    }
+
+    const storageKey = `crucible_upload_idem:${DATASET}:a.txt:10`
+    memory.set(storageKey, "stale-key-12345")
+
+    api.initiate.mockRejectedValueOnce(
+      new HubApiClientError({
+        message: "Filename is reserved by another upload",
+        status: 409,
+        retryable: false,
+      })
+    )
+
+    await expect(
+      uploadDatasetFile({
+        datasetMfid: DATASET,
+        file: new Blob(["0123456789"]),
+        filename: "a.txt",
+        putPart: async () => {},
+        resumeStorage,
+      })
+    ).rejects.toThrow("Filename is reserved by another upload")
+
+    expect(memory.get(storageKey)).toBeUndefined()
+  })
 })
 
 describe("uploadFiles", () => {

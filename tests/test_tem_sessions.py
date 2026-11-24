@@ -594,6 +594,235 @@ class TemSessionUploadersTests(unittest.TestCase):
             })
         self.assertEqual(res.status_code, 500)
 
+    def test_prepare_children_incomplete_child_dataset_reuse_on_resume(self):
+        start_res = self.client.post("/titanx/api/session/start", json={"folder_name": "interrupted_run"})
+        session_dsid = start_res.get_json()["session_dsid"]
+
+        sha_notes1 = "1" * 64
+
+        # In Run 1:
+        # Child 0: notes1.txt was completed
+        child0 = cruc_client.datasets.create(Dataset(
+            dataset_name="notes1.txt",
+            project_id="proj-1",
+            owner=self.user["orcid"],
+            instrument_mfid="0sh6zrzxhnz8k000k7pwq0s2t8",
+        ))
+        child0_id = child0["dataset_mfid"]
+        cruc_client.datasets.link(session_dsid, child0_id)
+        self.store["files"][child0_id] = [
+            {"filename": "notes1.txt", "sha256_hash": sha_notes1, "size": 100}
+        ]
+
+        # Child 1: acq_1.ser was created, companion acq.emi uploaded, primary acq_1.ser never completed
+        child1 = cruc_client.datasets.create(Dataset(
+            dataset_name="acq_1.ser",
+            project_id="proj-1",
+            owner=self.user["orcid"],
+            instrument_mfid="0sh6zrzxhnz8k000k7pwq0s2t8",
+        ))
+        child1_id = child1["dataset_mfid"]
+        cruc_client.datasets.link(session_dsid, child1_id)
+        self.store["files"][child1_id] = [
+            {"filename": "acq.emi", "sha256_hash": "e" * 64, "size": 500}
+        ]
+
+        # Now Run 2 resumes with:
+        # - notes1.txt (has sha_notes1)
+        # - acq_1.ser (has sha_ser, but no file with this sha exists yet on server)
+        # - notes3.txt (brand new)
+        sha_ser = "s" * 64
+        sha_notes3 = "3" * 64
+
+        res = self.client.post("/titanx/api/session/prepare-children", json={
+            "session_dsid": session_dsid,
+            "items": [
+                {"client_id": "c0", "dataset_name": "notes1.txt", "sha256_hash": sha_notes1},
+                {"client_id": "c1", "dataset_name": "acq_1.ser", "sha256_hash": sha_ser},
+                {"client_id": "c2", "dataset_name": "notes3.txt", "sha256_hash": sha_notes3},
+            ],
+        })
+        self.assertEqual(res.status_code, 200, res.get_data(as_text=True))
+        children = res.get_json()["children"]
+        self.assertEqual(len(children), 3)
+
+        # Child 0 matches via SHA-256
+        self.assertEqual(children[0]["client_id"], "c0")
+        self.assertEqual(children[0]["dataset_mfid"], child0_id)
+        self.assertTrue(children[0]["reused"])
+        self.assertEqual(children[0]["existing_filenames"], ["notes1.txt"])
+
+        # Child 1 matches incomplete child by dataset_name
+        self.assertEqual(children[1]["client_id"], "c1")
+        self.assertEqual(children[1]["dataset_mfid"], child1_id)
+        self.assertTrue(children[1]["reused"])
+        self.assertEqual(children[1]["existing_filenames"], ["acq.emi"])
+
+        # Child 2 was never created in Run 1 -> created fresh
+        self.assertEqual(children[2]["client_id"], "c2")
+        self.assertFalse(children[2]["reused"])
+        self.assertEqual(children[2]["existing_filenames"], [])
+        self.assertNotIn(children[2]["dataset_mfid"], [child0_id, child1_id])
+
+        # Verify no duplicate link was created for child0 and child1
+        links = self.store["dataset_links"]
+        self.assertEqual(links.count((session_dsid, child0_id)), 1)
+        self.assertEqual(links.count((session_dsid, child1_id)), 1)
+        self.assertEqual(links.count((session_dsid, children[2]["dataset_mfid"])), 1)
+
+    def test_prepare_children_different_sha_with_same_filename_not_claimed_as_incomplete(self):
+        start_res = self.client.post("/titanx/api/session/start", json={"folder_name": "subfolder_run"})
+        session_dsid = start_res.get_json()["session_dsid"]
+
+        sha_foo1 = "a" * 64
+        sha_foo2 = "b" * 64
+
+        # Existing child for foo.txt in subfolder A that already completed foo.txt with sha_foo1
+        child_foo = cruc_client.datasets.create(Dataset(
+            dataset_name="foo.txt",
+            project_id="proj-1",
+            owner=self.user["orcid"],
+            instrument_mfid="0sh6zrzxhnz8k000k7pwq0s2t8",
+        ))
+        child_foo_id = child_foo["dataset_mfid"]
+        cruc_client.datasets.link(session_dsid, child_foo_id)
+        self.store["files"][child_foo_id] = [
+            {"filename": "foo.txt", "sha256_hash": sha_foo1, "size": 120}
+        ]
+
+        # Second foo.txt (e.g. from subfolder B) has sha_foo2
+        res = self.client.post("/titanx/api/session/prepare-children", json={
+            "session_dsid": session_dsid,
+            "items": [
+                {"client_id": "c_sub", "dataset_name": "foo.txt", "sha256_hash": sha_foo2},
+            ],
+        })
+        self.assertEqual(res.status_code, 200)
+        child = res.get_json()["children"][0]
+        # Must NOT claim child_foo because child_foo ALREADY has foo.txt!
+        self.assertFalse(child["reused"])
+        self.assertNotEqual(child["dataset_mfid"], child_foo_id)
+        self.assertEqual(child["existing_filenames"], [])
+
+    def test_prepare_children_mrc_and_txt_sha256_scoping_prevents_name_clobber(self):
+        start_res = self.client.post("/titanx/api/session/start", json={"folder_name": "tomo_run"})
+        session_dsid = start_res.get_json()["session_dsid"]
+
+        sha_mrc = "m" * 64
+        sha_txt = "t" * 64
+
+        # DS_MRC contains tomo.mrc and sidecars tomo.rawtlt and tomo.txt
+        ds_mrc = cruc_client.datasets.create(Dataset(
+            dataset_name="tomo.mrc",
+            project_id="proj-1",
+            owner=self.user["orcid"],
+            instrument_mfid="0sh6zrzxhnz8k000k7pwq0s2t8",
+        ))
+        ds_mrc_id = ds_mrc["dataset_mfid"]
+        cruc_client.datasets.link(session_dsid, ds_mrc_id)
+        self.store["files"][ds_mrc_id] = [
+            {"filename": "tomo.rawtlt", "sha256_hash": "r" * 64, "size": 200},
+            {"filename": "tomo.txt", "sha256_hash": sha_txt, "size": 300},
+            {"filename": "tomo.mrc", "sha256_hash": sha_mrc, "size": 5000},
+        ]
+
+        # 1. Standalone tomo.txt prepared in a separate call must NOT match ds_mrc
+        res_standalone = self.client.post("/titanx/api/session/prepare-children", json={
+            "session_dsid": session_dsid,
+            "items": [
+                {"client_id": "c_txt", "dataset_name": "tomo.txt", "sha256_hash": sha_txt},
+            ],
+        })
+        self.assertEqual(res_standalone.status_code, 200)
+        txt_child = res_standalone.get_json()["children"][0]
+        self.assertFalse(txt_child["reused"])
+        self.assertNotEqual(txt_child["dataset_mfid"], ds_mrc_id)
+        # Verify ds_mrc dataset_name was NOT overwritten to tomo.txt
+        self.assertEqual(self.store["datasets"][ds_mrc_id]["dataset_name"], "tomo.mrc")
+
+        # 2. Both prepared together: tomo.mrc reuses ds_mrc, tomo.txt reuses txt_child
+        res_both = self.client.post("/titanx/api/session/prepare-children", json={
+            "session_dsid": session_dsid,
+            "items": [
+                {"client_id": "c_mrc2", "dataset_name": "tomo.mrc", "sha256_hash": sha_mrc},
+                {"client_id": "c_txt2", "dataset_name": "tomo.txt", "sha256_hash": sha_txt},
+            ],
+        })
+        self.assertEqual(res_both.status_code, 200)
+        both_children = res_both.get_json()["children"]
+        self.assertEqual(both_children[0]["dataset_mfid"], ds_mrc_id)
+        self.assertTrue(both_children[0]["reused"])
+        self.assertEqual(both_children[1]["dataset_mfid"], txt_child["dataset_mfid"])
+        self.assertTrue(both_children[1]["reused"])
+        self.assertEqual(self.store["datasets"][ds_mrc_id]["dataset_name"], "tomo.mrc")
+
+    def test_prepare_children_exclude_dsids_prevents_double_claiming_across_batches(self):
+        start_res = self.client.post("/titanx/api/session/start", json={"folder_name": "calib_run"})
+        session_dsid = start_res.get_json()["session_dsid"]
+        sha_calib = "c" * 64
+
+        ds_calib = cruc_client.datasets.create(Dataset(
+            dataset_name="calib.txt",
+            project_id="proj-1",
+            owner=self.user["orcid"],
+            instrument_mfid="0sh6zrzxhnz8k000k7pwq0s2t8",
+        ))
+        ds_calib_id = ds_calib["dataset_mfid"]
+        cruc_client.datasets.link(session_dsid, ds_calib_id)
+        self.store["files"][ds_calib_id] = [
+            {"filename": "calib.txt", "sha256_hash": sha_calib, "size": 100}
+        ]
+
+        # Batch 1 claims ds_calib
+        res1 = self.client.post("/titanx/api/session/prepare-children", json={
+            "session_dsid": session_dsid,
+            "items": [
+                {"client_id": "b1_item", "dataset_name": "calib.txt", "sha256_hash": sha_calib},
+            ],
+        })
+        self.assertEqual(res1.status_code, 200)
+        self.assertEqual(res1.get_json()["children"][0]["dataset_mfid"], ds_calib_id)
+
+        # Batch 2 passes exclude_dsids containing ds_calib_id
+        res2 = self.client.post("/titanx/api/session/prepare-children", json={
+            "session_dsid": session_dsid,
+            "exclude_dsids": [ds_calib_id],
+            "items": [
+                {"client_id": "b2_item", "dataset_name": "calib.txt", "sha256_hash": sha_calib},
+            ],
+        })
+        self.assertEqual(res2.status_code, 200)
+        b2_child = res2.get_json()["children"][0]
+        # Must create a new child dataset because ds_calib_id is excluded
+        self.assertFalse(b2_child["reused"])
+        self.assertNotEqual(b2_child["dataset_mfid"], ds_calib_id)
+
+    def test_prepare_children_probing_fails_closed_on_list_files_error(self):
+        start_res = self.client.post("/titanx/api/session/start", json={"folder_name": "error_probe_run"})
+        session_dsid = start_res.get_json()["session_dsid"]
+
+        child_probe = cruc_client.datasets.create(Dataset(
+            dataset_name="probe.txt",
+            project_id="proj-1",
+            owner=self.user["orcid"],
+            instrument_mfid="0sh6zrzxhnz8k000k7pwq0s2t8",
+        ))
+        probe_id = child_probe["dataset_mfid"]
+        cruc_client.datasets.link(session_dsid, probe_id)
+
+        # When list_files raises during probing of candidate child, it must fail-closed and not claim it
+        with patch.object(cruc_client.datasets, "list_files", side_effect=RuntimeError("transient storage error")):
+            res = self.client.post("/titanx/api/session/prepare-children", json={
+                "session_dsid": session_dsid,
+                "items": [
+                    {"client_id": "c_probe", "dataset_name": "probe.txt", "sha256_hash": None},
+                ],
+            })
+        self.assertEqual(res.status_code, 200)
+        child = res.get_json()["children"][0]
+        self.assertFalse(child["reused"])
+        self.assertNotEqual(child["dataset_mfid"], probe_id)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -27,8 +27,9 @@ export async function uploadFiles(options: {
   onProgress?: (file: File, progress: UploadProgress) => void
   signal?: AbortSignal
   putPart?: PutPart
+  resumeStorage?: Pick<Storage, "getItem" | "setItem" | "removeItem"> | null
 }): Promise<FileUploadResult[]> {
-  const { datasetMfid, files, ingestion, onProgress, signal, putPart } = options
+  const { datasetMfid, files, ingestion, onProgress, signal, putPart, resumeStorage } = options
   const results: FileUploadResult[] = new Array(files.length)
   let next = 0
 
@@ -44,6 +45,7 @@ export async function uploadFiles(options: {
           onProgress: (progress) => onProgress?.(file, progress),
           signal,
           putPart,
+          resumeStorage,
         })
         const result: FileUploadResult = { file, ok: true, record }
         const choice = ingestion?.(file)
