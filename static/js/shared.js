@@ -412,3 +412,116 @@ function initSampleTypeTypeahead() {
 }
 
 document.addEventListener('DOMContentLoaded', initSampleTypeTypeahead);
+
+// ========== Upload Tab Guard & Single Progress Helpers ==========
+
+let _activeUploadGuards = 0;
+
+function _onUploadBeforeUnload(event) {
+    if (_activeUploadGuards > 0) {
+        event.preventDefault();
+        event.returnValue = '';
+    }
+}
+
+if (typeof window !== 'undefined') {
+    window.addEventListener('beforeunload', _onUploadBeforeUnload);
+}
+
+function beginUploadTabGuard() {
+    _activeUploadGuards += 1;
+    let released = false;
+    return function release() {
+        if (!released) {
+            released = true;
+            _activeUploadGuards = Math.max(0, _activeUploadGuards - 1);
+        }
+    };
+}
+
+function renderSingleUploadProgress(containerEl, opts = {}) {
+    if (!containerEl) {
+        return {
+            update: () => {},
+            hideNotice: () => {},
+        };
+    }
+    const initialLabel = opts.label || 'Uploading...';
+    const initialDetail = opts.detail || '';
+
+    containerEl.innerHTML = `
+        <div class="upload-active-notice">
+            Upload in progress -- please do not close or refresh this browser tab until the upload is finished.
+        </div>
+        <div class="upload-step is-active">
+            <div class="upload-step-header">
+                <div>
+                    <span class="upload-step-label"></span>
+                    <div class="upload-step-detail"></div>
+                </div>
+                <span class="upload-step-pct">0%</span>
+            </div>
+            <div class="upload-step-bar">
+                <div class="upload-step-bar-fill is-active" style="width: 0%;"></div>
+            </div>
+        </div>
+    `;
+
+    const noticeEl = containerEl.querySelector('.upload-active-notice');
+    const stepEl = containerEl.querySelector('.upload-step');
+    const labelEl = containerEl.querySelector('.upload-step-label');
+    const detailEl = containerEl.querySelector('.upload-step-detail');
+    const pctEl = containerEl.querySelector('.upload-step-pct');
+    const fillEl = containerEl.querySelector('.upload-step-bar-fill');
+
+    if (labelEl) labelEl.textContent = initialLabel;
+    if (detailEl) detailEl.textContent = initialDetail;
+
+    try {
+        containerEl.scrollIntoView?.({ behavior: 'smooth', block: 'nearest' });
+    } catch {
+        // Ignore scroll errors in older/test environments
+    }
+
+    const hideNotice = () => {
+        if (noticeEl) {
+            noticeEl.style.display = 'none';
+        }
+    };
+
+    return {
+        hideNotice,
+        update({ label, detail, percent, isDone }) {
+            const clamped = Math.max(0, Math.min(100, Math.round(percent ?? 0)));
+            if (label !== undefined && labelEl) {
+                labelEl.textContent = label;
+            }
+            if (detail !== undefined && detailEl) {
+                detailEl.textContent = detail;
+            }
+            if (pctEl) {
+                pctEl.textContent = `${clamped}%`;
+            }
+            if (fillEl) {
+                fillEl.style.width = `${clamped}%`;
+                if (isDone) {
+                    fillEl.classList.add('is-done');
+                    fillEl.classList.remove('is-active');
+                } else {
+                    fillEl.classList.remove('is-done');
+                    fillEl.classList.add('is-active');
+                }
+            }
+            if (stepEl) {
+                if (isDone) {
+                    stepEl.classList.remove('is-active');
+                } else {
+                    stepEl.classList.add('is-active');
+                }
+            }
+            if (isDone) {
+                hideNotice();
+            }
+        },
+    };
+}

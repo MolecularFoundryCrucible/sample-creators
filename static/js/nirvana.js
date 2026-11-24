@@ -190,7 +190,11 @@
         const comments = (document.getElementById('nirvana-comments').value || '').trim() || null;
 
         uploadBtn.disabled = true;
-        statusEl.textContent = 'Preparing Nirvana upload(s)...';
+        const releaseGuard = beginUploadTabGuard();
+        const progressCtrl = renderSingleUploadProgress(statusEl, {
+            label: `Preparing ${_files.length} file(s)`,
+            detail: 'Starting Nirvana upload...',
+        });
 
         try {
             const uploadedDatasets = [];
@@ -206,7 +210,11 @@
                     }
                 }
 
-                statusEl.textContent = `Preparing file ${i + 1}/${_files.length}: ${file.name}...`;
+                progressCtrl.update({
+                    label: `[${i + 1}/${_files.length}] Uploading ${file.name}`,
+                    detail: `Preparing ${file.name}...`,
+                    percent: Math.round((i / _files.length) * 100),
+                });
 
                 let embeddedDsid = null;
                 let sha256 = null;
@@ -281,13 +289,20 @@
                 const prep = await api('/nirvana/api/prepare-upload', 'POST', preparePayload);
                 const datasetMfid = prep.dataset_mfid;
 
-                statusEl.textContent = `Uploading ${file.name} to dataset ${datasetMfid} (${ingestionClass})...`;
-
                 if (window.CrucibleUpload?.uploadFiles) {
                     const res = await window.CrucibleUpload.uploadFiles({
                         datasetMfid,
                         files: [file],
                         ingestion: () => ({ requested: true, ingestionClass }),
+                        onProgress: (f, p) => {
+                            const filePct = f.size ? Math.min(100, Math.round((p.uploadedBytes / f.size) * 100)) : 100;
+                            const overallPct = Math.round(((i + (filePct / 100)) / _files.length) * 100);
+                            progressCtrl.update({
+                                label: `[${i + 1}/${_files.length}] Uploading ${file.name}`,
+                                detail: `Uploading ${file.name} (${filePct}%)...`,
+                                percent: overallPct,
+                            });
+                        },
                     });
                     const failed = res.filter(r => !r.ok);
                     if (failed.length) throw new Error(failed.map(f => `${f.file.name}: ${f.error}`).join('; '));
@@ -296,12 +311,21 @@
                 uploadedDatasets.push({ filename: file.name, datasetMfid, hubUrl: prep.hub_url });
             }
 
+            progressCtrl.update({
+                label: 'Upload Complete',
+                detail: `Uploaded ${uploadedDatasets.length} scan(s)`,
+                percent: 100,
+                isDone: true,
+            });
+            progressCtrl.hideNotice();
+
             showAlert('success', `Successfully uploaded ${uploadedDatasets.length} Nirvana scan(s)!`, uploadedDatasets.length === 1 ? { linkUrl: uploadedDatasets[0].hubUrl } : { linkUrl: hubProjectUrl(currentUserState?.selected_project), linkText: 'Open Project in Crucible Hub \u2197' });
             statusEl.innerHTML = uploadedDatasets.map(d => `<a href="${escapeHtml(d.hubUrl)}" target="_blank">${escapeHtml(d.filename)}</a>`).join(', ');
         } catch (e) {
             showAlert('error', 'Upload failed: ' + e.message);
             statusEl.textContent = 'Upload failed: ' + e.message;
         } finally {
+            releaseGuard();
             uploadBtn.disabled = false;
         }
     };

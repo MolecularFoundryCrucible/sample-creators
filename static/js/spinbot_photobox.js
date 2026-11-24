@@ -167,7 +167,11 @@
         const comments = (document.getElementById('pb-comments').value || '').trim() || null;
 
         uploadBtn.disabled = true;
-        statusEl.textContent = 'Preparing carrier photo dataset...';
+        const releaseGuard = beginUploadTabGuard();
+        const progressCtrl = renderSingleUploadProgress(statusEl, {
+            label: 'Preparing Carrier Photo Dataset',
+            detail: 'Creating dataset record in Crucible...',
+        });
 
         try {
             const prep = await api('/spinbot-photobox/api/prepare-upload', 'POST', {
@@ -188,20 +192,44 @@
             updateCarrierDisplay();
 
             const datasetMfid = prep.dataset_mfid;
-            statusEl.textContent = `Uploading photo file to dataset ${datasetMfid}...`;
+            progressCtrl.update({
+                label: `Uploading ${photoFile.name}`,
+                detail: `Dataset ${datasetMfid} ready. Transferring file...`,
+                percent: 10,
+            });
 
             if (window.CrucibleUpload?.uploadFiles) {
                 const res = await window.CrucibleUpload.uploadFiles({
                     datasetMfid,
                     files: [photoFile],
                     ingestion: () => ({ requested: true }),
+                    onProgress: (file, p) => {
+                        const pct = file.size ? Math.min(100, Math.round((p.uploadedBytes / file.size) * 100)) : 100;
+                        progressCtrl.update({
+                            label: `Uploading ${photoFile.name}`,
+                            detail: `Uploading ${photoFile.name} (${pct}%)...`,
+                            percent: Math.round(10 + pct * 0.8),
+                        });
+                    },
                 });
                 const failed = res.filter(r => !r.ok);
                 if (failed.length) throw new Error(failed.map(f => `${f.file.name}: ${f.error}`).join('; '));
             }
 
-            statusEl.textContent = 'Triggering carrier segmentation pipeline...';
+            progressCtrl.update({
+                label: 'Post-processing',
+                detail: 'Triggering carrier segmentation pipeline...',
+                percent: 95,
+            });
             await api('/spinbot-photobox/api/postprocess', 'POST', { dataset_id: datasetMfid });
+
+            progressCtrl.update({
+                label: 'Upload Complete',
+                detail: `Carrier photo attached to ${datasetMfid}`,
+                percent: 100,
+                isDone: true,
+            });
+            progressCtrl.hideNotice();
 
             showAlert('success', 'Carrier photo uploaded and segmentation requested!', { linkUrl: prep.hub_url || hubDatasetUrl(datasetMfid) });
             statusEl.innerHTML = `<a href="${escapeHtml(prep.hub_url)}" target="_blank">View Dataset in Crucible Hub (${escapeHtml(datasetMfid)})</a>`;
@@ -209,6 +237,7 @@
             showAlert('error', 'Upload failed: ' + e.message);
             statusEl.textContent = 'Upload failed: ' + e.message;
         } finally {
+            releaseGuard();
             uploadBtn.disabled = false;
         }
     };
